@@ -26,13 +26,27 @@ export async function middleware(request: NextRequest) {
     },
   });
 
-  await supabase.auth.getUser();
+  try {
+    await supabase.auth.getUser();
+  } catch (err) {
+    // Invalid/expired JWT (e.g. "Invalid Compact JWS") – clear auth cookies and continue
+    const msg = err instanceof Error ? err.message : String(err);
+    if (/compact jws|jwt|jose/i.test(msg)) {
+      const all = request.cookies.getAll();
+      all.forEach(({ name }) => {
+        if (name.startsWith("sb-") && name.includes("auth-token")) {
+          response.cookies.set(name, "", { maxAge: 0, path: "/" });
+        }
+      });
+    }
+  }
 
   return response;
 }
 
 export const config = {
   matcher: [
-    "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
+    // Run auth for pages; skip static assets and /api/upload (avoids JWT errors on upload)
+    "/((?!_next/static|_next/image|favicon.ico|api/upload|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
   ],
 };
