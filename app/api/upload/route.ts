@@ -21,7 +21,22 @@ export async function POST(req: NextRequest) {
   const ext = file.name.split(".").pop() ?? "bin";
   const path = `${TENANT}/${docId}/file.${ext}`;
 
-  const supabase = createAdminClient();
+  let supabase;
+  try {
+    supabase = createAdminClient();
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    return Response.json(
+      {
+        error:
+          msg.includes("Compact JWS") || msg.includes("JWT")
+            ? "Invalid Supabase service role key. In Vercel, set SUPABASE_SERVICE_ROLE_KEY to the service_role secret from Project Settings → API (not the anon key)."
+            : msg,
+      },
+      { status: 500 }
+    );
+  }
+
   let result = await supabase.storage.from(BUCKET).upload(path, buffer, {
     contentType: file.type,
     upsert: true,
@@ -37,7 +52,16 @@ export async function POST(req: NextRequest) {
   }
 
   if (result.error) {
-    return Response.json({ error: result.error.message }, { status: 500 });
+    const msg = result.error.message;
+    return Response.json(
+      {
+        error:
+          msg.includes("Compact JWS") || msg.includes("JWT")
+            ? "Invalid Supabase key. In Vercel, set SUPABASE_SERVICE_ROLE_KEY to the service_role secret from Project Settings → API."
+            : msg,
+      },
+      { status: 500 }
+    );
   }
 
   await db.insert(documents).values({

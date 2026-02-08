@@ -2,8 +2,8 @@ import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
 export async function middleware(request: NextRequest) {
-  // Skip Supabase auth for upload API so bad/expired cookies never cause 500
-  if (request.nextUrl.pathname === "/api/upload") {
+  // Skip Supabase auth for all API routes (avoids "Invalid Compact JWS" from cookie JWT on serverless)
+  if (request.nextUrl.pathname.startsWith("/api/")) {
     return NextResponse.next();
   }
 
@@ -51,7 +51,7 @@ export async function middleware(request: NextRequest) {
 
 export const config = {
   matcher: [
-    // Run auth for pages; skip static assets and /api/upload (avoids JWT errors on upload)
-    "/((?!_next/static|_next/image|favicon.ico|api/upload|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
+    // Run auth for pages only; skip static assets and all /api/* (avoids JWT errors on serverless)
+    "/((?!_next/static|_next/image|favicon.ico|api/|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
   ],
 };
