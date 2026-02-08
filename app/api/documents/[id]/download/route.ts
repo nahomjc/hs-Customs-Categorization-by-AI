@@ -20,7 +20,7 @@ export async function GET(
     unit: r.unit,
   }));
   const buffer = await generateCategorizedExcel(grouped);
-  return new Response(buffer, {
+  return new Response(new Uint8Array(buffer), {
     headers: {
       "Content-Type":
         "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",

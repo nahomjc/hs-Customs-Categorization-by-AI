@@ -22,7 +22,7 @@ export default async function DocumentPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  let doc: Awaited<ReturnType<typeof db.select>>[0] | undefined;
+  let doc: (typeof documents)["$inferSelect"] | undefined;
   try {
     const rows = await db.select().from(documents).where(eq(documents.id, id));
     doc = rows[0];
