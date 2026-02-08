@@ -36,6 +36,12 @@ export const ALLOWED_HS_CODES = [
   "9999", // Only for "Unclassified" when item is real but unclear — assessor fallback
 ] as const;
 
+/** Real item but AI unsure — needs human review. Not a "non-item". */
+export const UNKNOWN_HS = "9999";
+
+/** Not an import good (header, address, etc.) — exclude from grouped result. */
+export const EXCLUDED_HS = "EXCLUDE";
+
 /** HS codes that mean "exclude from export" (non-goods). Never use 0000.00. */
 export const EXCLUDE_HS = ["EXCLUDE", "0000.00", "0000", "9999.99"];
 
@@ -53,12 +59,11 @@ export const NON_ITEM_CATEGORIES = [
   "Noise",
 ];
 
+/** Exact match only — no "starts with" or first-4-digits. Assessor does exact HS selection. */
 export function isAllowedHsCode(code: string | null): boolean {
   if (!code) return false;
-  const normalized = code.replace(/\./g, "").slice(0, 4);
-  return ALLOWED_HS_CODES.some(
-    (allowed) => allowed.replace(/\./g, "").slice(0, 4) === normalized
-  );
+  const clean = code.trim();
+  return (ALLOWED_HS_CODES as readonly string[]).includes(clean);
 }
 
 export function isExcludedHsCode(code: string | null): boolean {
@@ -74,4 +79,38 @@ export function isNonItemCategory(category: string | null): boolean {
   if (!category) return false;
   const c = category.trim().toLowerCase();
   return NON_ITEM_CATEGORIES.some((n) => c.includes(n.toLowerCase()));
+}
+
+/**
+ * Senior-assessor validation: category gate first, then exact HS.
+ * Use after AI + assessor rules as last line of defense.
+ */
+export function validateClassification({
+  hsCode,
+  category,
+}: {
+  hsCode: string | null;
+  category: string | null;
+}): { status: "exclude" | "review" | "valid"; hsCode: string } {
+  // Step 1: Not a real item → exclude
+  if (isNonItemCategory(category)) {
+    return { status: "exclude", hsCode: EXCLUDED_HS };
+  }
+
+  // Step 2: AI said unsure (real item) → review bucket
+  if (
+    hsCode === UNKNOWN_HS ||
+    hsCode === "9999.00" ||
+    hsCode?.startsWith("9999.")
+  ) {
+    return { status: "review", hsCode: UNKNOWN_HS };
+  }
+
+  // Step 3: Exact allowed code → valid
+  if (isAllowedHsCode(hsCode)) {
+    return { status: "valid", hsCode: hsCode!.trim() };
+  }
+
+  // Step 4: AI mistake (hallucinated subcode) → force review, do not trust code
+  return { status: "review", hsCode: UNKNOWN_HS };
 }

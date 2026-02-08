@@ -1,4 +1,4 @@
-import { ALLOWED_HS_CODES } from "./allowedHsCodes";
+import { ALLOWED_HS_CODES, validateClassification } from "./allowedHsCodes";
 import { applyAssessorRules } from "./assessorRules";
 
 const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
@@ -135,6 +135,30 @@ export async function classifyItem(
       "| category:",
       final.category
     );
+  }
+
+  // Senior-assessor validation: exact HS only, category gate, no hallucinated subcodes
+  const validated = validateClassification({
+    hsCode: final.hsCode,
+    category: final.category,
+  });
+  if (validated.status === "exclude") {
+    final.hsCode = validated.hsCode;
+    final.category = "Non-item";
+    final.isImportItem = false;
+  } else if (
+    validated.status === "review" &&
+    validated.hsCode !== final.hsCode
+  ) {
+    console.log(
+      "[HS classifyItem] validation → review (exact HS):",
+      final.hsCode,
+      "→",
+      validated.hsCode
+    );
+    final.hsCode = validated.hsCode;
+  } else if (validated.status === "valid") {
+    final.hsCode = validated.hsCode;
   }
 
   return {

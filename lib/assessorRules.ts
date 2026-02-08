@@ -160,3 +160,25 @@ export function applyAssessorRules(
 
   return result;
 }
+
+/**
+ * Classify using only rulebook (no AI). Use when API fails so we still get correct HS codes.
+ */
+export function classifyByRulesOnly(description: string): {
+  hsCode: string;
+  category: string;
+  cleanDescription: string;
+} {
+  const fake: ClassificationResult = {
+    isImportItem: true,
+    hsCode: "9999",
+    category: "Unclassified",
+    cleanDescription: description.trim(),
+  };
+  const out = applyAssessorRules(description.trim(), fake);
+  return {
+    hsCode: out.hsCode ?? "9999",
+    category: out.category ?? "Unclassified",
+    cleanDescription: out.cleanDescription ?? description.trim(),
+  };
+}

@@ -1,4 +1,9 @@
-import { isExcludedHsCode, isNonItemCategory } from "./allowedHsCodes";
+import {
+  isExcludedHsCode,
+  isNonItemCategory,
+  UNKNOWN_HS,
+  validateClassification,
+} from "./allowedHsCodes";
 
 export interface ItemWithClassification {
   id: string;
@@ -39,22 +44,29 @@ export function groupItemsByHsCode(
     if (isNonItemCategory(item.aiCategory)) continue;
     if (isExcludedHsCode(item.aiHsCode)) continue;
 
-    const hs =
-      item.aiHsCode && !isExcludedHsCode(item.aiHsCode)
-        ? item.aiHsCode
-        : "9999";
+    const validated = validateClassification({
+      hsCode: item.aiHsCode,
+      category: item.aiCategory,
+    });
+    if (validated.status === "exclude") continue;
+    const hsNormalized =
+      validated.hsCode === "9999.00" ||
+      validated.hsCode === "9999.99" ||
+      validated.hsCode?.startsWith("9999.")
+        ? UNKNOWN_HS
+        : validated.hsCode;
     const category = item.aiCategory || "Unclassified";
     const desc =
       item.cleanDescription || item.detectedDescription || item.rawLine || "";
     const qty = Number(item.detectedQuantity) || 1;
     const unit = item.detectedUnit ?? null;
 
-    if (!byHs[hs]) {
-      byHs[hs] = { category, descriptions: [], totalQty: 0, unit };
+    if (!byHs[hsNormalized]) {
+      byHs[hsNormalized] = { category, descriptions: [], totalQty: 0, unit };
     }
-    byHs[hs].descriptions.push(desc);
-    byHs[hs].totalQty += qty;
-    if (unit) byHs[hs].unit = unit;
+    byHs[hsNormalized].descriptions.push(desc);
+    byHs[hsNormalized].totalQty += qty;
+    if (unit) byHs[hsNormalized].unit = unit;
   }
 
   return Object.entries(byHs).map(([hsCode, g]) => ({

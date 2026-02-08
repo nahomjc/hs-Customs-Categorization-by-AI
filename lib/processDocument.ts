@@ -10,6 +10,8 @@ import {
 import { extractTextFromBuffer, type FileType } from "./extractText";
 import { parseLines } from "./parseLines";
 import { classifyItem } from "./classifyItem";
+import { validateClassification } from "./allowedHsCodes";
+import { classifyByRulesOnly } from "./assessorRules";
 import { groupItemsByHsCode, type ItemWithClassification } from "./groupItems";
 import { eq } from "drizzle-orm";
 
@@ -72,22 +74,31 @@ export async function processDocumentPipeline(
           unit: item.detectedUnit ?? undefined,
         }
       );
+      // Result is already validated in classifyItem (exact HS, category gate)
+      const hsCode = result.isImportItem === false ? "EXCLUDE" : result.hsCode;
       await db.insert(itemClassifications).values({
         itemId: item.id,
         aiCategory: result.category,
-        aiHsCode: result.isImportItem === false ? "EXCLUDE" : result.hsCode,
+        aiHsCode: hsCode,
         cleanDescription: result.cleanDescription,
         confidence: String(result.confidence ?? 0.9),
         aiRawResponse: result.aiRawResponse,
       });
     } catch (e) {
       try {
+        // API failed: use rule-based classification, then validate (exact HS only)
+        const desc = item.detectedDescription ?? item.rawLine ?? "";
+        const ruleResult = classifyByRulesOnly(desc);
+        const validated = validateClassification({
+          hsCode: ruleResult.hsCode,
+          category: ruleResult.category,
+        });
         await db.insert(itemClassifications).values({
           itemId: item.id,
-          aiCategory: "Unclassified",
-          aiHsCode: "9999.00",
-          cleanDescription:
-            item.detectedDescription ?? item.rawLine ?? "Unclassified",
+          aiCategory: ruleResult.category,
+          aiHsCode: validated.hsCode,
+          cleanDescription: ruleResult.cleanDescription,
+          confidence: "0.8",
           aiRawResponse: String(
             e instanceof Error ? e.message : e ?? "Unknown error"
           ),
