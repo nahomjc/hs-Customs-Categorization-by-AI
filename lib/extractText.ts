@@ -36,13 +36,24 @@ export async function extractTextFromBuffer(
       const pdfParse = (await import("pdf-parse")).default;
       const data = await pdfParse(buffer);
       const text = data?.text?.trim() ?? "";
-      if (!text)
+      if (!text) {
+        console.error(
+          "[HS extractText] PDF has no extractable text (image-only or scanned?)"
+        );
         throw new Error(
           "PDF has no extractable text (e.g. image-only or scanned). Try exporting as text-based PDF or use a DOCX file."
         );
+      }
+      console.log(
+        "[HS extractText] PDF extracted OK | text length:",
+        text.length,
+        "| first 80 chars:",
+        text.slice(0, 80)
+      );
       return text;
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
+      console.error("[HS extractText] PDF extraction failed:", msg);
       throw new Error("PDF text extraction failed: " + msg);
     }
   }

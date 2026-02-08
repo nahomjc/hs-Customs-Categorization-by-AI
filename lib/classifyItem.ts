@@ -44,7 +44,14 @@ export async function classifyItem(
   options?: { country?: string; unit?: string }
 ): Promise<ClassificationResult & { aiRawResponse?: string }> {
   const apiKey = process.env.OPENROUTER_API_KEY;
-  if (!apiKey) throw new Error("OPENROUTER_API_KEY is not set");
+  if (!apiKey) {
+    console.error("[HS classifyItem] OPENROUTER_API_KEY is not set");
+    throw new Error("OPENROUTER_API_KEY is not set");
+  }
+  console.log(
+    "[HS classifyItem] calling API for:",
+    description.slice(0, 60) + (description.length > 60 ? "..." : "")
+  );
 
   let userContent = 'Line from packing list: "' + description + '"';
   if (options?.country)
@@ -72,6 +79,11 @@ export async function classifyItem(
 
   if (!res.ok) {
     const err = await res.text();
+    console.error(
+      "[HS classifyItem] OpenRouter API error:",
+      res.status,
+      err?.slice(0, 200)
+    );
     throw new Error("OpenRouter API error: " + res.status + " " + err);
   }
 
@@ -79,15 +91,30 @@ export async function classifyItem(
     choices?: Array<{ message?: { content?: string } }>;
   };
   const content = data.choices?.[0]?.message?.content?.trim();
-  if (!content) throw new Error("Empty response from OpenRouter");
+  if (!content) {
+    console.error("[HS classifyItem] Empty response from OpenRouter");
+    throw new Error("Empty response from OpenRouter");
+  }
 
   let parsed: ClassificationResult;
   try {
     const cleaned = content.replace(/^```json\s*|\s*```$/g, "").trim();
     parsed = JSON.parse(cleaned) as ClassificationResult;
   } catch {
+    console.error(
+      "[HS classifyItem] Invalid JSON from AI:",
+      content?.slice(0, 150)
+    );
     throw new Error("Invalid JSON from AI: " + content);
   }
+  console.log(
+    "[HS classifyItem] AI raw → hsCode:",
+    parsed.hsCode,
+    "| category:",
+    parsed.category,
+    "| isImportItem:",
+    parsed.isImportItem
+  );
 
   // Normalize: non-items must have EXCLUDE and consistent category
   if (parsed.isImportItem === false) {
@@ -97,9 +124,18 @@ export async function classifyItem(
   if (parsed.hsCode === "9999.99" || parsed.hsCode === "0000.00")
     parsed.hsCode = "9999";
 
-  // Apply assessor rulebook overrides (sculpture→9703, wallpaper→4814, vague→NEED_INFO, etc.)
   const inputDesc = description.trim();
   const final = applyAssessorRules(inputDesc, parsed);
+  if (final.hsCode !== parsed.hsCode) {
+    console.log(
+      "[HS classifyItem] assessor override:",
+      parsed.hsCode,
+      "→",
+      final.hsCode,
+      "| category:",
+      final.category
+    );
+  }
 
   return {
     ...final,
