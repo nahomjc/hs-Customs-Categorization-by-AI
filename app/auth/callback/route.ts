@@ -1,4 +1,4 @@
-import { type EmailOtpType } from "@supabase/supabase-js";
+import type { EmailOtpType } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
 import { ensureUserProfile } from "@/lib/auth/ensure-profile";
 import { getAppOrigin } from "@/lib/auth/constants";
@@ -7,7 +7,7 @@ import { createClient } from "@/lib/supabase/server";
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const code = searchParams.get("code");
-  const tokenHash = searchParams.get("token_hash");
+  const tokenHash = searchParams.get("token_hash") ?? searchParams.get("token");
   const type = searchParams.get("type") as EmailOtpType | null;
   const next = searchParams.get("next") ?? "/dashboard";
   const origin = getAppOrigin();
@@ -18,7 +18,7 @@ export async function GET(request: Request) {
     const { error } = await supabase.auth.exchangeCodeForSession(code);
     if (error) {
       return NextResponse.redirect(
-        `${origin}/login?error=${encodeURIComponent(error.message)}`
+        `${origin}/login?error=${encodeURIComponent(error.message)}`,
       );
     }
   } else if (tokenHash && type) {
@@ -28,7 +28,7 @@ export async function GET(request: Request) {
     });
     if (error) {
       return NextResponse.redirect(
-        `${origin}/login?error=${encodeURIComponent(error.message)}`
+        `${origin}/login?error=${encodeURIComponent(error.message)}`,
       );
     }
   } else {
@@ -48,7 +48,8 @@ export async function GET(request: Request) {
           (user.user_metadata?.full_name as string | undefined) ??
           (user.user_metadata?.name as string | undefined) ??
           null,
-        avatarUrl: (user.user_metadata?.avatar_url as string | undefined) ?? null,
+        avatarUrl:
+          (user.user_metadata?.avatar_url as string | undefined) ?? null,
       });
     } catch (err) {
       console.error("ensureUserProfile failed:", err);

@@ -47,6 +47,24 @@ NEXT_PUBLIC_APP_URL=https://your-app.vercel.app
 3. Sign up at `/signup`.
 4. Inbox should show the branded Impact Logistics email from your Brevo sender.
 
+## Confirmation link goes to `localhost` instead of your live site
+
+The email link uses whatever was sent at signup in `emailRedirectTo`. If you signed up on `http://localhost:3000`, the link points there.
+
+**Do this:**
+
+1. **Vercel** → Environment Variables → set `NEXT_PUBLIC_APP_URL` to your live URL (e.g. `https://hs-customs-categorization-by-ai.vercel.app`), **not** `http://localhost:3000`. Redeploy.
+2. **Supabase** → **Authentication** → **URL Configuration**:
+   - **Site URL**: `https://hs-customs-categorization-by-ai.vercel.app`
+   - **Redirect URLs**: add  
+     `https://hs-customs-categorization-by-ai.vercel.app/auth/callback`  
+     `https://hs-customs-categorization-by-ai.vercel.app/reset-password`
+3. Sign up again from the **production** site (not local dev). Old emails still have the old link.
+
+The Send Email hook rewrites `localhost` redirects to `NEXT_PUBLIC_APP_URL` / Vercel URL when the app runs in production.
+
+Confirmation links go to **your app** (`/auth/callback?token_hash=...&type=email`), not `*.supabase.co/auth/v1/verify`. The hosted verify URL often returns 500 for PKCE signup tokens.
+
 ## Troubleshooting
 
 ### `unexpected_failure` — hook returned 404

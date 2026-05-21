@@ -7,7 +7,10 @@ import {
   resolveAuthEmail,
 } from "@/lib/emails/templates";
 import type { SendEmailHookPayload } from "@/lib/emails/types";
-import { getAppOrigin } from "@/lib/auth/constants";
+import {
+  getAppOrigin,
+  normalizeAuthRedirectTo,
+} from "@/lib/auth/redirect-origin";
 
 function getHookSecret(): string {
   const raw = process.env.SEND_EMAIL_HOOK_SECRET;
@@ -15,14 +18,6 @@ function getHookSecret(): string {
     throw new Error("SEND_EMAIL_HOOK_SECRET is not configured");
   }
   return raw.replace(/^v1,whsec_/, "");
-}
-
-function getSupabaseUrl(): string {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  if (!url) {
-    throw new Error("NEXT_PUBLIC_SUPABASE_URL is not configured");
-  }
-  return url;
 }
 
 export async function handleSendEmailHook(
@@ -38,7 +33,11 @@ export async function handleSendEmailHook(
   }
 
   const siteUrl = getAppOrigin();
-  const confirmationUrl = buildConfirmationUrl(getSupabaseUrl(), emailData);
+  const redirectTo = normalizeAuthRedirectTo(emailData.redirect_to, siteUrl);
+  const confirmationUrl = buildConfirmationUrl({
+    ...emailData,
+    redirect_to: redirectTo,
+  }, siteUrl);
 
   const message = resolveAuthEmail(emailData.email_action_type, {
     siteUrl,
