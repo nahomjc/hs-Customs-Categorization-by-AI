@@ -1,6 +1,8 @@
 # Brevo + Supabase Auth setup
 
-Auth emails (signup confirmation, password reset, magic links) are sent by **Supabase Auth** using **Brevo SMTP**. Your Next.js app uses Supabase for login/signup; you do not send those emails from app code.
+Auth emails (signup confirmation, password reset, magic links) are sent by **this Next.js app** when Supabase triggers the **Send Email** hook. Templates live in `lib/emails/`. See **[AUTH-EMAILS.md](./AUTH-EMAILS.md)** for setup.
+
+The sections below about Brevo **SMTP in Supabase** are optional legacy setup if you do not use the hook.
 
 ## 1. Brevo (SMTP)
 
@@ -25,7 +27,7 @@ Docs: [Brevo SMTP](https://help.brevo.com/hc/en-us/articles/7924908994450-Send-t
 2. Enable **Custom SMTP**.
 3. Enter Brevo host, port, username, password.
 4. **Sender email**: your verified Brevo sender (e.g. `noreply@yourdomain.com`).
-5. **Sender name**: e.g. `HS Portal`.
+5. **Sender name**: `Impact Logistics` (shows in the inbox instead of a raw Brevo address).
 
 Reference: [Supabase custom SMTP](https://supabase.com/docs/guides/auth/auth-smtp).
 
@@ -72,14 +74,18 @@ DEFAULT_TENANT_ID=default-tenant
 
 Run the SQL from the previous step (users table + optional trigger on `auth.users`) in the Supabase SQL editor so profiles sync when users sign up.
 
-## 7. Test flow
+## 7. Branded emails (recommended)
+
+Enable the **Send Email** hook → `https://YOUR_APP/api/auth/hooks/send-email`. Full steps: [AUTH-EMAILS.md](./AUTH-EMAILS.md).
+
+## 8. Test flow
 
 1. Open `/signup` → create account.
 2. Check inbox for confirmation email (from Brevo sender).
 3. Click link → `/auth/callback` → dashboard.
 4. **Forgot password** → `/forgot-password` → reset email → set password on `/reset-password`.
 
-## App routes
+## 9. App routes
 
 | Route | Purpose |
 |-------|---------|
