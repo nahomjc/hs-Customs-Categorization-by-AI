@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
+import { PasswordInput } from "@/components/auth/PasswordInput";
 import { createClient } from "@/lib/supabase/client";
 
 export function LoginForm() {
@@ -67,14 +68,11 @@ export function LoginForm() {
             Forgot password?
           </Link>
         </div>
-        <input
+        <PasswordInput
           id="password"
-          name="password"
-          type="password"
           required
           autoComplete="current-password"
           minLength={6}
-          className="auth-input"
           placeholder="••••••••"
         />
       </div>

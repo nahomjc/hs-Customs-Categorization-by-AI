@@ -28,7 +28,7 @@ const plans = [
       "Dedicated onboarding",
     ],
     cta: "Get demo",
-    href: "/dashboard",
+    href: "/demo?source=pricing",
     highlighted: true,
   },
   {
@@ -76,7 +76,10 @@ export function PricingSection() {
           {plans.map((plan) => (
             <MotionItem key={plan.name} variants={fadeUp}>
               <motion.div
-                whileHover={{ y: plan.highlighted ? -8 : -5, scale: plan.highlighted ? 1.02 : 1.01 }}
+                whileHover={{
+                  y: plan.highlighted ? -8 : -5,
+                  scale: plan.highlighted ? 1.02 : 1.01,
+                }}
                 transition={{ type: "spring", stiffness: 300, damping: 22 }}
                 className={`landing-float-card rounded-2xl p-8 flex flex-col h-full ${
                   plan.highlighted
@@ -129,7 +132,9 @@ export function PricingSection() {
                         fill="none"
                         viewBox="0 0 24 24"
                         stroke="currentColor"
+                        aria-hidden="true"
                       >
+                        <title>Included</title>
                         <path
                           strokeLinecap="round"
                           strokeLinejoin="round"
@@ -141,7 +146,10 @@ export function PricingSection() {
                     </li>
                   ))}
                 </ul>
-                <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
+                <motion.div
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                >
                   <Link
                     href={plan.href}
                     className={`block text-center py-3 rounded-xl font-semibold text-sm transition-colors ${

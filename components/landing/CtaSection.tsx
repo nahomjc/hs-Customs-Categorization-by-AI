@@ -46,7 +46,7 @@ export function CtaSection() {
             >
               <motion.div whileHover={{ scale: 1.04 }} whileTap={{ scale: 0.97 }}>
                 <Link
-                  href="/dashboard"
+                  href="/demo?source=cta"
                   className="inline-flex items-center justify-center px-8 py-3.5 rounded-full bg-white text-[#007bff] font-semibold text-sm hover:bg-blue-50 transition-colors"
                 >
                   Get free demo

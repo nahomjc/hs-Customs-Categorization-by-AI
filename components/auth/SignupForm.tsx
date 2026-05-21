@@ -3,6 +3,8 @@
 import Link from "next/link";
 import { useState } from "react";
 import { toast } from "sonner";
+import { PasswordInput } from "@/components/auth/PasswordInput";
+
 import { getRedirectOrigin } from "@/lib/auth/redirect-origin";
 import { createClient } from "@/lib/supabase/client";
 
@@ -56,14 +58,25 @@ export function SignupForm() {
     return (
       <div className="space-y-5 text-center">
         <div className="mx-auto w-12 h-12 rounded-full bg-[#007bff]/10 flex items-center justify-center text-[#007bff]">
-          <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+          <svg
+            className="w-6 h-6"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+            strokeWidth={2}
+            aria-hidden="true"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"
+            />
           </svg>
         </div>
         <p className="auth-muted leading-relaxed">
           We sent a confirmation link to{" "}
-          <span className="font-medium text-gray-900">{sentTo}</span>. Open it to
-          activate your account.
+          <span className="font-medium text-gray-900">{sentTo}</span>. Open it
+          to activate your account.
         </p>
         <Link href="/login" className="inline-block auth-link text-sm">
           Back to sign in
@@ -105,14 +118,11 @@ export function SignupForm() {
         <label htmlFor="password" className="auth-label">
           Password
         </label>
-        <input
+        <PasswordInput
           id="password"
-          name="password"
-          type="password"
           required
           minLength={8}
           autoComplete="new-password"
-          className="auth-input"
           placeholder="At least 8 characters"
         />
       </div>

@@ -230,7 +230,7 @@ export function HeroSection() {
             <motion.div variants={fadeUp} className="mt-8">
               <motion.div whileHover={{ scale: 1.04 }} whileTap={{ scale: 0.97 }}>
                 <Link
-                  href="/dashboard"
+                  href="/demo?source=hero"
                   className="inline-flex items-center justify-center px-8 py-3.5 rounded-full bg-[#007bff] text-white font-semibold text-sm hover:bg-[#0069d9] transition-colors shadow-lg shadow-blue-500/25"
                 >
                   Get free demo
