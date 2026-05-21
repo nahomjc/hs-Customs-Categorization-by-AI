@@ -60,7 +60,7 @@ export async function processDocumentPipeline(
     .where(eq(documentItems.documentId, documentId))
     .orderBy(documentItems.lineIndex);
 
-  onStatus?.("AI classifying items");
+  onStatus?.("Feature extractor AI -> GRI rules -> OpenRouter reasoning");
   await db
     .update(documents)
     .set({ status: "ai_processed", updatedAt: new Date() })
@@ -74,7 +74,7 @@ export async function processDocumentPipeline(
           unit: item.detectedUnit ?? undefined,
         }
       );
-      // Result is already validated in classifyItem (exact HS, category gate)
+      // Result is validated in classifyItem (final validated HS code)
       const hsCode = result.isImportItem === false ? "EXCLUDE" : result.hsCode;
       await db.insert(itemClassifications).values({
         itemId: item.id,

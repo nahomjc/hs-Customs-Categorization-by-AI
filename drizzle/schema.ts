@@ -1,4 +1,4 @@
-import { pgTable, index, pgPolicy, uuid, varchar, text, timestamp, foreignKey, integer, numeric } from "drizzle-orm/pg-core"
+import { pgTable, index, pgPolicy, uuid, varchar, text, timestamp, foreignKey, integer, numeric, unique, jsonb } from "drizzle-orm/pg-core"
 import { sql } from "drizzle-orm"
 
 
@@ -89,4 +89,29 @@ export const hsCodeReference = pgTable("hs_code_reference", {
 	hsCode: varchar("hs_code", { length: 20 }).primaryKey().notNull(),
 	category: varchar({ length: 100 }),
 	description: text(),
+});
+
+export const users = pgTable("users", {
+	id: uuid().primaryKey().notNull(),
+	tenantId: varchar("tenant_id", { length: 30 }).notNull(),
+	email: varchar({ length: 255 }).notNull(),
+	fullName: varchar("full_name", { length: 255 }),
+	avatarUrl: text("avatar_url"),
+	role: varchar({ length: 30 }).default('user').notNull(),
+	status: varchar({ length: 30 }).default('active').notNull(),
+	meta: jsonb().default({}).notNull(),
+	createdAt: timestamp("created_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+	updatedAt: timestamp("updated_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+}, (table) => {
+	return {
+		idxUsersEmail: index("idx_users_email").using("btree", table.email.asc().nullsLast().op("text_ops")),
+		idxUsersTenantId: index("idx_users_tenant_id").using("btree", table.tenantId.asc().nullsLast().op("text_ops")),
+		usersIdFkey: foreignKey({
+			columns: [table.id],
+			foreignColumns: [table.id],
+			name: "users_id_fkey"
+		}).onDelete("cascade"),
+		usersTenantEmailUnique: unique("users_tenant_email_unique").on(table.tenantId, table.email),
+		allowAllForService: pgPolicy("Allow all for service", { as: "permissive", for: "all", to: ["public"], using: sql`true`, withCheck: sql`true`  }),
+	}
 });

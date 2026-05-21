@@ -1,8 +1,24 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
+const AUTH_PATHS = new Set([
+  "/login",
+  "/signup",
+  "/forgot-password",
+  "/reset-password",
+  "/auth/callback",
+]);
+
+function isProtectedPath(pathname: string) {
+  return (
+    pathname === "/account" ||
+    pathname.startsWith("/account/") ||
+    pathname === "/dashboard" ||
+    pathname.startsWith("/dashboard/")
+  );
+}
+
 export async function middleware(request: NextRequest) {
-  // Skip Supabase auth for all API routes (avoids "Invalid Compact JWS" from cookie JWT on serverless)
   if (request.nextUrl.pathname.startsWith("/api/")) {
     return NextResponse.next();
   }
@@ -24,26 +40,48 @@ export async function middleware(request: NextRequest) {
         return request.cookies.getAll();
       },
       setAll(cookiesToSet) {
-        cookiesToSet.forEach(({ name, value }) =>
-          response.cookies.set(name, value)
-        );
+        for (const { name, value, options } of cookiesToSet) {
+          request.cookies.set(name, value);
+          response.cookies.set(
+            name,
+            value,
+            options as Parameters<typeof response.cookies.set>[2]
+          );
+        }
       },
     },
   });
 
+  let user = null;
   try {
-    await supabase.auth.getUser();
+    const { data } = await supabase.auth.getUser();
+    user = data.user;
   } catch (err) {
-    // Invalid/expired JWT (e.g. "Invalid Compact JWS") – clear auth cookies and continue
     const msg = err instanceof Error ? err.message : String(err);
     if (/compact jws|jwt|jose/i.test(msg)) {
       const all = request.cookies.getAll();
-      all.forEach(({ name }) => {
+      for (const { name } of all) {
         if (name.startsWith("sb-") && name.includes("auth-token")) {
           response.cookies.set(name, "", { maxAge: 0, path: "/" });
         }
-      });
+      }
     }
+  }
+
+  const { pathname } = request.nextUrl;
+
+  if (isProtectedPath(pathname) && !user) {
+    const loginUrl = request.nextUrl.clone();
+    loginUrl.pathname = "/login";
+    loginUrl.searchParams.set("redirect", pathname);
+    return NextResponse.redirect(loginUrl);
+  }
+
+  if (user && AUTH_PATHS.has(pathname) && pathname !== "/auth/callback") {
+    const dashboardUrl = request.nextUrl.clone();
+    dashboardUrl.pathname = "/dashboard";
+    dashboardUrl.search = "";
+    return NextResponse.redirect(dashboardUrl);
   }
 
   return response;
@@ -51,7 +89,6 @@ export async function middleware(request: NextRequest) {
 
 export const config = {
   matcher: [
-    // Run auth for pages only; skip static assets and all /api/* (avoids JWT errors on serverless)
     "/((?!_next/static|_next/image|favicon.ico|api/|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
   ],
 };

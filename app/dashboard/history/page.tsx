@@ -1,3 +1,4 @@
+import { PageHeader } from "@/components/dashboard/ui";
 import { db } from "@/db";
 import { documents } from "@/db/schema";
 import { desc } from "drizzle-orm";
@@ -28,15 +29,10 @@ export default async function HistoryPage() {
 
   return (
     <div className="space-y-8">
-      <div>
-        <h1 className="text-2xl font-bold text-[var(--foreground)] tracking-tight">
-          History
-        </h1>
-        <p className="mt-1 text-[var(--foreground)]/70">
-          All uploaded packing lists and their processing status.
-        </p>
-      </div>
-
+      <PageHeader
+        title="History"
+        description="All uploaded packing lists and their processing status."
+      />
       <HistoryTable list={list} />
     </div>
   );

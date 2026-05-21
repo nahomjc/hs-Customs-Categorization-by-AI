@@ -4,6 +4,11 @@ import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
+  StatusBadge,
+  dashInputClass,
+  dashSelectClass,
+} from "@/components/dashboard/ui";
+import {
   Dialog,
   DialogContent,
   DialogDescription,
@@ -132,36 +137,13 @@ export function HistoryTable({ list }: { list: Doc[] }) {
     }));
   };
 
-  const statusBadge = (s: string | null) => {
-    const status = s ?? "uploaded";
-    const styles: Record<string, string> = {
-      uploaded: "bg-stone-100 text-stone-700",
-      parsed: "bg-amber-100 text-amber-800",
-      ai_processed: "bg-amber-100 text-amber-800",
-      completed: "bg-emerald-100 text-emerald-800",
-      failed: "bg-red-100 text-red-800",
-    };
-    const c = styles[status] ?? "bg-stone-100 text-stone-700";
-    return (
-      <span
-        className={
-          "inline-flex items-center px-2.5 py-1 rounded-md text-xs font-medium " +
-          c
-        }
-      >
-        {formatStatus(status)}
-      </span>
-    );
-  };
-
   return (
     <>
-      <div className="bg-[var(--background-card)] rounded-xl border border-[var(--border)] shadow-sm overflow-hidden">
-        {/* Search + filter bar */}
-        <div className="px-4 py-3 border-b border-[var(--border)] bg-[var(--background)]/50 flex flex-col sm:flex-row gap-3">
+      <div className="landing-float-card bg-white rounded-2xl overflow-hidden">
+        <div className="px-4 py-3 border-b border-gray-100 bg-gray-50/50 flex flex-col sm:flex-row gap-3">
           <div className="relative flex-1">
             <span
-              className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--foreground)]/40 pointer-events-none"
+              className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none"
               aria-hidden
             >
               <svg
@@ -183,14 +165,14 @@ export function HistoryTable({ list }: { list: Doc[] }) {
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Search by file name or date…"
-              className="w-full pl-9 pr-8 py-2 text-sm border border-[var(--border)] rounded-lg bg-white focus:ring-2 focus:ring-[var(--accent)] focus:border-[var(--accent)] outline-none"
+              className={`${dashInputClass} pr-8`}
               aria-label="Search history"
             />
             {search && (
               <button
                 type="button"
                 onClick={() => setSearch("")}
-                className="absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded text-[var(--foreground)]/50 hover:text-[var(--foreground)] hover:bg-[var(--background)]"
+                className="absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded text-gray-400 hover:text-gray-700 hover:bg-gray-100"
                 aria-label="Clear search"
               >
                 <svg
@@ -210,13 +192,11 @@ export function HistoryTable({ list }: { list: Doc[] }) {
             )}
           </div>
           <div className="flex items-center gap-2 flex-wrap">
-            <label className="text-sm text-[var(--foreground)]/70 shrink-0">
-              Status:
-            </label>
+            <label className="text-sm text-gray-500 shrink-0">Status:</label>
             <select
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value)}
-              className="py-2 pl-3 pr-8 text-sm border border-[var(--border)] rounded-lg bg-white focus:ring-2 focus:ring-[var(--accent)] focus:border-[var(--accent)] outline-none"
+              className={dashSelectClass}
               aria-label="Filter by status"
             >
               {STATUS_OPTIONS.map((o) => (
@@ -225,7 +205,7 @@ export function HistoryTable({ list }: { list: Doc[] }) {
                 </option>
               ))}
             </select>
-            <span className="text-xs text-[var(--foreground)]/60 whitespace-nowrap">
+            <span className="text-xs text-gray-500 whitespace-nowrap">
               {sorted.length === list.length
                 ? `${list.length} document${list.length !== 1 ? "s" : ""}`
                 : `${sorted.length} of ${list.length}`}
@@ -236,12 +216,12 @@ export function HistoryTable({ list }: { list: Doc[] }) {
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
-              <tr className="bg-[var(--background)]/80 text-left border-b border-[var(--border)]">
+              <tr className="bg-gray-50/80 text-left border-b border-gray-100">
                 <th className="px-5 py-3.5">
                   <button
                     type="button"
                     onClick={() => toggleSort("file")}
-                    className="font-semibold text-[var(--foreground)]/80 uppercase tracking-wider text-xs text-left flex items-center gap-1 hover:text-[var(--foreground)]"
+                    className="font-semibold text-gray-500 uppercase tracking-wider text-xs text-left flex items-center gap-1 hover:text-gray-900"
                   >
                     File
                     {sort.key === "file" && (sort.dir === "asc" ? " ↑" : " ↓")}
@@ -251,7 +231,7 @@ export function HistoryTable({ list }: { list: Doc[] }) {
                   <button
                     type="button"
                     onClick={() => toggleSort("date")}
-                    className="font-semibold text-[var(--foreground)]/80 uppercase tracking-wider text-xs text-left flex items-center gap-1 hover:text-[var(--foreground)]"
+                    className="font-semibold text-gray-500 uppercase tracking-wider text-xs text-left flex items-center gap-1 hover:text-gray-900"
                   >
                     Date
                     {sort.key === "date" && (sort.dir === "asc" ? " ↑" : " ↓")}
@@ -261,14 +241,14 @@ export function HistoryTable({ list }: { list: Doc[] }) {
                   <button
                     type="button"
                     onClick={() => toggleSort("status")}
-                    className="font-semibold text-[var(--foreground)]/80 uppercase tracking-wider text-xs text-left flex items-center gap-1 hover:text-[var(--foreground)]"
+                    className="font-semibold text-gray-500 uppercase tracking-wider text-xs text-left flex items-center gap-1 hover:text-gray-900"
                   >
                     Status
                     {sort.key === "status" &&
                       (sort.dir === "asc" ? " ↑" : " ↓")}
                   </button>
                 </th>
-                <th className="px-5 py-3.5 font-semibold text-[var(--foreground)]/80 uppercase tracking-wider text-xs w-24 text-right">
+                <th className="px-5 py-3.5 font-semibold text-gray-500 uppercase tracking-wider text-xs w-24 text-right">
                   Action
                 </th>
               </tr>
@@ -278,9 +258,9 @@ export function HistoryTable({ list }: { list: Doc[] }) {
                 <tr>
                   <td colSpan={4} className="p-0">
                     <div className="flex flex-col items-center justify-center py-16 px-6 text-center">
-                      <div className="w-14 h-14 rounded-full bg-[var(--background)] flex items-center justify-center mb-4">
+                      <div className="w-14 h-14 rounded-2xl bg-blue-50 flex items-center justify-center mb-4 text-[#007bff]">
                         <svg
-                          className="w-7 h-7 text-[var(--foreground)]/40"
+                          className="w-7 h-7 opacity-60"
                           fill="none"
                           stroke="currentColor"
                           viewBox="0 0 24 24"
@@ -293,16 +273,14 @@ export function HistoryTable({ list }: { list: Doc[] }) {
                           />
                         </svg>
                       </div>
-                      <p className="font-semibold text-[var(--foreground)]">
-                        No documents yet
-                      </p>
-                      <p className="mt-1 text-sm text-[var(--foreground)]/60 max-w-xs">
+                      <p className="font-semibold text-gray-900">No documents yet</p>
+                      <p className="mt-1 text-sm text-gray-500 max-w-xs">
                         Upload a packing list from the Upload page to see it
                         here.
                       </p>
                       <Link
                         href="/dashboard/upload"
-                        className="mt-5 inline-flex items-center gap-2 px-4 py-2.5 bg-[var(--accent)] text-white rounded-lg text-sm font-medium hover:bg-[var(--accent-hover)] transition-colors"
+                        className="mt-5 inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-[#007bff] text-white text-sm font-semibold hover:bg-[#0069d9] transition-colors shadow-md shadow-blue-500/20"
                       >
                         Upload packing list
                       </Link>
@@ -313,7 +291,7 @@ export function HistoryTable({ list }: { list: Doc[] }) {
                 <tr>
                   <td
                     colSpan={4}
-                    className="px-5 py-12 text-center text-[var(--foreground)]/60 text-sm"
+                    className="px-5 py-12 text-center text-gray-500 text-sm"
                   >
                     No documents match your search or filter.
                   </td>
@@ -322,22 +300,27 @@ export function HistoryTable({ list }: { list: Doc[] }) {
                 sorted.map((doc) => (
                   <tr
                     key={doc.id}
-                    className="border-t border-[var(--border-subtle)] hover:bg-[var(--background)]/50 transition-colors"
+                    className="border-t border-gray-50 hover:bg-gray-50/50 transition-colors"
                   >
                     <td className="px-5 py-3.5">
-                      <span className="font-medium text-[var(--foreground)] truncate block max-w-[240px] sm:max-w-none">
+                      <span className="font-medium text-gray-900 truncate block max-w-[240px] sm:max-w-none">
                         {doc.originalFileName ?? "—"}
                       </span>
                     </td>
-                    <td className="px-5 py-3.5 text-[var(--foreground)]/70 whitespace-nowrap text-xs">
+                    <td className="px-5 py-3.5 text-gray-500 whitespace-nowrap text-xs">
                       {formatDate(doc.createdAt)}
                     </td>
-                    <td className="px-5 py-3.5">{statusBadge(doc.status)}</td>
+                    <td className="px-5 py-3.5">
+                      <StatusBadge
+                        status={doc.status}
+                        label={formatStatus(doc.status)}
+                      />
+                    </td>
                     <td className="px-5 py-3.5 text-right">
                       <div className="inline-flex items-center gap-2">
                         <Link
                           href={"/dashboard/documents/" + doc.id}
-                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium text-[var(--accent)] bg-[var(--accent-light)]/50 hover:bg-[var(--accent-light)] transition-colors"
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium text-[#007bff] bg-blue-50 hover:bg-blue-100 transition-colors"
                         >
                           View
                           <svg
@@ -432,7 +415,7 @@ export function HistoryTable({ list }: { list: Doc[] }) {
               type="button"
               onClick={closeDeleteDialog}
               disabled={!!deletingId}
-              className="px-4 py-2 rounded-lg text-sm font-medium border border-[var(--border)] bg-[var(--background)] text-[var(--foreground)] hover:bg-[var(--background)]/80 disabled:opacity-50"
+              className="px-4 py-2 rounded-full text-sm font-medium border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 disabled:opacity-50"
             >
               Cancel
             </button>

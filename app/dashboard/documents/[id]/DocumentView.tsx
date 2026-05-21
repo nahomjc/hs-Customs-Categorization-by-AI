@@ -293,7 +293,7 @@ export function DocumentView(props: {
 
     return (
       <div className="max-w-md mx-auto py-12">
-        <div className="bg-[var(--background-card)] rounded-xl border border-[var(--border)] shadow-sm overflow-hidden">
+        <div className="landing-float-card bg-white rounded-2xl overflow-hidden">
           <div className="px-6 pt-6 pb-4">
             <div className="flex items-center gap-3 mb-6">
               <div className="flex-shrink-0 w-10 h-10 rounded-full bg-[var(--accent-light)] flex items-center justify-center text-[var(--accent)]">
@@ -427,7 +427,7 @@ export function DocumentView(props: {
           </svg>
           Back to dashboard
         </Link>
-        <div className="bg-[var(--background-card)] rounded-xl border border-[var(--border)] shadow-sm overflow-hidden">
+        <div className="landing-float-card bg-white rounded-2xl overflow-hidden">
           <div className="p-6 text-center">
             <div className="w-12 h-12 rounded-full bg-red-100 flex items-center justify-center mx-auto mb-4">
               <svg
@@ -490,11 +490,11 @@ export function DocumentView(props: {
         </Link>
 
         {/* Document header card */}
-        <div className="bg-[var(--background-card)] rounded-xl border border-[var(--border)] shadow-sm overflow-hidden">
+        <div className="landing-float-card bg-white rounded-2xl overflow-hidden">
           <div className="px-5 py-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
             <div className="min-w-0">
               <div className="flex items-center gap-2">
-                <div className="shrink-0 w-9 h-9 rounded-lg bg-[var(--accent-light)] flex items-center justify-center text-[var(--accent)]">
+                <div className="shrink-0 w-9 h-9 rounded-xl bg-blue-50 flex items-center justify-center text-[#007bff]">
                   <svg
                     className="w-5 h-5"
                     fill="none"
