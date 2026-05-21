@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useState } from "react";
 import { toast } from "sonner";
+import { getAuthErrorMessage } from "@/lib/auth/auth-error-message";
 import { getRedirectOrigin } from "@/lib/auth/redirect-origin";
 import { createClient } from "@/lib/supabase/client";
 
@@ -26,7 +27,7 @@ export function ForgotPasswordForm() {
     setLoading(false);
 
     if (error) {
-      toast.error(error.message);
+      toast.error(getAuthErrorMessage(error));
       return;
     }
 
@@ -38,8 +39,19 @@ export function ForgotPasswordForm() {
     return (
       <div className="space-y-5 text-center">
         <div className="mx-auto w-12 h-12 rounded-full bg-[#007bff]/10 flex items-center justify-center text-[#007bff]">
-          <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+          <svg
+            className="w-6 h-6"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+            strokeWidth={2}
+            aria-hidden="true"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              d="M5 13l4 4L19 7"
+            />
           </svg>
         </div>
         <p className="auth-muted leading-relaxed">

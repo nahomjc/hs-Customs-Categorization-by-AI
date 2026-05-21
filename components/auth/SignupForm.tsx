@@ -5,6 +5,7 @@ import { useState } from "react";
 import { toast } from "sonner";
 import { PasswordInput } from "@/components/auth/PasswordInput";
 
+import { getAuthErrorMessage } from "@/lib/auth/auth-error-message";
 import { getRedirectOrigin } from "@/lib/auth/redirect-origin";
 import { createClient } from "@/lib/supabase/client";
 
@@ -39,7 +40,7 @@ export function SignupForm() {
     setLoading(false);
 
     if (error) {
-      toast.error(error.message);
+      toast.error(getAuthErrorMessage(error));
       return;
     }
 

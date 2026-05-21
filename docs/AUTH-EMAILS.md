@@ -41,9 +41,33 @@ NEXT_PUBLIC_APP_URL=https://your-app.vercel.app
 
 ## Test
 
-1. Set env vars and redeploy (or restart `npm run dev` with ngrok URL in the hook).
-2. Sign up at `/signup`.
-3. Inbox should show the branded Impact Logistics email from your Brevo sender.
+1. Set env vars and **redeploy Vercel** (the hook route must exist in production).
+2. Confirm the endpoint responds (should **not** be 404):
+   `POST https://YOUR_APP/api/auth/hooks/send-email`
+3. Sign up at `/signup`.
+4. Inbox should show the branded Impact Logistics email from your Brevo sender.
+
+## Troubleshooting
+
+### `unexpected_failure` — hook returned 404
+
+Supabase enabled the Send Email hook, but your deployed app does not have the API route yet (or the hook URL is wrong).
+
+**Fix A (use in-repo emails):**
+
+1. Deploy latest code to Vercel.
+2. Vercel → Project → **Settings** → **Environment Variables**: add `BREVO_API_KEY`, `BREVO_SENDER_EMAIL`, `BREVO_SENDER_NAME`, `SEND_EMAIL_HOOK_SECRET`.
+3. Supabase → **Authentication** → **Hooks** → Send Email → URL must be exactly:
+   `https://hs-customs-categorization-by-ai.vercel.app/api/auth/hooks/send-email`
+   (no trailing slash)
+4. Redeploy after env changes.
+
+**Fix B (fastest — no hook):**
+
+1. Supabase → **Authentication** → **Hooks** → **disable** Send Email hook.
+2. Use **SMTP** (Brevo) + paste templates from `docs/supabase-email-templates/` under **Email Templates**.
+
+Signup works again as soon as Supabase is not calling a missing URL.
 
 ## Legacy dashboard templates
 

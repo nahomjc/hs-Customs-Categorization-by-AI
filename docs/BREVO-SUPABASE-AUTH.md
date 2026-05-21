@@ -78,14 +78,28 @@ Run the SQL from the previous step (users table + optional trigger on `auth.user
 
 Enable the **Send Email** hook → `https://YOUR_APP/api/auth/hooks/send-email`. Full steps: [AUTH-EMAILS.md](./AUTH-EMAILS.md).
 
-## 8. Test flow
+## 8. Email rate limits (`429 over_email_send_rate_limit`)
+
+Supabase caps how many auth emails (signup, reset, etc.) your project can send per hour. If signup returns **429** with `over_email_send_rate_limit`, you hit that cap—common while testing signup repeatedly.
+
+**Fix:**
+
+1. Wait ~1 hour for the window to reset, or use an email you have not tried yet.
+2. Supabase Dashboard → **Authentication** → **Rate Limits**  
+   [Open rate limits for this project](https://supabase.com/dashboard/project/dznvltvreyjgmkbtowef/auth/rate-limits)
+3. Raise **Email sent** / `rate_limit_email_sent` (e.g. from 30 to 100+ for staging).
+4. Ensure **custom SMTP** (Brevo) is enabled—built-in Supabase mail has a much lower cap. See [custom SMTP](https://supabase.com/docs/guides/auth/auth-smtp).
+
+If the user already signed up, check inbox for an earlier confirmation link or use **Sign in** / **Forgot password** instead of creating again.
+
+## 9. Test flow
 
 1. Open `/signup` → create account.
 2. Check inbox for confirmation email (from Brevo sender).
 3. Click link → `/auth/callback` → dashboard.
 4. **Forgot password** → `/forgot-password` → reset email → set password on `/reset-password`.
 
-## 9. App routes
+## 10. App routes
 
 | Route | Purpose |
 |-------|---------|
