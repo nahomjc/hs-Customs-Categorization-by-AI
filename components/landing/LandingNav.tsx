@@ -9,6 +9,7 @@ import { LandingWrap } from "./LandingWrap";
 
 const navLinks = [
   { href: "#features", label: "Features" },
+  { href: "#telegram-monitoring", label: "Telegram" },
   { href: "#how-it-works", label: "How it works" },
   { href: "#solutions", label: "Solutions" },
   { href: "#pricing", label: "Pricing" },

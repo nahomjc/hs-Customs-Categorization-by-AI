@@ -36,6 +36,7 @@ export function LandingFooter() {
           >
             {[
               { href: "#features", label: "Features", external: true },
+              { href: "#telegram-monitoring", label: "Telegram", external: true },
               { href: "#how-it-works", label: "How it works", external: true },
               { href: "#solutions", label: "Solutions", external: true },
               { href: "#pricing", label: "Pricing", external: true },

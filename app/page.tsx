@@ -8,6 +8,7 @@ import { LandingFooter } from "@/components/landing/LandingFooter";
 import { LandingNav } from "@/components/landing/LandingNav";
 import { PricingSection } from "@/components/landing/PricingSection";
 import { SolutionsSection } from "@/components/landing/SolutionsSection";
+import { TelegramMonitoringSection } from "@/components/landing/TelegramMonitoringSection";
 import { toUserMenuUser } from "@/lib/auth/user-display";
 import { createClient } from "@/lib/supabase/server";
 
@@ -29,6 +30,7 @@ export default async function HomePage() {
         <HeroSection />
         <DashboardPreviewSection />
         <FeaturesSection />
+        <TelegramMonitoringSection />
         <HowItWorksSection />
         <SolutionsSection />
         <PricingSection />

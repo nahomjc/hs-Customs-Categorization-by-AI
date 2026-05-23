@@ -24,6 +24,7 @@ const plans = [
     features: [
       "Unlimited documents",
       "Priority processing",
+      "Telegram monitoring",
       "History & audit trail",
       "Dedicated onboarding",
     ],
@@ -38,6 +39,7 @@ const plans = [
     description: "SSO, SLAs, and integrations for large customs operations.",
     features: [
       "Custom rules & HS tables",
+      "Telegram + multi-channel alerts",
       "API access",
       "Volume pricing",
       "24/7 support",
