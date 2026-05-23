@@ -44,10 +44,7 @@ type UsersTableProps = {
   canManageRoles?: boolean;
 };
 
-export function UsersTable({
-  users,
-  canManageRoles = false,
-}: UsersTableProps) {
+export function UsersTable({ users, canManageRoles = false }: UsersTableProps) {
   return (
     <div className="space-y-6">
       <PageHeader
@@ -59,12 +56,12 @@ export function UsersTable({
             className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold text-white bg-[#007bff] hover:bg-[#0069d9] transition-colors shadow-sm"
           >
             <svg
+              aria-hidden="true"
               className="w-4 h-4"
               fill="none"
               viewBox="0 0 24 24"
               stroke="currentColor"
               strokeWidth={2}
-              aria-hidden
             >
               <path
                 strokeLinecap="round"
@@ -82,20 +79,14 @@ export function UsersTable({
           <table className="w-full text-sm">
             <thead>
               <tr className="bg-gray-50/80 text-left border-b border-gray-100">
-                <th className="px-5 py-3 font-medium text-gray-500 uppercase tracking-wider text-xs">
+                <th className="px-5 py-3 font-medium text-gray-500 uppercase tracking-wider text-xs min-w-[200px]">
                   User
-                </th>
-                <th className="px-5 py-3 font-medium text-gray-500 uppercase tracking-wider text-xs">
-                  Email
                 </th>
                 <th className="px-5 py-3 font-medium text-gray-500 uppercase tracking-wider text-xs w-36">
                   Role
                 </th>
                 <th className="px-5 py-3 font-medium text-gray-500 uppercase tracking-wider text-xs w-28">
                   Status
-                </th>
-                <th className="px-5 py-3 font-medium text-gray-500 uppercase tracking-wider text-xs w-32">
-                  Tenant
                 </th>
                 <th className="px-5 py-3 font-medium text-gray-500 uppercase tracking-wider text-xs w-32">
                   Joined
@@ -108,7 +99,10 @@ export function UsersTable({
             <tbody>
               {users.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="px-5 py-16 text-center text-gray-500">
+                  <td
+                    colSpan={5}
+                    className="px-5 py-16 text-center text-gray-500"
+                  >
                     No users in the database yet.
                   </td>
                 </tr>
@@ -119,7 +113,7 @@ export function UsersTable({
                     className="border-t border-gray-50 hover:bg-gray-50/60 transition-colors"
                   >
                     <td className="px-5 py-3.5">
-                      <div className="flex items-center gap-3 min-w-[160px]">
+                      <div className="flex items-center gap-3 min-w-[200px]">
                         {u.avatarUrl ? (
                           // eslint-disable-next-line @next/next/no-img-element
                           <img
@@ -132,12 +126,16 @@ export function UsersTable({
                             {getInitials(u.fullName, u.email)}
                           </span>
                         )}
-                        <span className="font-medium text-gray-900 truncate">
-                          {u.fullName || "—"}
-                        </span>
+                        <div className="min-w-0">
+                          <p className="font-medium text-gray-900 truncate">
+                            {u.fullName || "—"}
+                          </p>
+                          <p className="text-xs text-gray-500 truncate">
+                            {u.email}
+                          </p>
+                        </div>
                       </div>
                     </td>
-                    <td className="px-5 py-3.5 text-gray-600">{u.email}</td>
                     <td className="px-5 py-3.5">
                       <UserRoleSelect
                         userId={u.id}
@@ -147,9 +145,6 @@ export function UsersTable({
                     </td>
                     <td className="px-5 py-3.5">
                       <StatusPill status={u.status} />
-                    </td>
-                    <td className="px-5 py-3.5 text-gray-500 text-xs font-mono">
-                      {u.tenantId}
                     </td>
                     <td className="px-5 py-3.5 text-gray-500 whitespace-nowrap">
                       {formatDate(u.createdAt)}

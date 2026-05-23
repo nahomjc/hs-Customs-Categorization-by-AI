@@ -1,26 +1,17 @@
 import { documents } from "@/db/schema";
-import { and, eq, or, type SQL } from "drizzle-orm";
-
-/** Values used before upload API stored the authenticated user id. */
-const LEGACY_UPLOAD_MARKERS = ["user", "test-user"] as const;
+import { eq, or, sql, type SQL } from "drizzle-orm";
 
 type UserRef = {
   id: string;
   email: string;
-  tenantId: string;
+  tenantId?: string;
 };
 
-/** SQL filter: documents belonging to this user (id, email, or legacy tenant uploads). */
+/** SQL filter: documents uploaded by this user (Supabase auth id or email on uploaded_by). */
 export function documentsUploadedByUser(user: UserRef): SQL {
-  const legacyMarkerMatch = or(
-    ...LEGACY_UPLOAD_MARKERS.map((marker) =>
-      eq(documents.uploadedBy, marker)
-    )
-  );
-
-  return or(
-    eq(documents.uploadedBy, user.id),
-    eq(documents.uploadedBy, user.email),
-    and(eq(documents.tenantId, user.tenantId), legacyMarkerMatch)
-  ) as SQL;
+  const matchers: SQL[] = [eq(documents.uploadedBy, user.id)];
+  if (user.email) {
+    matchers.push(sql`lower(${documents.uploadedBy}) = lower(${user.email})`);
+  }
+  return matchers.length === 1 ? matchers[0] : (or(...matchers) as SQL);
 }
