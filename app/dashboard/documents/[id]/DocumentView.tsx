@@ -1,10 +1,13 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { toast } from "sonner";
-import { startProcessingDocument } from "@/app/actions";
+import {
+  runClassificationBatch,
+  startProcessingDocument,
+} from "@/app/actions";
 import { NEED_INFO_HS } from "@/lib/allowedHsCodes";
 import { DocumentChat } from "./DocumentChat";
 
@@ -48,6 +51,8 @@ export function DocumentView(props: {
     totalItems: number;
     classifiedCount: number;
   } | null>(null);
+  const [classifyTrigger, setClassifyTrigger] = useState(0);
+  const classifyingRef = useRef(false);
   const [searchItems, setSearchItems] = useState("");
   const [searchGrouped, setSearchGrouped] = useState("");
   const [sortItems, setSortItems] = useState<{
@@ -230,43 +235,75 @@ export function DocumentView(props: {
     }));
   };
 
-  const retryProcessing = async () => {
+  const runAllClassificationBatches = useCallback(async () => {
+    if (classifyingRef.current) return;
+    classifyingRef.current = true;
     setProcessing(true);
     setError(null);
-    setStatus("uploaded");
     try {
-      const r = await startProcessingDocument(documentId);
-      if (r.error) {
-        setError(r.error);
-        setStatus("failed");
-      } else {
-        setStatus("completed");
-        router.refresh();
+      for (;;) {
+        const r = await runClassificationBatch(documentId);
+        if (r.error) {
+          setError(r.error);
+          setStatus("failed");
+          return;
+        }
+        if (r.totalItems != null && r.classifiedCount != null) {
+          setProgress({
+            totalItems: r.totalItems,
+            classifiedCount: r.classifiedCount,
+          });
+          setStatus("ai_processed");
+        }
+        if (r.completed) {
+          setStatus("completed");
+          router.refresh();
+          return;
+        }
+        await new Promise((resolve) => setTimeout(resolve, 400));
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed");
       setStatus("failed");
     } finally {
+      classifyingRef.current = false;
       setProcessing(false);
     }
+  }, [documentId, router]);
+
+  const retryProcessing = async () => {
+    setError(null);
+    if (status === "failed") {
+      setStatus("uploaded");
+      setClassifyTrigger((t) => t + 1);
+      return;
+    }
+    setClassifyTrigger((t) => t + 1);
   };
 
   useEffect(() => {
-    if ((status !== "uploaded" && status !== "failed") || processing) return;
-    if (status === "failed") return;
+    if (status !== "uploaded") return;
     let cancelled = false;
     const run = async () => {
       setProcessing(true);
+      setError(null);
       try {
         const r = await startProcessingDocument(documentId);
         if (cancelled) return;
-        if (r.error) setError(r.error);
-        else {
-          setStatus("completed");
-          router.refresh();
+        if (r.error) {
+          setError(r.error);
+          setStatus("failed");
+          return;
+        }
+        if (r.success) {
+          setStatus("parsed");
+          setClassifyTrigger((t) => t + 1);
         }
       } catch (e) {
-        if (!cancelled) setError(e instanceof Error ? e.message : "Failed");
+        if (!cancelled) {
+          setError(e instanceof Error ? e.message : "Failed");
+          setStatus("failed");
+        }
       } finally {
         if (!cancelled) setProcessing(false);
       }
@@ -275,7 +312,14 @@ export function DocumentView(props: {
     return () => {
       cancelled = true;
     };
-  }, [documentId, status, processing, router]);
+  }, [documentId, status]);
+
+  useEffect(() => {
+    if (status !== "parsed" && status !== "ai_processed") return;
+    // Run on resume (ai_processed) or after parse sets classifyTrigger
+    if (classifyTrigger === 0 && status !== "ai_processed") return;
+    void runAllClassificationBatches();
+  }, [classifyTrigger, status, runAllClassificationBatches]);
 
   useEffect(() => {
     if (status === "completed" || status === "failed" || processing) return;
@@ -419,11 +463,20 @@ export function DocumentView(props: {
               })}
             </ul>
           </div>
-          <div className="px-6 py-3 bg-[var(--background)]/60 border-t border-[var(--border)]">
+          <div className="px-6 py-3 bg-[var(--background)]/60 border-t border-[var(--border)] space-y-2">
             <p className="text-xs text-[var(--foreground)]/50">
-              Do not close this page. You’ll be redirected when processing is
-              complete.
+              Keep this tab open. Large lists are classified in small batches so
+              processing can resume if interrupted.
             </p>
+            {status === "ai_processed" && !processing && (
+              <button
+                type="button"
+                onClick={() => setClassifyTrigger((t) => t + 1)}
+                className="text-xs font-medium text-[var(--accent)] hover:underline"
+              >
+                Stuck? Continue classification
+              </button>
+            )}
           </div>
         </div>
       </div>

@@ -1,6 +1,7 @@
 import { ALLOWED_HS_CODES, validateClassification } from "./allowedHsCodes";
 import { applyAssessorRules } from "./assessorRules";
 import { applyGriRuleEngine, type HsFeatures } from "./griRuleEngine";
+import { fetchOpenRouter } from "./openrouterFetch";
 
 const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
 
@@ -59,13 +60,13 @@ async function callOpenRouter(messages: Array<{ role: "system" | "user"; content
     throw new Error("OPENROUTER_API_KEY is not set");
   }
 
-  const res = await fetch(OPENROUTER_URL, {
+  const res = await fetchOpenRouter(OPENROUTER_URL, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${apiKey}`,
       "Content-Type": "application/json",
       "HTTP-Referer":
-        process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000",
+        process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3099",
     },
     body: JSON.stringify({
       model: "openai/gpt-4o-mini",
