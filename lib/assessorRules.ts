@@ -30,6 +30,27 @@ const FORCE_RULES: Array<{
     hsCode: "4814",
     category: "Wallpaper and wall coverings",
   },
+  // Towels / textiles — never wallpaper 4814
+  {
+    match: (d) => /\btowel\b|bath\s*towel|cotton\s*towel/i.test(d),
+    hsCode: "6302",
+    category: "Textiles",
+  },
+  // Kitchen appliances — never computers 8471
+  {
+    match: (d) =>
+      /soy\s*milk\s*maker|milk\s*maker|electric\s*kettle|air\s*fryer|oven\b|steamer\b/i.test(
+        d
+      ),
+    hsCode: "8516",
+    category: "Electrical equipment",
+  },
+  // Cutlery / scissors
+  {
+    match: (d) => /\bscissors?\b/i.test(d),
+    hsCode: "8213",
+    category: "Tools and cutlery",
+  },
   // Ceramic vase / ceramic vessel → always 6913
   {
     match: (d) =>

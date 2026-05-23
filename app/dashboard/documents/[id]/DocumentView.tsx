@@ -9,7 +9,10 @@ import {
   startProcessingDocument,
 } from "@/app/actions";
 import { NEED_INFO_HS } from "@/lib/allowedHsCodes";
+import { parseDocumentClassificationMeta } from "@/lib/classifyFromDocumentHs";
+import { DashLink, StatusBadge, dashInputClass } from "@/components/dashboard/ui";
 import { DocumentChat } from "./DocumentChat";
+import { DocumentProcessingStepper } from "./DocumentProcessingStepper";
 
 type Item = {
   id: string;
@@ -17,9 +20,12 @@ type Item = {
   detectedDescription: string | null;
   detectedQuantity: number | null;
   detectedUnit: string | null;
+  sourceHsCode: string | null;
+  lineNumber: number | null;
   aiCategory: string | null;
   aiHsCode: string | null;
   cleanDescription: string | null;
+  aiRawResponse: string | null;
 };
 
 type Grouped = {
@@ -39,11 +45,14 @@ export function DocumentView(props: {
   documentId: string;
   status: string | null;
   fileName: string | null;
+  classificationMode: string | null;
   items: Item[];
   grouped: Grouped[];
 }) {
   const router = useRouter();
-  const { documentId, fileName, items, grouped } = props;
+  const { documentId, fileName, classificationMode, items, grouped } = props;
+  const isPreCoded = classificationMode === "pre_coded";
+  const hasDocumentHs = items.some((i) => i.sourceHsCode);
   const [status, setStatus] = useState(props.status ?? "uploaded");
   const [processing, setProcessing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -340,156 +349,9 @@ export function DocumentView(props: {
   }, [documentId, status, processing, router]);
 
   if (status !== "completed" && status !== "failed") {
-    const isClassifying =
-      status === "ai_processed" && progress && progress.totalItems > 0;
-    const steps = [
-      { id: "read", label: "Reading document", active: status === "uploaded" },
-      { id: "extract", label: "Extracting items", active: status === "parsed" },
-      {
-        id: "classify",
-        label: isClassifying
-          ? `AI classifying (${progress?.classifiedCount ?? 0}/${
-              progress?.totalItems ?? 0
-            })`
-          : "AI classifying",
-        active: status === "ai_processed",
-      },
-      { id: "group", label: "Grouping by HS code", active: false },
-    ];
-    const currentStepIndex = steps.findIndex((s) => s.active);
-    const activeIndex = currentStepIndex >= 0 ? currentStepIndex : 0;
-
     return (
-      <div className="max-w-md mx-auto py-12">
-        <div className="landing-float-card bg-white rounded-2xl overflow-hidden">
-          <div className="px-6 pt-6 pb-4">
-            <div className="flex items-center gap-3 mb-6">
-              <div className="flex-shrink-0 w-10 h-10 rounded-full bg-[var(--accent-light)] flex items-center justify-center text-[var(--accent)]">
-                <svg
-                  className="animate-spin h-5 w-5"
-                  xmlns="http://www.w3.org/2000/svg"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  aria-hidden="true"
-                >
-                  <circle
-                    className="opacity-25"
-                    cx="12"
-                    cy="12"
-                    r="10"
-                    stroke="currentColor"
-                    strokeWidth="4"
-                  />
-                  <path
-                    className="opacity-75"
-                    fill="currentColor"
-                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                  />
-                </svg>
-              </div>
-              <div>
-                <h2 className="font-semibold text-[var(--foreground)]">
-                  Processing your document
-                </h2>
-                <p className="text-sm text-[var(--foreground)]/60">
-                  {isClassifying
-                    ? "This may take a minute depending on list size."
-                    : "Please wait while we prepare your file."}
-                </p>
-              </div>
-            </div>
-            <ul className="space-y-0" aria-label="Processing steps">
-              {steps.map((step, i) => {
-                const isDone = i < activeIndex;
-                const isCurrent = i === activeIndex;
-                return (
-                  <li
-                    key={step.id}
-                    className="flex items-center gap-3 py-2.5 first:pt-0 last:pb-0"
-                  >
-                    <span
-                      className={`flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center text-xs font-medium transition-colors ${
-                        isCurrent
-                          ? "bg-[var(--accent)] text-white"
-                          : isDone
-                            ? "bg-emerald-100 text-emerald-700"
-                            : "bg-[var(--border)] text-[var(--foreground)]/50"
-                      }`}
-                      aria-hidden
-                    >
-                      {isDone ? (
-                        <svg
-                          aria-hidden="true"
-                          className="w-3.5 h-3.5"
-                          fill="none"
-                          stroke="currentColor"
-                          viewBox="0 0 24 24"
-                        >
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            strokeWidth={2}
-                            d="M5 13l4 4L19 7"
-                          />
-                        </svg>
-                      ) : (
-                        i + 1
-                      )}
-                    </span>
-                    <span
-                      className={`text-sm ${
-                        isCurrent
-                          ? "text-[var(--foreground)] font-medium"
-                          : isDone
-                            ? "text-[var(--foreground)]/70"
-                            : "text-[var(--foreground)]/50"
-                      }`}
-                    >
-                      {step.label}
-                    </span>
-                    {isCurrent && (
-                      <span
-                        className="ml-auto h-1.5 w-12 rounded-full bg-[var(--accent-light)] overflow-hidden"
-                        aria-hidden
-                      >
-                        <span
-                          className="block h-full w-1/2 rounded-full bg-[var(--accent)] animate-pulse"
-                          style={{ minWidth: "30%" }}
-                        />
-                      </span>
-                    )}
-                  </li>
-                );
-              })}
-            </ul>
-          </div>
-          <div className="px-6 py-3 bg-[var(--background)]/60 border-t border-[var(--border)] space-y-2">
-            <p className="text-xs text-[var(--foreground)]/50">
-              Keep this tab open. Large lists are classified in small batches so
-              processing can resume if interrupted.
-            </p>
-            {status === "ai_processed" && !processing && (
-              <button
-                type="button"
-                onClick={() => setClassifyTrigger((t) => t + 1)}
-                className="text-xs font-medium text-[var(--accent)] hover:underline"
-              >
-                Stuck? Continue classification
-              </button>
-            )}
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  if (error || status === "failed") {
-    return (
-      <div className="max-w-md mx-auto py-8">
-        <Link
-          href="/dashboard"
-          className="inline-flex items-center gap-1.5 text-sm font-medium text-[var(--accent)] hover:underline mb-6"
-        >
+      <div className="w-full min-w-0 space-y-4">
+        <DashLink href="/dashboard" className="inline-flex items-center gap-1.5">
           <svg
             aria-hidden="true"
             className="w-4 h-4"
@@ -505,8 +367,40 @@ export function DocumentView(props: {
             />
           </svg>
           Back to dashboard
-        </Link>
-        <div className="landing-float-card bg-white rounded-2xl overflow-hidden">
+        </DashLink>
+        <DocumentProcessingStepper
+          fileName={fileName}
+          status={status}
+          progress={progress}
+          isPreCoded={isPreCoded}
+          processing={processing}
+          onContinueClassification={() => setClassifyTrigger((t) => t + 1)}
+        />
+      </div>
+    );
+  }
+
+  if (error || status === "failed") {
+    return (
+      <div className="w-full min-w-0 space-y-3">
+        <DashLink href="/dashboard" className="inline-flex items-center gap-1.5">
+          <svg
+            aria-hidden="true"
+            className="w-4 h-4"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M15 19l-7-7 7-7"
+            />
+          </svg>
+          Back to dashboard
+        </DashLink>
+        <div className="landing-float-card bg-white rounded-2xl overflow-hidden w-full">
           <div className="p-6 text-center">
             <div className="w-12 h-12 rounded-full bg-red-100 flex items-center justify-center mx-auto mb-4">
               <svg
@@ -554,38 +448,56 @@ export function DocumentView(props: {
 
   const itemCount = items.length;
   const groupCount = grouped.length;
+  const reviewCount = items.filter((i) => {
+    const meta = parseDocumentClassificationMeta(i.aiRawResponse);
+    return meta?.reviewRecommended;
+  }).length;
 
   return (
     <>
-      <div className="space-y-6">
-        {/* Breadcrumb + back */}
-        <Link
-          href="/dashboard"
-          className="inline-flex items-center gap-1.5 text-sm font-medium text-[var(--accent)] hover:underline"
-        >
-          <svg
-            aria-hidden="true"
-            className="w-4 h-4"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M15 19l-7-7 7-7"
-            />
-          </svg>
-          Dashboard
-        </Link>
+      <div className="w-full min-w-0 space-y-3">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <DashLink href="/dashboard" className="inline-flex items-center gap-1.5">
+            <svg
+              aria-hidden="true"
+              className="w-4 h-4"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M15 19l-7-7 7-7"
+              />
+            </svg>
+            Dashboard
+          </DashLink>
+          <StatusBadge label="Completed" status="completed" />
+        </div>
 
-        {/* Document header card */}
-        <div className="landing-float-card bg-white rounded-2xl overflow-hidden">
-          <div className="px-5 py-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-            <div className="min-w-0">
-              <div className="flex items-center gap-2">
-                <div className="shrink-0 w-9 h-9 rounded-xl bg-blue-50 flex items-center justify-center text-[#007bff]">
+        {isPreCoded && (
+          <div className="rounded-xl border border-sky-200/80 bg-sky-50 px-3.5 py-2.5 text-sm text-sky-900">
+            <span className="font-semibold">Pre-coded packing list.</span> HS
+            codes from your document were used for grouping.
+            {reviewCount > 0 && (
+              <>
+                {" "}
+                <span className="font-medium">
+                  {reviewCount} line{reviewCount === 1 ? "" : "s"} need review.
+                </span>
+              </>
+            )}
+          </div>
+        )}
+
+        <div className="landing-float-card bg-white rounded-2xl border border-gray-100 overflow-hidden shadow-sm">
+          {/* Document header */}
+          <div className="px-4 py-3.5 sm:px-5 sm:py-4 border-b border-gray-100 bg-gradient-to-r from-slate-50/90 via-white to-white flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-2.5">
+                <div className="shrink-0 w-9 h-9 rounded-lg bg-[#007bff]/10 flex items-center justify-center text-[#007bff]">
                   <svg
                     aria-hidden="true"
                     className="w-5 h-5"
@@ -601,18 +513,37 @@ export function DocumentView(props: {
                     />
                   </svg>
                 </div>
-                <h1 className="text-lg font-semibold text-[var(--foreground)] truncate">
-                  {fileName ?? "Document"}
-                </h1>
+                <div className="min-w-0">
+                  <h1 className="text-base sm:text-lg font-semibold text-gray-900 truncate">
+                    {fileName ?? "Document"}
+                  </h1>
+                  <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-gray-500">
+                    <span>
+                      {itemCount} line item{itemCount !== 1 ? "s" : ""}
+                    </span>
+                    <span className="text-gray-300" aria-hidden>
+                      ·
+                    </span>
+                    <span>
+                      {groupCount} HS group{groupCount !== 1 ? "s" : ""}
+                    </span>
+                    {reviewCount > 0 && (
+                      <>
+                        <span className="text-gray-300" aria-hidden>
+                          ·
+                        </span>
+                        <span className="text-amber-700 font-medium">
+                          {reviewCount} to review
+                        </span>
+                      </>
+                    )}
+                  </div>
+                </div>
               </div>
-              <p className="mt-1.5 text-sm text-[var(--foreground)]/60">
-                {itemCount} item{itemCount !== 1 ? "s" : ""} detected ·{" "}
-                {groupCount} HS code group{groupCount !== 1 ? "s" : ""}
-              </p>
             </div>
             <a
               href={`/api/documents/${documentId}/download`}
-              className="inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 font-medium text-sm transition-colors shadow-sm shrink-0"
+              className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 font-semibold text-sm transition-colors shadow-sm shrink-0 w-full sm:w-auto"
             >
               <svg
                 aria-hidden="true"
@@ -631,23 +562,20 @@ export function DocumentView(props: {
               Download Excel
             </a>
           </div>
-        </div>
 
-        {/* Grouped by HS code on top, Detected items below */}
-        <div className="flex flex-col gap-8">
           {/* Grouped by HS code */}
-          <div className="bg-[var(--background-card)] rounded-xl border border-[var(--border)] overflow-hidden shadow-sm flex flex-col">
-            <div className="px-4 py-3 border-b border-[var(--border)] bg-[var(--background)]/50 flex flex-col gap-3">
-              <div className="flex items-center justify-between flex-wrap gap-2">
-                <h2 className="font-semibold text-[var(--foreground)] text-sm">
+          <section className="border-b border-gray-100">
+            <div className="px-4 py-3 border-b border-gray-50 bg-gray-50/50 flex flex-col gap-2.5 lg:flex-row lg:items-center lg:justify-between">
+              <div className="flex items-center justify-between gap-2 min-w-0">
+                <h2 className="font-semibold text-gray-900 text-sm shrink-0">
                   Grouped by HS code
                 </h2>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 shrink-0">
                   <button
                     type="button"
                     onClick={startAddGrouped}
                     disabled={editingGroupId !== null}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-[var(--accent)] text-white hover:bg-[var(--accent-hover)] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-[#007bff] text-white hover:bg-[#0069d9] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                   >
                     <svg
                       aria-hidden="true"
@@ -665,15 +593,15 @@ export function DocumentView(props: {
                     </svg>
                     Add group
                   </button>
-                  <span className="text-xs font-medium text-[var(--foreground)]/60 bg-[var(--border)]/80 px-2 py-0.5 rounded">
+                  <span className="text-xs font-medium text-gray-600 bg-gray-100 px-2 py-0.5 rounded-md tabular-nums">
                     {filteredGrouped.length === grouped.length
                       ? `${groupCount} groups`
-                      : `${filteredGrouped.length} of ${groupCount} groups`}
+                      : `${filteredGrouped.length} / ${groupCount}`}
                   </span>
                 </div>
               </div>
-              <div className="relative">
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--foreground)]/40 pointer-events-none">
+              <div className="relative w-full lg:max-w-xs lg:shrink-0">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none">
                   <svg
                     className="w-4 h-4"
                     fill="none"
@@ -693,8 +621,8 @@ export function DocumentView(props: {
                   type="search"
                   value={searchGrouped}
                   onChange={(e) => setSearchGrouped(e.target.value)}
-                  placeholder="Search HS code, category…"
-                  className="w-full pl-9 pr-8 py-2 text-sm border border-[var(--border)] rounded-lg bg-white focus:ring-2 focus:ring-[var(--accent)] focus:border-[var(--accent)] outline-none"
+                  placeholder="Search groups…"
+                  className={`${dashInputClass} pr-8`}
                   aria-label="Search grouped results"
                 />
                 {searchGrouped && (
@@ -722,11 +650,11 @@ export function DocumentView(props: {
                 )}
               </div>
             </div>
-            <div className="overflow-auto max-h-[28rem] flex-1">
+            <div className="overflow-auto max-h-[min(22rem,42vh)]">
               <table className="w-full text-sm">
-                <thead className="bg-[var(--background)]/80 sticky top-0 z-[1]">
+                <thead className="bg-gray-50 sticky top-0 z-[1] border-b border-gray-100">
                   <tr>
-                    <th className="px-4 py-2.5 text-left w-24">
+                    <th className="px-3 py-2 text-left w-24 sm:px-4">
                       <button
                         type="button"
                         onClick={() => toggleSortGrouped("hsCode")}
@@ -1023,73 +951,53 @@ export function DocumentView(props: {
                 </tbody>
               </table>
             </div>
-          </div>
+          </section>
 
           {/* Detected items */}
-          <div className="bg-[var(--background-card)] rounded-xl border border-[var(--border)] overflow-hidden shadow-sm flex flex-col">
-            <div className="px-5 py-4 border-b border-[var(--border)] bg-[var(--background)]/60 flex flex-col gap-4">
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <div className="flex items-center gap-2">
-                  <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[var(--background)] border border-[var(--border)]">
-                    <svg
-                      className="h-4 w-4 text-[var(--foreground)]/60"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                      aria-hidden="true"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={1.5}
-                        d="M4 6h16M4 10h16M4 14h16M4 18h16"
-                      />
-                    </svg>
-                  </div>
-                  <div>
-                    <h2 className="font-semibold text-[var(--foreground)]">
-                      Detected items
-                    </h2>
-                    <p className="text-xs text-[var(--foreground)]/60 mt-0.5">
-                      {filteredItems.length === items.length
-                        ? `${itemCount} line items`
-                        : `Showing ${filteredItems.length} of ${itemCount} items`}
-                    </p>
-                  </div>
-                </div>
-                <div className="min-w-0 flex-1 sm:max-w-xs">
-                  <label htmlFor="detected-items-search" className="sr-only">
-                    Search detected items
-                  </label>
-                  <div className="relative">
-                    <span
-                      className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[var(--foreground)]/40"
-                      aria-hidden
-                    >
-                      <svg
-                        aria-hidden="true"
-                        className="h-4 w-4"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
-                        />
-                      </svg>
-                    </span>
-                    <input
-                      id="detected-items-search"
-                      type="search"
-                      value={searchItems}
-                      onChange={(e) => setSearchItems(e.target.value)}
-                      placeholder="Search by description, HS code, category…"
-                      className="w-full rounded-lg border border-[var(--border)] bg-white py-2 pl-9 pr-8 text-sm outline-none transition-colors placeholder:text-[var(--foreground)]/40 focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent)]/20"
-                      aria-label="Search detected items"
+          <section>
+            <div className="px-4 py-3 border-b border-gray-50 bg-gray-50/50 flex flex-col gap-2.5 lg:flex-row lg:items-center lg:justify-between">
+              <div className="flex items-center gap-2 min-w-0">
+                <h2 className="font-semibold text-gray-900 text-sm shrink-0">
+                  Detected items
+                </h2>
+                <span className="text-xs font-medium text-gray-600 bg-gray-100 px-2 py-0.5 rounded-md tabular-nums">
+                  {filteredItems.length === items.length
+                    ? `${itemCount} lines`
+                    : `${filteredItems.length} / ${itemCount}`}
+                </span>
+              </div>
+              <div className="relative w-full lg:max-w-sm lg:shrink-0">
+                <label htmlFor="detected-items-search" className="sr-only">
+                  Search detected items
+                </label>
+                <span
+                  className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
+                  aria-hidden
+                >
+                  <svg
+                    aria-hidden="true"
+                    className="h-4 w-4"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
                     />
+                  </svg>
+                </span>
+                <input
+                  id="detected-items-search"
+                  type="search"
+                  value={searchItems}
+                  onChange={(e) => setSearchItems(e.target.value)}
+                  placeholder="Search line items…"
+                  className={`${dashInputClass} pr-8`}
+                  aria-label="Search detected items"
+                />
                     {searchItems && (
                       <button
                         type="button"
@@ -1113,13 +1021,11 @@ export function DocumentView(props: {
                         </svg>
                       </button>
                     )}
-                  </div>
-                </div>
               </div>
             </div>
-            <div className="overflow-auto max-h-[28rem] flex-1">
+            <div className="overflow-auto max-h-[min(22rem,42vh)]">
               <table className="w-full border-collapse text-sm">
-                <thead className="sticky top-0 z-[1] border-b border-[var(--border)] bg-[var(--background)] shadow-[0_1px_0_0_var(--border)]">
+                <thead className="sticky top-0 z-[1] border-b border-gray-100 bg-gray-50">
                   <tr>
                     <th scope="col" className="text-left">
                       <button
@@ -1149,13 +1055,20 @@ export function DocumentView(props: {
                         )}
                       </button>
                     </th>
+                    {hasDocumentHs && (
+                      <th scope="col" className="w-28">
+                        <span className="flex px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-[var(--foreground)]/80">
+                          Doc HS
+                        </span>
+                      </th>
+                    )}
                     <th scope="col" className="w-28">
                       <button
                         type="button"
                         onClick={() => toggleSortItems("hs")}
                         className="flex w-full items-center gap-1.5 px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-[var(--foreground)]/80 hover:text-[var(--foreground)]"
                       >
-                        HS code
+                        {hasDocumentHs ? "Classified HS" : "HS code"}
                         {sortItems.key === "hs" && (
                           <span className="text-[var(--accent)]" aria-hidden>
                             {sortItems.dir === "asc" ? "↑" : "↓"}
@@ -1182,7 +1095,7 @@ export function DocumentView(props: {
                 <tbody>
                   {sortedItems.length === 0 ? (
                     <tr>
-                      <td colSpan={4} className="p-0">
+                      <td colSpan={hasDocumentHs ? 5 : 4} className="p-0">
                         <div className="flex flex-col items-center justify-center px-4 py-16 text-center">
                           <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-[var(--background)] border border-[var(--border)]">
                             <svg
@@ -1221,7 +1134,12 @@ export function DocumentView(props: {
                         i.rawLine ??
                         "—";
                       const isNeedInfo = (i.aiHsCode ?? "") === NEED_INFO_HS;
+                      const meta = parseDocumentClassificationMeta(
+                        i.aiRawResponse
+                      );
+                      const needsReview = meta?.reviewRecommended === true;
                       const hsDisplay = i.aiHsCode ?? "—";
+                      const docHs = i.sourceHsCode ?? "—";
                       const catDisplay = i.aiCategory ?? "—";
                       const isExclude =
                         (catDisplay || "").toLowerCase().includes("non-item") ||
@@ -1247,13 +1165,36 @@ export function DocumentView(props: {
                                   Need more description
                                 </span>
                               )}
+                              {needsReview && (
+                                <span className="mt-1.5 inline-flex items-center rounded-md bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800">
+                                  Review HS
+                                </span>
+                              )}
                             </div>
                           </td>
                           <td className="px-4 py-3 text-right tabular-nums text-[var(--foreground)]/80">
                             {i.detectedQuantity != null
                               ? i.detectedQuantity.toLocaleString()
                               : "—"}
+                            {i.detectedUnit && (
+                              <span className="block text-[10px] text-[var(--foreground)]/50">
+                                {i.detectedUnit}
+                              </span>
+                            )}
                           </td>
+                          {hasDocumentHs && (
+                            <td className="px-4 py-3">
+                              {docHs !== "—" ? (
+                                <code className="inline-flex rounded border border-sky-200 bg-sky-50/80 px-2 py-1 font-mono text-xs text-sky-900">
+                                  {docHs}
+                                </code>
+                              ) : (
+                                <span className="text-[var(--foreground)]/50">
+                                  —
+                                </span>
+                              )}
+                            </td>
+                          )}
                           <td className="px-4 py-3">
                             {hsDisplay !== "—" ? (
                               <code className="inline-flex rounded border border-[var(--border)] bg-[var(--background)]/80 px-2 py-1 font-mono text-xs text-[var(--foreground)]">
@@ -1289,7 +1230,7 @@ export function DocumentView(props: {
                 </tbody>
               </table>
             </div>
-          </div>
+          </section>
         </div>
       </div>
       <DocumentChat documentId={documentId} />

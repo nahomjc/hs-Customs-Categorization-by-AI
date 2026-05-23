@@ -1,47 +1,7 @@
-import { pgTable, index, pgPolicy, uuid, varchar, text, timestamp, foreignKey, integer, numeric, unique, jsonb } from "drizzle-orm/pg-core"
+import { pgTable, index, foreignKey, pgPolicy, uuid, varchar, text, numeric, timestamp, integer, unique, jsonb } from "drizzle-orm/pg-core"
 import { sql } from "drizzle-orm"
 
 
-
-export const documents = pgTable("documents", {
-	id: uuid().defaultRandom().primaryKey().notNull(),
-	tenantId: varchar("tenant_id", { length: 30 }).notNull(),
-	uploadedBy: varchar("uploaded_by", { length: 100 }).notNull(),
-	originalFileUrl: text("original_file_url").notNull(),
-	originalFileName: varchar("original_file_name", { length: 255 }),
-	fileType: varchar("file_type", { length: 20 }).notNull(),
-	extractedText: text("extracted_text"),
-	status: varchar({ length: 30 }).default('uploaded'),
-	createdAt: timestamp("created_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
-	updatedAt: timestamp("updated_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
-}, (table) => {
-	return {
-		idxDocumentsCreatedAt: index("idx_documents_created_at").using("btree", table.createdAt.desc().nullsFirst().op("timestamptz_ops")),
-		idxDocumentsStatus: index("idx_documents_status").using("btree", table.status.asc().nullsLast().op("text_ops")),
-		allowAllForService: pgPolicy("Allow all for service", { as: "permissive", for: "all", to: ["public"], using: sql`true`, withCheck: sql`true`  }),
-	}
-});
-
-export const documentItems = pgTable("document_items", {
-	id: uuid().defaultRandom().primaryKey().notNull(),
-	documentId: uuid("document_id").notNull(),
-	rawLine: text("raw_line").notNull(),
-	detectedDescription: text("detected_description"),
-	detectedQuantity: integer("detected_quantity"),
-	detectedUnit: text("detected_unit"),
-	lineIndex: integer("line_index"),
-	createdAt: timestamp("created_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
-}, (table) => {
-	return {
-		idxDocumentItemsDocumentId: index("idx_document_items_document_id").using("btree", table.documentId.asc().nullsLast().op("uuid_ops")),
-		documentItemsDocumentIdFkey: foreignKey({
-			columns: [table.documentId],
-			foreignColumns: [documents.id],
-			name: "document_items_document_id_fkey"
-		}).onDelete("cascade"),
-		allowAllForService: pgPolicy("Allow all for service", { as: "permissive", for: "all", to: ["public"], using: sql`true`, withCheck: sql`true`  }),
-	}
-});
 
 export const itemClassifications = pgTable("item_classifications", {
 	id: uuid().defaultRandom().primaryKey().notNull(),
@@ -112,6 +72,50 @@ export const users = pgTable("users", {
 			name: "users_id_fkey"
 		}).onDelete("cascade"),
 		usersTenantEmailUnique: unique("users_tenant_email_unique").on(table.tenantId, table.email),
+		allowAllForService: pgPolicy("Allow all for service", { as: "permissive", for: "all", to: ["public"], using: sql`true`, withCheck: sql`true`  }),
+	}
+});
+
+export const documents = pgTable("documents", {
+	id: uuid().defaultRandom().primaryKey().notNull(),
+	tenantId: varchar("tenant_id", { length: 30 }).notNull(),
+	uploadedBy: varchar("uploaded_by", { length: 100 }).notNull(),
+	originalFileUrl: text("original_file_url").notNull(),
+	originalFileName: varchar("original_file_name", { length: 255 }),
+	fileType: varchar("file_type", { length: 20 }).notNull(),
+	extractedText: text("extracted_text"),
+	status: varchar({ length: 30 }).default('uploaded'),
+	createdAt: timestamp("created_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+	updatedAt: timestamp("updated_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+	classificationMode: varchar("classification_mode", { length: 30 }).default('ai'),
+}, (table) => {
+	return {
+		idxDocumentsCreatedAt: index("idx_documents_created_at").using("btree", table.createdAt.desc().nullsFirst().op("timestamptz_ops")),
+		idxDocumentsStatus: index("idx_documents_status").using("btree", table.status.asc().nullsLast().op("text_ops")),
+		allowAllForService: pgPolicy("Allow all for service", { as: "permissive", for: "all", to: ["public"], using: sql`true`, withCheck: sql`true`  }),
+	}
+});
+
+export const documentItems = pgTable("document_items", {
+	id: uuid().defaultRandom().primaryKey().notNull(),
+	documentId: uuid("document_id").notNull(),
+	rawLine: text("raw_line").notNull(),
+	detectedDescription: text("detected_description"),
+	detectedQuantity: integer("detected_quantity"),
+	detectedUnit: text("detected_unit"),
+	lineIndex: integer("line_index"),
+	createdAt: timestamp("created_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+	sourceHsCode: varchar("source_hs_code", { length: 20 }),
+	lineNumber: integer("line_number"),
+	specification: text(),
+}, (table) => {
+	return {
+		idxDocumentItemsDocumentId: index("idx_document_items_document_id").using("btree", table.documentId.asc().nullsLast().op("uuid_ops")),
+		documentItemsDocumentIdFkey: foreignKey({
+			columns: [table.documentId],
+			foreignColumns: [documents.id],
+			name: "document_items_document_id_fkey"
+		}).onDelete("cascade"),
 		allowAllForService: pgPolicy("Allow all for service", { as: "permissive", for: "all", to: ["public"], using: sql`true`, withCheck: sql`true`  }),
 	}
 });

@@ -1,18 +1,5 @@
 import { relations } from "drizzle-orm/relations";
-import { documents, documentItems, itemClassifications, groupedItems } from "./schema";
-
-export const documentItemsRelations = relations(documentItems, ({one, many}) => ({
-	document: one(documents, {
-		fields: [documentItems.documentId],
-		references: [documents.id]
-	}),
-	itemClassifications: many(itemClassifications),
-}));
-
-export const documentsRelations = relations(documents, ({many}) => ({
-	documentItems: many(documentItems),
-	groupedItems: many(groupedItems),
-}));
+import { documentItems, itemClassifications, documents, groupedItems, usersInAuth, users } from "./schema";
 
 export const itemClassificationsRelations = relations(itemClassifications, ({one}) => ({
 	documentItem: one(documentItems, {
@@ -21,9 +8,33 @@ export const itemClassificationsRelations = relations(itemClassifications, ({one
 	}),
 }));
 
+export const documentItemsRelations = relations(documentItems, ({one, many}) => ({
+	itemClassifications: many(itemClassifications),
+	document: one(documents, {
+		fields: [documentItems.documentId],
+		references: [documents.id]
+	}),
+}));
+
 export const groupedItemsRelations = relations(groupedItems, ({one}) => ({
 	document: one(documents, {
 		fields: [groupedItems.documentId],
 		references: [documents.id]
 	}),
+}));
+
+export const documentsRelations = relations(documents, ({many}) => ({
+	groupedItems: many(groupedItems),
+	documentItems: many(documentItems),
+}));
+
+export const usersRelations = relations(users, ({one}) => ({
+	usersInAuth: one(usersInAuth, {
+		fields: [users.id],
+		references: [usersInAuth.id]
+	}),
+}));
+
+export const usersInAuthRelations = relations(usersInAuth, ({many}) => ({
+	users: many(users),
 }));

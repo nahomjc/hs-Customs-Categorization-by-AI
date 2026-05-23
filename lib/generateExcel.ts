@@ -1,18 +1,79 @@
 import ExcelJS from "exceljs";
 import type { GroupedItem } from "./groupItems";
 import { isExcludedHsCode, isNonItemCategory } from "./allowedHsCodes";
+import { parseDocumentClassificationMeta } from "./classifyFromDocumentHs";
+
+export type LineItemExportRow = {
+  lineNumber: number | null;
+  description: string;
+  sourceHsCode: string | null;
+  classifiedHsCode: string | null;
+  category: string | null;
+  quantity: number | null;
+  unit: string | null;
+  specification: string | null;
+  reviewFlag: string;
+};
+
+function styleHeader(row: ExcelJS.Row) {
+  row.font = { bold: true };
+  row.fill = {
+    type: "pattern",
+    pattern: "solid",
+    fgColor: { argb: "FFE0E7F0" },
+  };
+}
 
 export async function generateCategorizedExcel(
   grouped: GroupedItem[],
-  options?: { documentName?: string }
+  options?: {
+    documentName?: string;
+    lineItems?: LineItemExportRow[];
+  }
 ): Promise<Buffer> {
   const filtered = grouped.filter(
     (row) => !isExcludedHsCode(row.hsCode) && !isNonItemCategory(row.category)
   );
+
   const workbook = new ExcelJS.Workbook();
-  workbook.creator = "Customs Categorization Portal";
+  workbook.creator = "Impact Logistics — HS Categorization";
+
+  const lineItems = options?.lineItems ?? [];
+
+  if (lineItems.length > 0) {
+    const detail = workbook.addWorksheet("Line items", {
+      views: [{ state: "frozen", ySplit: 1 }],
+    });
+    detail.columns = [
+      { header: "Line #", key: "lineNumber", width: 8 },
+      { header: "Description", key: "description", width: 42 },
+      { header: "Document HS", key: "sourceHsCode", width: 14 },
+      { header: "Classified HS", key: "classifiedHsCode", width: 14 },
+      { header: "Category", key: "category", width: 26 },
+      { header: "Qty", key: "quantity", width: 10 },
+      { header: "Unit", key: "unit", width: 10 },
+      { header: "Specification", key: "specification", width: 22 },
+      { header: "Review", key: "reviewFlag", width: 14 },
+    ];
+    styleHeader(detail.getRow(1));
+
+    for (const row of lineItems) {
+      detail.addRow({
+        lineNumber: row.lineNumber ?? "",
+        description: row.description,
+        sourceHsCode: row.sourceHsCode ?? "",
+        classifiedHsCode: row.classifiedHsCode ?? "",
+        category: row.category ?? "",
+        quantity: row.quantity ?? "",
+        unit: row.unit ?? "",
+        specification: row.specification ?? "",
+        reviewFlag: row.reviewFlag,
+      });
+    }
+  }
+
   const sheet = workbook.addWorksheet(
-    options?.documentName ?? "Categorized Packing List",
+    options?.lineItems?.length ? "Grouped summary" : "Categorized Packing List",
     {
       headerFooter: {
         firstHeader: options?.documentName ?? "Categorized Packing List",
@@ -29,13 +90,7 @@ export async function generateCategorizedExcel(
     { header: "Unit", key: "unit", width: 10 },
   ];
 
-  const headerRow = sheet.getRow(1);
-  headerRow.font = { bold: true };
-  headerRow.fill = {
-    type: "pattern",
-    pattern: "solid",
-    fgColor: { argb: "FFE0E7F0" },
-  };
+  styleHeader(sheet.getRow(1));
 
   for (const row of filtered) {
     sheet.addRow({
@@ -43,10 +98,47 @@ export async function generateCategorizedExcel(
       category: row.category,
       finalDescription: row.finalDescription,
       totalQuantity: row.totalQuantity,
-      unit: row.unit ?? "PCS",
+      unit: row.unit ?? "CTNS",
     });
   }
 
   const buffer = await workbook.xlsx.writeBuffer();
   return Buffer.from(buffer);
+}
+
+export function buildLineItemExportRows(
+  items: Array<{
+    lineNumber: number | null;
+    detectedDescription: string | null;
+    rawLine: string | null;
+    sourceHsCode: string | null;
+    detectedQuantity: number | null;
+    detectedUnit: string | null;
+    specification: string | null;
+    aiHsCode: string | null;
+    aiCategory: string | null;
+    aiRawResponse: string | null;
+  }>
+): LineItemExportRow[] {
+  return items.map((item) => {
+    const meta = parseDocumentClassificationMeta(item.aiRawResponse);
+    const reviewFlag = meta?.reviewRecommended
+      ? "Review"
+      : meta?.source === "document"
+        ? "OK"
+        : "";
+
+    return {
+      lineNumber: item.lineNumber,
+      description:
+        item.detectedDescription ?? item.rawLine ?? "",
+      sourceHsCode: item.sourceHsCode,
+      classifiedHsCode: item.aiHsCode,
+      category: item.aiCategory,
+      quantity: item.detectedQuantity,
+      unit: item.detectedUnit,
+      specification: item.specification,
+      reviewFlag,
+    };
+  });
 }

@@ -1,13 +1,17 @@
 import { db } from "@/db";
-import { groupedItems } from "@/db/schema";
+import { documentItems, groupedItems, itemClassifications } from "@/db/schema";
 import { eq } from "drizzle-orm";
-import { generateCategorizedExcel } from "@/lib/generateExcel";
+import {
+  buildLineItemExportRows,
+  generateCategorizedExcel,
+} from "@/lib/generateExcel";
 
 export async function GET(
   _req: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
+
   const rows = await db
     .select()
     .from(groupedItems)
@@ -19,7 +23,32 @@ export async function GET(
     totalQuantity: r.totalQuantity,
     unit: r.unit,
   }));
-  const buffer = await generateCategorizedExcel(grouped);
+
+  const items = await db
+    .select({
+      lineNumber: documentItems.lineNumber,
+      detectedDescription: documentItems.detectedDescription,
+      rawLine: documentItems.rawLine,
+      sourceHsCode: documentItems.sourceHsCode,
+      detectedQuantity: documentItems.detectedQuantity,
+      detectedUnit: documentItems.detectedUnit,
+      specification: documentItems.specification,
+      aiHsCode: itemClassifications.aiHsCode,
+      aiCategory: itemClassifications.aiCategory,
+      aiRawResponse: itemClassifications.aiRawResponse,
+    })
+    .from(documentItems)
+    .leftJoin(
+      itemClassifications,
+      eq(documentItems.id, itemClassifications.itemId)
+    )
+    .where(eq(documentItems.documentId, id))
+    .orderBy(documentItems.lineIndex);
+
+  const lineItems = buildLineItemExportRows(items);
+
+  const buffer = await generateCategorizedExcel(grouped, { lineItems });
+
   return new Response(new Uint8Array(buffer), {
     headers: {
       "Content-Type":

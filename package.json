@@ -3,7 +3,7 @@
 	"version": "0.1.0",
 	"private": true,
 	"scripts": {
-		"dev": "node --disable-warning=DEP0005 ./node_modules/next/dist/bin/next dev",
+		"dev": "node --disable-warning=DEP0005 ./node_modules/next/dist/bin/next dev -p 3010",
 		"dev:next": "next dev",
 		"build": "next build",
 		"start": "next start",

@@ -83,7 +83,7 @@ export default function UploadPage() {
     <div className="max-w-xl mx-auto space-y-8">
       <PageHeader
         title="Upload packing list"
-        description="Upload a PDF, Word, or Excel file to categorize items by HS code. Scanned or photo PDFs are supported via OCR."
+        description="Upload a PDF, Word, or Excel packing list. Lists that already include HS codes are read and grouped automatically."
       />
 
       <div className="space-y-5">

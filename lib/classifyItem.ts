@@ -53,7 +53,9 @@ function extractJson<T>(content: string): T {
   return JSON.parse(cleaned) as T;
 }
 
-async function callOpenRouter(messages: Array<{ role: "system" | "user"; content: string }>) {
+async function callOpenRouter(
+  messages: Array<{ role: "system" | "user"; content: string }>,
+) {
   const apiKey = process.env.OPENROUTER_API_KEY;
   if (!apiKey) {
     console.error("[HS classifyItem] OPENROUTER_API_KEY is not set");
@@ -66,7 +68,7 @@ async function callOpenRouter(messages: Array<{ role: "system" | "user"; content
       Authorization: `Bearer ${apiKey}`,
       "Content-Type": "application/json",
       "HTTP-Referer":
-        process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3099",
+        process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3010",
     },
     body: JSON.stringify({
       model: "openai/gpt-4o-mini",
@@ -81,7 +83,7 @@ async function callOpenRouter(messages: Array<{ role: "system" | "user"; content
     console.error(
       "[HS classifyItem] OpenRouter API error:",
       res.status,
-      err?.slice(0, 200)
+      err?.slice(0, 200),
     );
     throw new Error(`OpenRouter API error: ${res.status} ${err}`);
   }
@@ -96,11 +98,11 @@ async function callOpenRouter(messages: Array<{ role: "system" | "user"; content
 
 export async function classifyItem(
   description: string,
-  options?: { country?: string; unit?: string }
+  options?: { country?: string; unit?: string },
 ): Promise<ClassificationResult & { aiRawResponse?: string }> {
   console.log(
     "[HS classifyItem] calling API for:",
-    `${description.slice(0, 60)}${description.length > 60 ? "..." : ""}`
+    `${description.slice(0, 60)}${description.length > 60 ? "..." : ""}`,
   );
 
   let featureUserContent = `Line from packing list: "${description}"`;
@@ -119,9 +121,13 @@ export async function classifyItem(
 
   let features: HsFeatures & { isImportItem?: boolean };
   try {
-    features = extractJson<HsFeatures & { isImportItem?: boolean }>(featureContent);
+    features = extractJson<HsFeatures & { isImportItem?: boolean }>(
+      featureContent,
+    );
   } catch {
-    throw new Error(`Invalid JSON from feature extractor AI: ${featureContent}`);
+    throw new Error(
+      `Invalid JSON from feature extractor AI: ${featureContent}`,
+    );
   }
 
   // Step 2: GRI rule engine (code)
@@ -160,7 +166,7 @@ export async function classifyItem(
     "| category:",
     parsed.category,
     "| isImportItem:",
-    parsed.isImportItem
+    parsed.isImportItem,
   );
 
   // Normalize: non-items must have EXCLUDE and consistent category
@@ -181,7 +187,7 @@ export async function classifyItem(
       "→",
       final.hsCode,
       "| category:",
-      final.category
+      final.category,
     );
   }
 
@@ -202,7 +208,7 @@ export async function classifyItem(
       "[HS classifyItem] validation → review (exact HS):",
       final.hsCode,
       "→",
-      validated.hsCode
+      validated.hsCode,
     );
     final.hsCode = validated.hsCode;
   } else if (validated.status === "valid") {

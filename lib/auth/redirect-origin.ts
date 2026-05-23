@@ -26,7 +26,7 @@ export function getAppOrigin(): string {
     return configured;
   }
 
-  return "http://localhost:3099";
+  return "http://localhost:3010";
 }
 
 /** Safe origin for auth redirect URLs in the browser (signup, password reset). */
@@ -43,7 +43,7 @@ export function getRedirectOrigin(): string {
  */
 export function normalizeAuthRedirectTo(
   redirectTo: string,
-  appOrigin: string = getAppOrigin()
+  appOrigin: string = getAppOrigin(),
 ): string {
   const app = appOrigin.replace(/\/$/, "");
 

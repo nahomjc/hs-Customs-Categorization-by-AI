@@ -40,9 +40,12 @@ export default async function DocumentPage({
       detectedDescription: documentItems.detectedDescription,
       detectedQuantity: documentItems.detectedQuantity,
       detectedUnit: documentItems.detectedUnit,
+      sourceHsCode: documentItems.sourceHsCode,
+      lineNumber: documentItems.lineNumber,
       aiCategory: itemClassifications.aiCategory,
       aiHsCode: itemClassifications.aiHsCode,
       cleanDescription: itemClassifications.cleanDescription,
+      aiRawResponse: itemClassifications.aiRawResponse,
     })
     .from(documentItems)
     .leftJoin(
@@ -62,6 +65,7 @@ export default async function DocumentPage({
       documentId={id}
       status={doc.status}
       fileName={doc.originalFileName}
+      classificationMode={doc.classificationMode}
       items={items}
       grouped={grouped}
     />

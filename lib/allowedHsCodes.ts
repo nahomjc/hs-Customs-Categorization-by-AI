@@ -1,3 +1,5 @@
+import { isHsCodeFormat, normalizeHsCode } from "./hsCodeUtils";
+
 /**
  * Allowed HS codes for assessor-style classification.
  * AI must choose ONLY from this list — never invent codes.
@@ -81,23 +83,29 @@ export function isNonItemCategory(category: string | null): boolean {
   return NON_ITEM_CATEGORIES.some((n) => c.includes(n.toLowerCase()));
 }
 
+export type ValidationMode = "ai" | "document";
+
 /**
  * Senior-assessor validation: category gate first, then exact HS.
- * Use after AI + assessor rules as last line of defense.
+ * In `document` mode, accept HS codes from the packing list (####.####).
  */
 export function validateClassification({
   hsCode,
   category,
+  mode = "ai",
 }: {
   hsCode: string | null;
   category: string | null;
+  mode?: ValidationMode;
 }): { status: "exclude" | "review" | "valid"; hsCode: string } {
-  // Step 1: Not a real item → exclude
   if (isNonItemCategory(category)) {
     return { status: "exclude", hsCode: EXCLUDED_HS };
   }
 
-  // Step 2: AI said unsure (real item) → review bucket
+  if (hsCode === NEED_INFO_HS) {
+    return { status: "review", hsCode: NEED_INFO_HS };
+  }
+
   if (
     hsCode === UNKNOWN_HS ||
     hsCode === "9999.00" ||
@@ -106,11 +114,19 @@ export function validateClassification({
     return { status: "review", hsCode: UNKNOWN_HS };
   }
 
-  // Step 3: Exact allowed code → valid
-  if (isAllowedHsCode(hsCode)) {
-    return { status: "valid", hsCode: hsCode!.trim() };
+  if (mode === "document" && hsCode && isHsCodeFormat(hsCode)) {
+    const n = normalizeHsCode(hsCode);
+    return { status: "valid", hsCode: n?.display ?? hsCode.trim() };
   }
 
-  // Step 4: AI mistake (hallucinated subcode) → force review, do not trust code
+  if (isAllowedHsCode(hsCode)) {
+    return { status: "valid", hsCode: hsCode?.trim() ?? "" };
+  }
+
+  if (isHsCodeFormat(hsCode)) {
+    const n = normalizeHsCode(hsCode);
+    if (n) return { status: "valid", hsCode: n.display };
+  }
+
   return { status: "review", hsCode: UNKNOWN_HS };
 }

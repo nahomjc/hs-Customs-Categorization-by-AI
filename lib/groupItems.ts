@@ -1,9 +1,17 @@
 import {
   isExcludedHsCode,
   isNonItemCategory,
+  NEED_INFO_HS,
   UNKNOWN_HS,
   validateClassification,
+  type ValidationMode,
 } from "./allowedHsCodes";
+import { isHsCodeFormat } from "./hsCodeUtils";
+import {
+  cleanProductDescription,
+  isNonItemLine,
+  normalizeLineQuantity,
+} from "./packingListFilters";
 
 export interface ItemWithClassification {
   id: string;
@@ -27,9 +35,17 @@ export interface GroupedItem {
 /**
  * Group items by HS code: sum quantities, merge descriptions.
  */
+function validationModeForItems(
+  items: ItemWithClassification[]
+): ValidationMode {
+  const coded = items.filter((i) => isHsCodeFormat(i.aiHsCode)).length;
+  return coded >= items.length * 0.4 ? "document" : "ai";
+}
+
 export function groupItemsByHsCode(
   items: ItemWithClassification[]
 ): GroupedItem[] {
+  const validationMode = validationModeForItems(items);
   const byHs: Record<
     string,
     {
@@ -43,22 +59,27 @@ export function groupItemsByHsCode(
   for (const item of items) {
     if (isNonItemCategory(item.aiCategory)) continue;
     if (isExcludedHsCode(item.aiHsCode)) continue;
+    if (item.aiHsCode === NEED_INFO_HS) continue;
+
+    const desc =
+      item.cleanDescription || item.detectedDescription || item.rawLine || "";
+    if (isNonItemLine(desc, item.rawLine)) continue;
 
     const validated = validateClassification({
       hsCode: item.aiHsCode,
       category: item.aiCategory,
+      mode: validationMode,
     });
     if (validated.status === "exclude") continue;
     const hsNormalized =
-      validated.hsCode === "9999.00" ||
-      validated.hsCode === "9999.99" ||
-      validated.hsCode?.startsWith("9999.")
+      validationMode === "ai" &&
+      (validated.hsCode === "9999.00" ||
+        validated.hsCode === "9999.99" ||
+        validated.hsCode?.startsWith("9999."))
         ? UNKNOWN_HS
         : validated.hsCode;
     const category = item.aiCategory || "Unclassified";
-    const desc =
-      item.cleanDescription || item.detectedDescription || item.rawLine || "";
-    const qty = Number(item.detectedQuantity) || 1;
+    const qty = normalizeLineQuantity(item.detectedQuantity) ?? 1;
     const unit = item.detectedUnit ?? null;
 
     if (!byHs[hsNormalized]) {
@@ -82,12 +103,13 @@ function mergeDescriptions(descriptions: string[]): string {
   const unique = [
     ...new Set(
       descriptions
-        .map((d) => (d != null ? String(d).trim() : ""))
+        .map((d) =>
+          d != null ? cleanProductDescription(String(d)) : ""
+        )
         .filter(Boolean)
     ),
   ];
   if (unique.length === 1) return unique[0];
-  return (
-    unique.slice(0, 3).join("; ") + (unique.length > 3 ? " (and others)" : "")
-  );
+  if (unique.length <= 5) return unique.join("; ");
+  return `${unique.slice(0, 4).join("; ")} (+${unique.length - 4} more)`;
 }

@@ -9,6 +9,10 @@ export const documents = pgTable("documents", {
   fileType: varchar("file_type", { length: 20 }).notNull(), // pdf | docx | xlsx
   extractedText: text("extracted_text"),
   status: varchar("status", { length: 30 }).default("uploaded"),
+  /** ai = classify with model; pre_coded = use HS column from document */
+  classificationMode: varchar("classification_mode", { length: 30 }).default(
+    "ai"
+  ),
   // uploaded | parsed | ai_processed | grouped | completed | failed
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),

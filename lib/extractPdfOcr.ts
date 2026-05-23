@@ -56,12 +56,12 @@ function extractAnnotations(response: unknown): FileAnnotation[] {
 
 /** OCR fallback for scanned / image-only PDFs via OpenRouter (mistral-ocr). */
 export async function extractPdfTextViaOpenRouter(
-  buffer: Buffer
+  buffer: Buffer,
 ): Promise<string> {
   const apiKey = process.env.OPENROUTER_API_KEY;
   if (!apiKey) {
     throw new Error(
-      "OPENROUTER_API_KEY is not set. Scanned PDFs need OCR via OpenRouter."
+      "OPENROUTER_API_KEY is not set. Scanned PDFs need OCR via OpenRouter.",
     );
   }
 
@@ -73,7 +73,7 @@ export async function extractPdfTextViaOpenRouter(
       Authorization: `Bearer ${apiKey}`,
       "Content-Type": "application/json",
       "HTTP-Referer":
-        process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3099",
+        process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3010",
     },
     body: JSON.stringify({
       model: "openai/gpt-4o-mini",
@@ -115,7 +115,7 @@ export async function extractPdfTextViaOpenRouter(
       "[HS extractText] PDF OCR OK | text length:",
       text.length,
       "| first 80 chars:",
-      text.slice(0, 80)
+      text.slice(0, 80),
     );
     return text;
   }
@@ -133,6 +133,6 @@ export async function extractPdfTextViaOpenRouter(
   if (modelText) return modelText;
 
   throw new Error(
-    "PDF OCR returned no text. The file may be unreadable or too large."
+    "PDF OCR returned no text. The file may be unreadable or too large.",
   );
 }
