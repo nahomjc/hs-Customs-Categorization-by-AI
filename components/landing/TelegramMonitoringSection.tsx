@@ -3,7 +3,8 @@
 import Link from "next/link";
 import { motion } from "framer-motion";
 import { LandingWrap } from "./LandingWrap";
-import { FadeInView, MotionItem, MotionSection, easeOut, fadeUp } from "./motion";
+import { TelegramFlowAnimation } from "./TelegramFlowAnimation";
+import { FadeInView, MotionItem, MotionSection, fadeUp } from "./motion";
 
 const TELEGRAM_BLUE = "#2AABEE";
 
@@ -54,182 +55,12 @@ const capabilities = [
   },
 ];
 
-type AlertTone = "info" | "progress" | "success" | "warning";
-
-const mockAlerts: {
-  time: string;
-  title: string;
-  body: string;
-  meta?: string;
-  tone: AlertTone;
-}[] = [
-  {
-    time: "09:14",
-    title: "Upload received",
-    body: "PL-Shipment-2841.xlsx · 847 line items queued for classification.",
-    tone: "info",
-  },
-  {
-    time: "09:16",
-    title: "HS classification in progress",
-    body: "Shipment #2841 — 62% complete · 12 HS groups identified so far.",
-    meta: "ETA ~4 min",
-    tone: "progress",
-  },
-  {
-    time: "09:21",
-    title: "Classification complete",
-    body: "847 items grouped into 28 HS codes. Review and export from dashboard.",
-    meta: "View in dashboard →",
-    tone: "success",
-  },
-  {
-    time: "09:22",
-    title: "Export ready",
-    body: "Grouped Excel generated for PL-Shipment-2841.xlsx — ready for declaration.",
-    tone: "success",
-  },
-  {
-    time: "09:41",
-    title: "Review required",
-    body: "Packing_List_March.pdf — 3 line items flagged for manual HS review.",
-    meta: "Assigned: compliance team",
-    tone: "warning",
-  },
-];
-
-const toneStyles: Record<AlertTone, { border: string; dot: string; badge: string }> = {
-  info: {
-    border: "border-sky-200/80",
-    dot: "bg-sky-400",
-    badge: "bg-sky-50 text-sky-700",
-  },
-  progress: {
-    border: "border-[#007bff]/25",
-    dot: "bg-[#007bff]",
-    badge: "bg-blue-50 text-[#007bff]",
-  },
-  success: {
-    border: "border-emerald-200/80",
-    dot: "bg-emerald-500",
-    badge: "bg-emerald-50 text-emerald-700",
-  },
-  warning: {
-    border: "border-amber-200/80",
-    dot: "bg-amber-500",
-    badge: "bg-amber-50 text-amber-800",
-  },
-};
-
 function TelegramIcon({ className }: { className?: string }) {
   return (
     <svg className={className} viewBox="0 0 24 24" fill="currentColor" aria-hidden>
       <title>Telegram</title>
       <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm4.64 6.8c-.15 1.58-.8 5.42-1.13 7.19-.14.75-.42 1-.68 1.03-.58.05-1.02-.38-1.58-.75-.88-.58-1.38-.94-2.23-1.5-.99-.65-.35-1.01.22-1.59.15-.15 2.71-2.48 2.76-2.69a.2.2 0 00-.05-.18c-.06-.05-.14-.03-.21-.02-.09.02-1.49.95-4.22 2.79-.4.27-.76.41-1.08.4-.36-.01-1.04-.2-1.55-.37-.63-.2-1.12-.31-1.08-.66.02-.18.27-.36.74-.55 2.92-1.27 4.86-2.11 5.83-2.51 2.78-1.16 3.35-1.36 3.73-1.36.08 0 .27.02.39.12.1.08.13.19.14.27-.01.06.01.24 0 .38z" />
     </svg>
-  );
-}
-
-function TelegramChatPreview() {
-  return (
-    <motion.div
-      initial={{ opacity: 0, y: 24 }}
-      whileInView={{ opacity: 1, y: 0 }}
-      viewport={{ once: true, margin: "-40px" }}
-      transition={{ duration: 0.65, ease: easeOut }}
-      className="landing-float-card rounded-2xl overflow-hidden bg-white border border-gray-100 shadow-xl"
-    >
-      {/* Chat header */}
-      <div
-        className="flex items-center gap-3 px-4 py-3 text-white"
-        style={{ background: `linear-gradient(135deg, ${TELEGRAM_BLUE} 0%, #229ED9 100%)` }}
-      >
-        <div className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center shrink-0">
-          <TelegramIcon className="w-6 h-6 text-white" />
-        </div>
-        <div className="min-w-0 flex-1">
-          <p className="text-sm font-semibold truncate">Impact Logistics — HS Ops</p>
-          <p className="text-[11px] text-white/85">12 members · bot active</p>
-        </div>
-        <span className="text-[10px] font-medium bg-white/20 px-2 py-0.5 rounded-full shrink-0">
-          Live
-        </span>
-      </div>
-
-      {/* Messages */}
-      <div
-        className="p-4 space-y-3 max-h-[420px] overflow-y-auto"
-        style={{
-          background:
-            "linear-gradient(180deg, #e8f4fc 0%, #dbeafe 40%, #f0f9ff 100%)",
-        }}
-      >
-        <p className="text-center text-[10px] text-gray-500 font-medium py-1">Today</p>
-
-        {mockAlerts.map((alert, i) => {
-          const style = toneStyles[alert.tone];
-          return (
-            <motion.div
-              key={alert.title + alert.time}
-              initial={{ opacity: 0, x: -12 }}
-              whileInView={{ opacity: 1, x: 0 }}
-              viewport={{ once: true }}
-              transition={{ delay: 0.08 * i, duration: 0.4, ease: easeOut }}
-              className="flex gap-2"
-            >
-              <div
-                className="w-8 h-8 rounded-full shrink-0 flex items-center justify-center text-white text-[10px] font-bold"
-                style={{ backgroundColor: TELEGRAM_BLUE }}
-                aria-hidden
-              >
-                IL
-              </div>
-              <div
-                className={`flex-1 min-w-0 rounded-2xl rounded-tl-sm bg-white border px-3 py-2.5 shadow-sm ${style.border}`}
-              >
-                <div className="flex items-center justify-between gap-2 mb-1">
-                  <span className="text-[11px] font-semibold text-gray-900">{alert.title}</span>
-                  <span className="text-[10px] text-gray-400 shrink-0">{alert.time}</span>
-                </div>
-                <p className="text-[11px] text-gray-600 leading-relaxed">{alert.body}</p>
-                {alert.meta && (
-                  <p className="mt-1.5 text-[10px] font-medium text-[#007bff]">{alert.meta}</p>
-                )}
-                <div className="mt-2 flex items-center gap-1.5">
-                  <span className={`w-1.5 h-1.5 rounded-full ${style.dot}`} aria-hidden />
-                  <span className={`text-[9px] font-medium px-1.5 py-0.5 rounded ${style.badge}`}>
-                    {alert.tone === "progress"
-                      ? "In progress"
-                      : alert.tone === "success"
-                        ? "Completed"
-                        : alert.tone === "warning"
-                          ? "Action needed"
-                          : "Event"}
-                  </span>
-                </div>
-              </div>
-            </motion.div>
-          );
-        })}
-      </div>
-
-      {/* Input bar mock */}
-      <div className="px-3 py-2.5 bg-white border-t border-gray-100 flex items-center gap-2">
-        <div className="flex-1 h-9 rounded-full bg-gray-100 px-3 flex items-center">
-          <span className="text-[11px] text-gray-400">Alerts delivered automatically</span>
-        </div>
-        <div
-          className="w-9 h-9 rounded-full flex items-center justify-center shrink-0"
-          style={{ backgroundColor: TELEGRAM_BLUE }}
-          aria-hidden
-        >
-          <svg className="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 24 24" aria-hidden>
-            <title>Send</title>
-            <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z" />
-          </svg>
-        </div>
-      </div>
-    </motion.div>
   );
 }
 
@@ -311,7 +142,7 @@ export function TelegramMonitoringSection() {
             </FadeInView>
           </div>
 
-          <TelegramChatPreview />
+          <TelegramFlowAnimation />
         </div>
 
         {/* Event types strip */}
