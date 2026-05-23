@@ -1,5 +1,5 @@
 import { relations } from "drizzle-orm/relations";
-import { documentItems, itemClassifications, documents, groupedItems, usersInAuth, users } from "./schema";
+import { documentItems, itemClassifications, documents, groupedItems } from "./schema";
 
 export const itemClassificationsRelations = relations(itemClassifications, ({one}) => ({
 	documentItem: one(documentItems, {
@@ -26,15 +26,4 @@ export const groupedItemsRelations = relations(groupedItems, ({one}) => ({
 export const documentsRelations = relations(documents, ({many}) => ({
 	groupedItems: many(groupedItems),
 	documentItems: many(documentItems),
-}));
-
-export const usersRelations = relations(users, ({one}) => ({
-	usersInAuth: one(usersInAuth, {
-		fields: [users.id],
-		references: [usersInAuth.id]
-	}),
-}));
-
-export const usersInAuthRelations = relations(usersInAuth, ({many}) => ({
-	users: many(users),
 }));
