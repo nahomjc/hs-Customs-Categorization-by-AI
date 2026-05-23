@@ -59,6 +59,7 @@ export async function inviteDashboardUser(
     full_name: input.fullName,
     name: input.fullName,
     phone: input.phone,
+    must_change_password: true,
   };
 
   let userId: string;

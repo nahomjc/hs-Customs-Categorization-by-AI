@@ -1,5 +1,9 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
+import {
+  mustChangePassword,
+  SET_PASSWORD_PATH,
+} from "@/lib/auth/must-change-password";
 
 const AUTH_PATHS = new Set([
   "/login",
@@ -14,7 +18,8 @@ function isProtectedPath(pathname: string) {
     pathname === "/account" ||
     pathname.startsWith("/account/") ||
     pathname === "/dashboard" ||
-    pathname.startsWith("/dashboard/")
+    pathname.startsWith("/dashboard/") ||
+    pathname === SET_PASSWORD_PATH
   );
 }
 
@@ -77,7 +82,26 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(loginUrl);
   }
 
-  if (user && AUTH_PATHS.has(pathname) && pathname !== "/auth/callback") {
+  if (user && mustChangePassword(user)) {
+    if (isProtectedPath(pathname) && pathname !== SET_PASSWORD_PATH) {
+      const setPasswordUrl = request.nextUrl.clone();
+      setPasswordUrl.pathname = SET_PASSWORD_PATH;
+      setPasswordUrl.search = "";
+      return NextResponse.redirect(setPasswordUrl);
+    }
+  } else if (pathname === SET_PASSWORD_PATH) {
+    const dashboardUrl = request.nextUrl.clone();
+    dashboardUrl.pathname = "/dashboard";
+    dashboardUrl.search = "";
+    return NextResponse.redirect(dashboardUrl);
+  }
+
+  if (
+    user &&
+    AUTH_PATHS.has(pathname) &&
+    pathname !== "/auth/callback" &&
+    pathname !== SET_PASSWORD_PATH
+  ) {
     const dashboardUrl = request.nextUrl.clone();
     dashboardUrl.pathname = "/dashboard";
     dashboardUrl.search = "";

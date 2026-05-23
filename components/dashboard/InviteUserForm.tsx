@@ -131,7 +131,7 @@ export function InviteUserForm() {
               className={fieldClass}
             />
             <p className="mt-1.5 text-xs text-gray-500">
-              Set a temporary password. The user can change it after signing in.
+              Temporary password for first sign-in. They must choose a new password after accepting the invite.
             </p>
           </div>
           <div className="flex flex-col sm:flex-row gap-3 pt-2">

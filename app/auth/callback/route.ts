@@ -2,6 +2,10 @@ import type { EmailOtpType } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
 import { ensureUserProfile } from "@/lib/auth/ensure-profile";
 import { getAppOrigin } from "@/lib/auth/constants";
+import {
+  mustChangePassword,
+  SET_PASSWORD_PATH,
+} from "@/lib/auth/must-change-password";
 import { createClient } from "@/lib/supabase/server";
 
 export async function GET(request: Request) {
@@ -56,6 +60,9 @@ export async function GET(request: Request) {
     }
   }
 
-  const safeNext = next.startsWith("/") ? next : "/dashboard";
+  let safeNext = next.startsWith("/") ? next : "/dashboard";
+  if (mustChangePassword(user)) {
+    safeNext = SET_PASSWORD_PATH;
+  }
   return NextResponse.redirect(`${origin}${safeNext}`);
 }

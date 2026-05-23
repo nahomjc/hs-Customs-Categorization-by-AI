@@ -154,6 +154,131 @@ function FloatingTasksCard({ reduced }: { reduced: boolean }) {
   );
 }
 
+function HeroMobileDecor({ reduced }: { reduced: boolean }) {
+  return (
+    <motion.div
+      className="lg:hidden mt-10 px-2"
+      initial="hidden"
+      animate="visible"
+      variants={staggerContainer}
+    >
+      <div className="grid grid-cols-2 gap-3 max-w-sm mx-auto">
+        <motion.div variants={fadeUp} className="col-span-2 flex justify-center">
+          <motion.div
+            className="relative w-full max-w-[200px]"
+            animate={floatAnimation(reduced)}
+          >
+            <div className="landing-float-card absolute -right-2 top-4 w-11 h-11 rounded-xl bg-white flex items-center justify-center rotate-6 z-10">
+              <svg className="w-6 h-6 text-[#007bff]" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <title>Upload verified</title>
+                <path
+                  d="M9 12l2 2 4-4"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+                <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="2" />
+              </svg>
+            </div>
+            <div
+              className="landing-float-card rounded-2xl p-3 rotate-[-3deg] shadow-lg"
+              style={{ background: "#fef08a" }}
+            >
+              <div className="flex justify-end mb-0.5">
+                <span className="text-red-500 text-base" aria-hidden>
+                  📌
+                </span>
+              </div>
+              <p className="text-[10px] font-medium text-amber-900/90 leading-snug pr-6">
+                Upload packing lists — PDF, Word, or Excel — in one click.
+              </p>
+            </div>
+          </motion.div>
+        </motion.div>
+
+        <motion.div variants={fadeUp}>
+          <motion.div
+            className="landing-float-card bg-white rounded-2xl overflow-hidden h-full"
+            animate={floatAnimation(reduced)}
+            transition={{ delay: 0.4 }}
+          >
+            <div className="bg-gray-50 px-3 py-1.5 border-b border-gray-100">
+              <p className="text-[10px] font-semibold text-gray-700">Classification queue</p>
+            </div>
+            <div className="p-3 space-y-2">
+              <div>
+                <p className="text-[10px] font-medium text-gray-900">Shipment #2841</p>
+                <p className="text-[9px] text-gray-500">847 items · Processing</p>
+              </div>
+              <div className="h-1 rounded-full bg-gray-100 overflow-hidden">
+                <div className="h-full w-2/3 rounded-full bg-[#007bff]" />
+              </div>
+            </div>
+          </motion.div>
+        </motion.div>
+
+        <motion.div variants={fadeUp}>
+          <motion.div
+            className="landing-float-card bg-white rounded-2xl p-3 h-full"
+            animate={floatAnimation(reduced)}
+            transition={{ delay: 0.6 }}
+          >
+            <p className="text-[10px] font-semibold text-gray-800 mb-2">Today&apos;s jobs</p>
+            <ul className="space-y-2">
+              <li>
+                <div className="flex items-center justify-between text-[9px] text-gray-600 mb-0.5">
+                  <span>PL-2024-089</span>
+                  <span className="flex -space-x-1">
+                    <span className="w-4 h-4 rounded-full bg-orange-200 border border-white" />
+                    <span className="w-4 h-4 rounded-full bg-blue-200 border border-white" />
+                  </span>
+                </div>
+                <div className="h-1 rounded-full bg-gray-100 overflow-hidden">
+                  <div className="h-full w-4/5 rounded-full bg-orange-400" />
+                </div>
+              </li>
+              <li>
+                <div className="flex items-center justify-between text-[9px] text-gray-600 mb-0.5">
+                  <span>PL-2024-090</span>
+                  <span className="w-4 h-4 rounded-full bg-blue-200 border border-white" />
+                </div>
+                <div className="h-1 rounded-full bg-gray-100 overflow-hidden">
+                  <div className="h-full w-1/2 rounded-full bg-[#007bff]" />
+                </div>
+              </li>
+            </ul>
+          </motion.div>
+        </motion.div>
+
+        <motion.div variants={fadeUp} className="col-span-2">
+          <motion.div
+            className="landing-float-card bg-white rounded-2xl p-3"
+            animate={floatAnimation(reduced)}
+            transition={{ delay: 0.8 }}
+          >
+            <p className="text-[10px] font-semibold text-gray-800 mb-2">Export formats</p>
+            <div className="flex gap-2">
+              {[
+                { label: "Excel", bg: "bg-emerald-100", text: "text-emerald-700" },
+                { label: "PDF", bg: "bg-red-100", text: "text-red-600" },
+                { label: "CSV", bg: "bg-blue-100", text: "text-blue-600" },
+              ].map((fmt) => (
+                <div
+                  key={fmt.label}
+                  className={`flex-1 ${fmt.bg} rounded-lg py-2 flex items-center justify-center`}
+                >
+                  <span className={`text-[9px] font-bold ${fmt.text}`}>{fmt.label}</span>
+                </div>
+              ))}
+            </div>
+          </motion.div>
+        </motion.div>
+      </div>
+    </motion.div>
+  );
+}
+
 function FloatingFormatsCard({ reduced }: { reduced: boolean }) {
   return (
     <motion.div
@@ -196,16 +321,16 @@ export function HeroSection() {
   const reduced = useReducedMotion() ?? false;
 
   return (
-    <section className="landing-dot-grid relative w-full overflow-hidden pt-12 pb-24 sm:pt-16 sm:pb-32">
-      <div className="landing-wrap relative min-h-[520px] sm:min-h-[560px]">
+    <section className="landing-dot-grid relative w-full overflow-hidden pt-12 pb-16 sm:pt-16 sm:pb-24 lg:pb-32">
+      <div className="landing-wrap relative lg:min-h-[560px]">
           <FloatingUploadCard reduced={reduced} />
           <FloatingQueueCard reduced={reduced} />
           <FloatingTasksCard reduced={reduced} />
           <FloatingFormatsCard reduced={reduced} />
 
-        <div className="relative z-10 flex min-h-[520px] sm:min-h-[560px] items-center justify-center">
+        <div className="relative z-10 flex lg:min-h-[560px] items-center justify-center py-4 lg:py-0">
           <motion.div
-            className="text-center max-w-2xl mx-auto px-4"
+            className="text-center max-w-2xl mx-auto px-4 w-full"
             variants={staggerContainer}
             initial="hidden"
             animate="visible"
@@ -237,6 +362,8 @@ export function HeroSection() {
                 </Link>
               </motion.div>
             </motion.div>
+
+            <HeroMobileDecor reduced={reduced} />
           </motion.div>
         </div>
       </div>
