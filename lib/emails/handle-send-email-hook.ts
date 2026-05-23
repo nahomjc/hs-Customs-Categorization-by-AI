@@ -46,10 +46,9 @@ export async function handleSendEmailHook(
   });
 
   if (!message) {
-    console.warn(
-      `[send-email-hook] No template for action: ${emailData.email_action_type}`
+    throw new Error(
+      `No email template for auth action: ${emailData.email_action_type}`
     );
-    return;
   }
 
   await sendViaBrevo({

@@ -26,7 +26,7 @@ export function getAppOrigin(): string {
     return configured;
   }
 
-  return "http://localhost:3000";
+  return "http://localhost:3099";
 }
 
 /** Safe origin for auth redirect URLs in the browser (signup, password reset). */

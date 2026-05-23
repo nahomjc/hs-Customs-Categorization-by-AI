@@ -1,4 +1,5 @@
 import { confirmSignupEmail } from "@/lib/emails/templates/confirm-signup";
+import { inviteUserEmail } from "@/lib/emails/templates/invite-user";
 import { magicLinkEmail } from "@/lib/emails/templates/magic-link";
 import { resetPasswordEmail } from "@/lib/emails/templates/reset-password";
 import type { AuthEmailMessage, AuthEmailTemplateInput } from "@/lib/emails/types";
@@ -7,6 +8,7 @@ type TemplateBuilder = (input: AuthEmailTemplateInput) => AuthEmailMessage;
 
 const templates: Record<string, TemplateBuilder> = {
   signup: confirmSignupEmail,
+  invite: inviteUserEmail,
   recovery: resetPasswordEmail,
   magiclink: magicLinkEmail,
 };
