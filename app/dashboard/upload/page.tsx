@@ -83,7 +83,7 @@ export default function UploadPage() {
     <div className="max-w-xl mx-auto space-y-8">
       <PageHeader
         title="Upload packing list"
-        description="Upload a PDF, Word, or Excel file to categorize items by HS code."
+        description="Upload a PDF, Word, or Excel file to categorize items by HS code. Scanned or photo PDFs are supported via OCR."
       />
 
       <div className="space-y-5">
@@ -100,11 +100,11 @@ export default function UploadPage() {
           <div className="p-8 sm:p-10 text-center">
             <div className="w-14 h-14 rounded-2xl bg-blue-50 flex items-center justify-center mx-auto mb-4 text-[#007bff]">
               <svg
+                aria-hidden="true"
                 className="w-7 h-7"
                 fill="none"
                 stroke="currentColor"
                 viewBox="0 0 24 24"
-                aria-hidden
               >
                 <path
                   strokeLinecap="round"
@@ -120,8 +120,13 @@ export default function UploadPage() {
             <p className="text-sm text-gray-500 mb-5">
               or choose a file from your device
             </p>
+            <p className="text-xs text-gray-400 mb-5 max-w-sm mx-auto">
+              Scanned or image-only PDFs are read automatically; processing may
+              take a little longer.
+            </p>
             <label className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-gray-900 text-white cursor-pointer hover:bg-gray-800 transition-colors font-medium text-sm">
               <svg
+                aria-hidden="true"
                 className="w-4 h-4"
                 fill="none"
                 stroke="currentColor"
@@ -159,6 +164,7 @@ export default function UploadPage() {
           <div className="landing-float-card flex items-center gap-3 p-4 rounded-2xl bg-white">
             <div className="shrink-0 w-11 h-11 rounded-xl bg-emerald-50 flex items-center justify-center text-emerald-600">
               <svg
+                aria-hidden="true"
                 className="w-5 h-5"
                 fill="none"
                 stroke="currentColor"
@@ -185,6 +191,7 @@ export default function UploadPage() {
               aria-label="Remove file"
             >
               <svg
+                aria-hidden="true"
                 className="w-4 h-4"
                 fill="none"
                 stroke="currentColor"
@@ -204,6 +211,7 @@ export default function UploadPage() {
         {error && (
           <div className="flex items-center gap-3 p-4 rounded-2xl bg-red-50 border border-red-100 text-red-800 text-sm">
             <svg
+              aria-hidden="true"
               className="w-5 h-5 shrink-0"
               fill="none"
               stroke="currentColor"
@@ -221,6 +229,7 @@ export default function UploadPage() {
         )}
 
         <button
+          type="button"
           onClick={submit}
           disabled={!file || loading}
           className="w-full inline-flex items-center justify-center gap-2 py-3.5 px-4 rounded-full bg-[#007bff] text-white font-semibold disabled:opacity-50 disabled:cursor-not-allowed hover:bg-[#0069d9] transition-colors shadow-md shadow-blue-500/20"
@@ -228,10 +237,10 @@ export default function UploadPage() {
           {loading ? (
             <>
               <svg
+                aria-hidden="true"
                 className="animate-spin w-5 h-5"
                 fill="none"
                 viewBox="0 0 24 24"
-                aria-hidden
               >
                 <circle
                   className="opacity-25"
@@ -253,6 +262,7 @@ export default function UploadPage() {
             <>
               Process and categorize
               <svg
+                aria-hidden="true"
                 className="w-4 h-4"
                 fill="none"
                 stroke="currentColor"

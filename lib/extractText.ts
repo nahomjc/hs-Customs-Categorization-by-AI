@@ -1,5 +1,6 @@
 import mammoth from "mammoth";
 import * as XLSX from "xlsx";
+import { extractPdfTextViaOpenRouter } from "./extractPdfOcr";
 
 export type FileType = "pdf" | "docx" | "xlsx";
 
@@ -32,18 +33,17 @@ export async function extractTextFromBuffer(
   }
 
   if (fileType === "pdf") {
+    let text = "";
     try {
       const pdfParse = (await import("pdf-parse")).default;
       const data = await pdfParse(buffer);
-      const text = data?.text?.trim() ?? "";
-      if (!text) {
-        console.error(
-          "[HS extractText] PDF has no extractable text (image-only or scanned?)"
-        );
-        throw new Error(
-          "PDF has no extractable text (e.g. image-only or scanned). Try exporting as text-based PDF or use a DOCX file."
-        );
-      }
+      text = data?.text?.trim() ?? "";
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      console.warn("[HS extractText] pdf-parse failed:", msg);
+    }
+
+    if (text) {
       console.log(
         "[HS extractText] PDF extracted OK | text length:",
         text.length,
@@ -51,12 +51,21 @@ export async function extractTextFromBuffer(
         text.slice(0, 80)
       );
       return text;
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
-      console.error("[HS extractText] PDF extraction failed:", msg);
-      throw new Error("PDF text extraction failed: " + msg);
+    }
+
+    console.log(
+      "[HS extractText] No embedded PDF text; trying OpenRouter OCR (scanned/image PDF)…"
+    );
+    try {
+      return await extractPdfTextViaOpenRouter(buffer);
+    } catch (ocrErr) {
+      const ocrMsg = ocrErr instanceof Error ? ocrErr.message : String(ocrErr);
+      console.error("[HS extractText] PDF OCR failed:", ocrMsg);
+      throw new Error(
+        `Could not read this PDF. It may be scanned or image-only. Ensure OPENROUTER_API_KEY is set, or upload a text-based PDF / DOCX. (${ocrMsg})`
+      );
     }
   }
 
-  throw new Error("Unsupported file type: " + fileType);
+  throw new Error(`Unsupported file type: ${fileType}`);
 }

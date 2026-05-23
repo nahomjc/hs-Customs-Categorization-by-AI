@@ -15,14 +15,26 @@ export async function startProcessingDocument(documentId: string) {
     .from(documents)
     .where(eq(documents.id, documentId));
   if (!doc) return { error: "Document not found" };
-  if (doc.status !== "uploaded") return { error: "Document already processed" };
+  if (
+    doc.status !== "uploaded" &&
+    doc.status !== "failed"
+  ) {
+    return { error: "Document already processed" };
+  }
+
+  if (doc.status === "failed") {
+    await db
+      .update(documents)
+      .set({ status: "uploaded", updatedAt: new Date() })
+      .where(eq(documents.id, documentId));
+  }
 
   const supabase = createAdminClient();
   const path = doc.originalFileUrl;
   const { data, error } = await supabase.storage.from(BUCKET).download(path);
   if (error || !data)
     return {
-      error: "Failed to download file: " + (error?.message ?? "no data"),
+      error: `Failed to download file: ${error?.message ?? "no data"}`,
     };
 
   const buffer = Buffer.from(await data.arrayBuffer());

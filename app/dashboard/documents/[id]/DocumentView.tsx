@@ -28,6 +28,10 @@ type Grouped = {
   unit: string | null;
 };
 
+function itemDesc(i: Item) {
+  return i.cleanDescription ?? i.detectedDescription ?? i.rawLine ?? "";
+}
+
 export function DocumentView(props: {
   documentId: string;
   status: string | null;
@@ -123,7 +127,7 @@ export function DocumentView(props: {
                 finalDescription: editForm.finalDescription.trim(),
                 totalQuantity: editForm.totalQuantity,
                 unit: editForm.unit.trim() || null,
-              }
+              },
         ),
       });
       if (!res.ok) {
@@ -140,8 +144,6 @@ export function DocumentView(props: {
     }
   };
 
-  const itemDesc = (i: Item) =>
-    i.cleanDescription ?? i.detectedDescription ?? i.rawLine ?? "";
   const filteredItems = useMemo(() => {
     const q = searchItems.trim().toLowerCase();
     if (!q) return items;
@@ -228,8 +230,30 @@ export function DocumentView(props: {
     }));
   };
 
+  const retryProcessing = async () => {
+    setProcessing(true);
+    setError(null);
+    setStatus("uploaded");
+    try {
+      const r = await startProcessingDocument(documentId);
+      if (r.error) {
+        setError(r.error);
+        setStatus("failed");
+      } else {
+        setStatus("completed");
+        router.refresh();
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed");
+      setStatus("failed");
+    } finally {
+      setProcessing(false);
+    }
+  };
+
   useEffect(() => {
-    if (status !== "uploaded" || processing) return;
+    if ((status !== "uploaded" && status !== "failed") || processing) return;
+    if (status === "failed") return;
     let cancelled = false;
     const run = async () => {
       setProcessing(true);
@@ -256,7 +280,7 @@ export function DocumentView(props: {
   useEffect(() => {
     if (status === "completed" || status === "failed" || processing) return;
     const t = setInterval(async () => {
-      const r = await fetch("/api/documents/" + documentId + "/status");
+      const r = await fetch(`/api/documents/${documentId}/status`);
       const d = await r.json();
       if (d.status) {
         setStatus(d.status);
@@ -280,8 +304,8 @@ export function DocumentView(props: {
       {
         id: "classify",
         label: isClassifying
-          ? `AI classifying (${progress!.classifiedCount}/${
-              progress!.totalItems
+          ? `AI classifying (${progress?.classifiedCount ?? 0}/${
+              progress?.totalItems ?? 0
             })`
           : "AI classifying",
         active: status === "ai_processed",
@@ -344,13 +368,14 @@ export function DocumentView(props: {
                         isCurrent
                           ? "bg-[var(--accent)] text-white"
                           : isDone
-                          ? "bg-emerald-100 text-emerald-700"
-                          : "bg-[var(--border)] text-[var(--foreground)]/50"
+                            ? "bg-emerald-100 text-emerald-700"
+                            : "bg-[var(--border)] text-[var(--foreground)]/50"
                       }`}
                       aria-hidden
                     >
                       {isDone ? (
                         <svg
+                          aria-hidden="true"
                           className="w-3.5 h-3.5"
                           fill="none"
                           stroke="currentColor"
@@ -372,8 +397,8 @@ export function DocumentView(props: {
                         isCurrent
                           ? "text-[var(--foreground)] font-medium"
                           : isDone
-                          ? "text-[var(--foreground)]/70"
-                          : "text-[var(--foreground)]/50"
+                            ? "text-[var(--foreground)]/70"
+                            : "text-[var(--foreground)]/50"
                       }`}
                     >
                       {step.label}
@@ -413,6 +438,7 @@ export function DocumentView(props: {
           className="inline-flex items-center gap-1.5 text-sm font-medium text-[var(--accent)] hover:underline mb-6"
         >
           <svg
+            aria-hidden="true"
             className="w-4 h-4"
             fill="none"
             stroke="currentColor"
@@ -431,6 +457,7 @@ export function DocumentView(props: {
           <div className="p-6 text-center">
             <div className="w-12 h-12 rounded-full bg-red-100 flex items-center justify-center mx-auto mb-4">
               <svg
+                aria-hidden="true"
                 className="w-6 h-6 text-red-600"
                 fill="none"
                 stroke="currentColor"
@@ -450,12 +477,22 @@ export function DocumentView(props: {
             <p className="mt-1 text-sm text-[var(--foreground)]/70">
               {error ?? "An error occurred while processing this document."}
             </p>
-            <Link
-              href="/dashboard"
-              className="mt-5 inline-flex items-center justify-center px-4 py-2.5 bg-[var(--accent)] text-white rounded-lg text-sm font-medium hover:bg-[var(--accent-hover)] transition-colors"
-            >
-              Back to dashboard
-            </Link>
+            <div className="mt-5 flex flex-col sm:flex-row gap-3 justify-center">
+              <button
+                type="button"
+                onClick={retryProcessing}
+                disabled={processing}
+                className="inline-flex items-center justify-center px-4 py-2.5 bg-[var(--accent)] text-white rounded-lg text-sm font-medium hover:bg-[var(--accent-hover)] transition-colors disabled:opacity-50"
+              >
+                {processing ? "Retrying…" : "Try again"}
+              </button>
+              <Link
+                href="/dashboard/upload"
+                className="inline-flex items-center justify-center px-4 py-2.5 border border-gray-200 text-[var(--foreground)] rounded-lg text-sm font-medium hover:bg-gray-50 transition-colors"
+              >
+                Upload new file
+              </Link>
+            </div>
           </div>
         </div>
       </div>
@@ -474,6 +511,7 @@ export function DocumentView(props: {
           className="inline-flex items-center gap-1.5 text-sm font-medium text-[var(--accent)] hover:underline"
         >
           <svg
+            aria-hidden="true"
             className="w-4 h-4"
             fill="none"
             stroke="currentColor"
@@ -496,6 +534,7 @@ export function DocumentView(props: {
               <div className="flex items-center gap-2">
                 <div className="shrink-0 w-9 h-9 rounded-xl bg-blue-50 flex items-center justify-center text-[#007bff]">
                   <svg
+                    aria-hidden="true"
                     className="w-5 h-5"
                     fill="none"
                     stroke="currentColor"
@@ -519,10 +558,11 @@ export function DocumentView(props: {
               </p>
             </div>
             <a
-              href={"/api/documents/" + documentId + "/download"}
+              href={`/api/documents/${documentId}/download`}
               className="inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 font-medium text-sm transition-colors shadow-sm shrink-0"
             >
               <svg
+                aria-hidden="true"
                 className="w-4 h-4"
                 fill="none"
                 stroke="currentColor"
@@ -557,6 +597,7 @@ export function DocumentView(props: {
                     className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-[var(--accent)] text-white hover:bg-[var(--accent-hover)] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                   >
                     <svg
+                      aria-hidden="true"
                       className="w-3.5 h-3.5"
                       fill="none"
                       stroke="currentColor"
@@ -585,7 +626,7 @@ export function DocumentView(props: {
                     fill="none"
                     stroke="currentColor"
                     viewBox="0 0 24 24"
-                    aria-hidden
+                    aria-hidden="true"
                   >
                     <path
                       strokeLinecap="round"
@@ -611,6 +652,7 @@ export function DocumentView(props: {
                     aria-label="Clear search"
                   >
                     <svg
+                      aria-hidden="true"
                       className="w-4 h-4"
                       fill="none"
                       stroke="currentColor"
@@ -721,7 +763,7 @@ export function DocumentView(props: {
                                 ...f,
                                 totalQuantity: Math.max(
                                   0,
-                                  parseInt(e.target.value, 10) || 0
+                                  Number.parseInt(e.target.value, 10) || 0,
                                 ),
                               }))
                             }
@@ -839,7 +881,8 @@ export function DocumentView(props: {
                                         ...f,
                                         totalQuantity: Math.max(
                                           0,
-                                          parseInt(e.target.value, 10) || 0
+                                          Number.parseInt(e.target.value, 10) ||
+                                            0,
                                         ),
                                       }))
                                     }
@@ -940,7 +983,7 @@ export function DocumentView(props: {
                       fill="none"
                       stroke="currentColor"
                       viewBox="0 0 24 24"
-                      aria-hidden
+                      aria-hidden="true"
                     >
                       <path
                         strokeLinecap="round"
@@ -971,6 +1014,7 @@ export function DocumentView(props: {
                       aria-hidden
                     >
                       <svg
+                        aria-hidden="true"
                         className="h-4 w-4"
                         fill="none"
                         stroke="currentColor"
@@ -1001,6 +1045,7 @@ export function DocumentView(props: {
                         aria-label="Clear search"
                       >
                         <svg
+                          aria-hidden="true"
                           className="h-4 w-4"
                           fill="none"
                           stroke="currentColor"
@@ -1088,11 +1133,11 @@ export function DocumentView(props: {
                         <div className="flex flex-col items-center justify-center px-4 py-16 text-center">
                           <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-[var(--background)] border border-[var(--border)]">
                             <svg
+                              aria-hidden="true"
                               className="h-6 w-6 text-[var(--foreground)]/40"
                               fill="none"
                               stroke="currentColor"
                               viewBox="0 0 24 24"
-                              aria-hidden
                             >
                               <path
                                 strokeLinecap="round"

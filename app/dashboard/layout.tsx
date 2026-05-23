@@ -1,5 +1,6 @@
 import { Inter } from "next/font/google";
 import { BrandLogo } from "@/components/BrandLogo";
+import { DashboardAssistantChat } from "@/components/dashboard/DashboardAssistantChat";
 import { DashboardSidebarShell } from "@/components/dashboard/DashboardSidebarShell";
 import { ensureUserProfile } from "@/lib/auth/ensure-profile";
 import { toUserMenuUser } from "@/lib/auth/user-display";
@@ -48,6 +49,7 @@ export default async function DashboardLayout({
         <DashboardSidebarShell />
         <main className="flex-1 min-w-0 w-full">{children}</main>
       </div>
+      <DashboardAssistantChat />
     </div>
   );
 }
