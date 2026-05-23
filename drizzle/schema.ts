@@ -15,6 +15,11 @@ export const itemClassifications = pgTable("item_classifications", {
 }, (table) => {
 	return {
 		idxItemClassificationsItemId: index("idx_item_classifications_item_id").using("btree", table.itemId.asc().nullsLast().op("uuid_ops")),
+		itemClassificationsItemIdDocumentItemsIdFk: foreignKey({
+			columns: [table.itemId],
+			foreignColumns: [documentItems.id],
+			name: "item_classifications_item_id_document_items_id_fk"
+		}).onDelete("cascade"),
 		itemClassificationsItemIdFkey: foreignKey({
 			columns: [table.itemId],
 			foreignColumns: [documentItems.id],
@@ -36,6 +41,11 @@ export const groupedItems = pgTable("grouped_items", {
 }, (table) => {
 	return {
 		idxGroupedItemsDocumentId: index("idx_grouped_items_document_id").using("btree", table.documentId.asc().nullsLast().op("uuid_ops")),
+		groupedItemsDocumentIdDocumentsIdFk: foreignKey({
+			columns: [table.documentId],
+			foreignColumns: [documents.id],
+			name: "grouped_items_document_id_documents_id_fk"
+		}).onDelete("cascade"),
 		groupedItemsDocumentIdFkey: foreignKey({
 			columns: [table.documentId],
 			foreignColumns: [documents.id],
@@ -49,6 +59,27 @@ export const hsCodeReference = pgTable("hs_code_reference", {
 	hsCode: varchar("hs_code", { length: 20 }).primaryKey().notNull(),
 	category: varchar({ length: 100 }),
 	description: text(),
+});
+
+export const settings = pgTable("settings", {
+	id: uuid().defaultRandom().primaryKey().notNull(),
+	tenantId: varchar("tenant_id", { length: 30 }).notNull(),
+	userId: uuid("user_id").notNull(),
+	preferences: jsonb().default({"emailOnComplete":true,"autoOpenDocument":true,"defaultExportFormat":"xlsx"}).notNull(),
+	createdAt: timestamp("created_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+	updatedAt: timestamp("updated_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+}, (table) => {
+	return {
+		idxSettingsTenantId: index("idx_settings_tenant_id").using("btree", table.tenantId.asc().nullsLast().op("text_ops")),
+		idxSettingsUserId: index("idx_settings_user_id").using("btree", table.userId.asc().nullsLast().op("uuid_ops")),
+		settingsUserIdFkey: foreignKey({
+			columns: [table.userId],
+			foreignColumns: [users.id],
+			name: "settings_user_id_fkey"
+		}).onDelete("cascade"),
+		settingsUserIdUnique: unique("settings_user_id_unique").on(table.userId),
+		allowAllForService: pgPolicy("Allow all for service", { as: "permissive", for: "all", to: ["public"], using: sql`true`, withCheck: sql`true`  }),
+	}
 });
 
 export const users = pgTable("users", {
@@ -111,6 +142,11 @@ export const documentItems = pgTable("document_items", {
 }, (table) => {
 	return {
 		idxDocumentItemsDocumentId: index("idx_document_items_document_id").using("btree", table.documentId.asc().nullsLast().op("uuid_ops")),
+		documentItemsDocumentIdDocumentsIdFk: foreignKey({
+			columns: [table.documentId],
+			foreignColumns: [documents.id],
+			name: "document_items_document_id_documents_id_fk"
+		}).onDelete("cascade"),
 		documentItemsDocumentIdFkey: foreignKey({
 			columns: [table.documentId],
 			foreignColumns: [documents.id],
