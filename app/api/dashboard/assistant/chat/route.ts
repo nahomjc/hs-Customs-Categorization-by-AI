@@ -1,8 +1,10 @@
 import { NextResponse } from "next/server";
-import { desc, eq, or } from "drizzle-orm";
+import { desc } from "drizzle-orm";
 import { db } from "@/db";
 import { documents } from "@/db/schema";
 import { completeChat, type ChatMessage } from "@/lib/ai/openrouter-chat";
+import { DEFAULT_TENANT_ID } from "@/lib/auth/constants";
+import { documentsUploadedByUser } from "@/lib/dashboard/document-ownership";
 import { createClient } from "@/lib/supabase/server";
 
 const MAX_HISTORY = 12;
@@ -50,10 +52,11 @@ export async function POST(request: Request) {
 
   let recentDocsSummary = "No documents uploaded yet.";
   try {
-    const uploadFilters = [eq(documents.uploadedBy, user.id)];
-    if (user.email) {
-      uploadFilters.push(eq(documents.uploadedBy, user.email));
-    }
+    const uploadFilter = documentsUploadedByUser({
+      id: user.id,
+      email: user.email ?? "",
+      tenantId: DEFAULT_TENANT_ID,
+    });
 
     const recent = await db
       .select({
@@ -62,7 +65,7 @@ export async function POST(request: Request) {
         createdAt: documents.createdAt,
       })
       .from(documents)
-      .where(or(...uploadFilters))
+      .where(uploadFilter)
       .orderBy(desc(documents.createdAt))
       .limit(8);
 

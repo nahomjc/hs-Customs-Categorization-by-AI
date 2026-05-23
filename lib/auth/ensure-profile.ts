@@ -1,6 +1,7 @@
 import { db } from "@/db";
 import { users } from "@/db/schema/users";
 import { DEFAULT_TENANT_ID } from "@/lib/auth/constants";
+import { and, eq, sql } from "drizzle-orm";
 
 export async function ensureUserProfile(input: {
   id: string;
@@ -38,4 +39,16 @@ export async function ensureUserProfile(input: {
         updatedAt: now,
       },
     });
+
+  const [{ adminCount }] = await db
+    .select({ adminCount: sql<number>`count(*)::int` })
+    .from(users)
+    .where(and(eq(users.tenantId, tenantId), eq(users.role, "admin")));
+
+  if (adminCount === 0) {
+    await db
+      .update(users)
+      .set({ role: "admin", updatedAt: now })
+      .where(eq(users.id, input.id));
+  }
 }

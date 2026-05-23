@@ -1,5 +1,7 @@
 import Link from "next/link";
 import { DashCard, DashCardHeader, DashLink, StatusBadge } from "@/components/dashboard/ui";
+import { UserRoleSelect } from "@/components/dashboard/UserRoleSelect";
+import { USER_ROLE_LABELS, isUserRole } from "@/lib/auth/roles";
 import type { getDashboardUserDetail } from "@/lib/dashboard/users";
 
 type UserDetail = NonNullable<Awaited<ReturnType<typeof getDashboardUserDetail>>>;
@@ -31,17 +33,32 @@ const STATUS_LABELS: Record<string, string> = {
   failed: "Failed",
 };
 
+function getPhoneFromMeta(meta: unknown): string | null {
+  if (!meta || typeof meta !== "object") return null;
+  const phone = (meta as Record<string, unknown>).phone;
+  if (typeof phone === "string" && phone.trim()) return phone.trim();
+  return null;
+}
+
 type UserDetailPanelProps = {
   user: UserDetail;
   /** When viewing your own profile from My account */
   variant?: "self" | "admin";
+  canManageRoles?: boolean;
+  /** Logged-in viewer role (for permission hints on admin pages). */
+  viewerRole?: string | null;
 };
 
-export function UserDetailPanel({ user, variant = "admin" }: UserDetailPanelProps) {
-  const meta =
-    user.meta && typeof user.meta === "object" && Object.keys(user.meta).length > 0
-      ? user.meta
-      : null;
+export function UserDetailPanel({
+  user,
+  variant = "admin",
+  canManageRoles = false,
+  viewerRole = null,
+}: UserDetailPanelProps) {
+  const roleLabel = isUserRole(user.role)
+    ? USER_ROLE_LABELS[user.role]
+    : user.role;
+  const phone = getPhoneFromMeta(user.meta);
 
   return (
     <div className="space-y-6">
@@ -66,9 +83,9 @@ export function UserDetailPanel({ user, variant = "admin" }: UserDetailPanelProp
                 : user.fullName || "Unnamed user"}
             </h1>
             <p className="text-gray-500 mt-1">{user.email}</p>
-            <div className="flex flex-wrap gap-2 mt-4">
+            <div className="flex flex-wrap items-center gap-2 mt-4">
               <span className="inline-flex px-2.5 py-1 rounded-full text-xs font-medium bg-blue-50 text-[#007bff] capitalize">
-                {user.role}
+                {roleLabel}
               </span>
               <span
                 className={`inline-flex px-2.5 py-1 rounded-full text-xs font-medium capitalize ${
@@ -89,20 +106,20 @@ export function UserDetailPanel({ user, variant = "admin" }: UserDetailPanelProp
         <dl className="mt-8 grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
           <div className="rounded-xl bg-gray-50 px-4 py-3">
             <dt className="text-gray-500 text-xs font-medium uppercase tracking-wider">
-              User ID
-            </dt>
-            <dd className="mt-1 font-mono text-xs text-gray-800 break-all">
-              {user.id}
-            </dd>
-          </div>
-          <div className="rounded-xl bg-gray-50 px-4 py-3">
-            <dt className="text-gray-500 text-xs font-medium uppercase tracking-wider">
               Documents
             </dt>
             <dd className="mt-1 text-lg font-semibold text-gray-900 tabular-nums">
               {user.documentCount}
             </dd>
           </div>
+          {phone ? (
+            <div className="rounded-xl bg-gray-50 px-4 py-3">
+              <dt className="text-gray-500 text-xs font-medium uppercase tracking-wider">
+                Phone
+              </dt>
+              <dd className="mt-1 text-gray-900">{phone}</dd>
+            </div>
+          ) : null}
           <div className="rounded-xl bg-gray-50 px-4 py-3">
             <dt className="text-gray-500 text-xs font-medium uppercase tracking-wider">
               Joined
@@ -116,18 +133,49 @@ export function UserDetailPanel({ user, variant = "admin" }: UserDetailPanelProp
             <dd className="mt-1 text-gray-900">{formatDate(user.updatedAt)}</dd>
           </div>
         </dl>
-
-        {meta ? (
-          <div className="mt-6">
-            <h3 className="text-xs font-medium text-gray-500 uppercase tracking-wider mb-2">
-              Meta
-            </h3>
-            <pre className="text-xs bg-gray-900 text-gray-100 rounded-xl p-4 overflow-x-auto">
-              {JSON.stringify(meta, null, 2)}
-            </pre>
-          </div>
-        ) : null}
       </div>
+
+      {variant === "admin" ? (
+        <DashCard>
+          <DashCardHeader title="Role" />
+          <div className="p-5 sm:p-6">
+            {canManageRoles ? (
+              <>
+                <label
+                  htmlFor={`role-${user.id}`}
+                  className="block text-sm font-medium text-gray-700 mb-1.5"
+                >
+                  Assign role
+                </label>
+                <div className="max-w-xs">
+                  <UserRoleSelect
+                    userId={user.id}
+                    value={user.role}
+                    canEdit
+                    id={`role-${user.id}`}
+                  />
+                </div>
+                <p className="mt-2 text-xs text-gray-500">
+                  Admin, Assessor, or User. Changes apply immediately.
+                </p>
+              </>
+            ) : (
+              <>
+                <p className="text-sm text-gray-700">
+                  Current role:{" "}
+                  <span className="font-medium text-gray-900">{roleLabel}</span>
+                </p>
+                <p className="mt-2 text-sm text-gray-500">
+                  Only admins can change roles.
+                  {viewerRole && viewerRole !== "admin"
+                    ? ` You are signed in as ${isUserRole(viewerRole) ? USER_ROLE_LABELS[viewerRole] : viewerRole}.`
+                    : " Ask an administrator to grant you admin access, or promote your account in the database."}
+                </p>
+              </>
+            )}
+          </div>
+        </DashCard>
+      ) : null}
 
       <DashCard>
         <DashCardHeader

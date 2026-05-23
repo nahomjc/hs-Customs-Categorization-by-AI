@@ -1,6 +1,7 @@
 import { db } from "@/db";
 import { documents, users } from "@/db/schema";
-import { desc, eq, or, sql } from "drizzle-orm";
+import { documentsUploadedByUser } from "@/lib/dashboard/document-ownership";
+import { desc, eq, sql } from "drizzle-orm";
 
 export type UserListItem = {
   id: string;
@@ -46,24 +47,14 @@ export async function getDashboardUserDetail(userId: string) {
         createdAt: documents.createdAt,
       })
       .from(documents)
-      .where(
-        or(
-          eq(documents.uploadedBy, row.id),
-          eq(documents.uploadedBy, row.email)
-        )
-      )
+      .where(documentsUploadedByUser(row))
       .orderBy(desc(documents.createdAt))
       .limit(10);
 
     const [countRow] = await db
       .select({ count: sql<number>`count(*)::int` })
       .from(documents)
-      .where(
-        or(
-          eq(documents.uploadedBy, row.id),
-          eq(documents.uploadedBy, row.email)
-        )
-      );
+      .where(documentsUploadedByUser(row));
 
     return {
       ...row,

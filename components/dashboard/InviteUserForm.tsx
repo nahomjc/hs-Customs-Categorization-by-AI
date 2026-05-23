@@ -58,7 +58,7 @@ export function InviteUserForm() {
   }
 
   return (
-    <div className="space-y-6 max-w-xl">
+    <div className="space-y-6">
       <PageHeader
         title="Invite user"
         description="Create an account and send an invitation email with login details."

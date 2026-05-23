@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { DashCard, PageHeader } from "@/components/dashboard/ui";
+import { UserRoleSelect } from "@/components/dashboard/UserRoleSelect";
 import type { UserListItem } from "@/lib/dashboard/users";
 
 function getInitials(name: string | null, email: string) {
@@ -40,9 +41,13 @@ function StatusPill({ status }: { status: string }) {
 
 type UsersTableProps = {
   users: UserListItem[];
+  canManageRoles?: boolean;
 };
 
-export function UsersTable({ users }: UsersTableProps) {
+export function UsersTable({
+  users,
+  canManageRoles = false,
+}: UsersTableProps) {
   return (
     <div className="space-y-6">
       <PageHeader
@@ -83,7 +88,7 @@ export function UsersTable({ users }: UsersTableProps) {
                 <th className="px-5 py-3 font-medium text-gray-500 uppercase tracking-wider text-xs">
                   Email
                 </th>
-                <th className="px-5 py-3 font-medium text-gray-500 uppercase tracking-wider text-xs w-24">
+                <th className="px-5 py-3 font-medium text-gray-500 uppercase tracking-wider text-xs w-36">
                   Role
                 </th>
                 <th className="px-5 py-3 font-medium text-gray-500 uppercase tracking-wider text-xs w-28">
@@ -133,8 +138,12 @@ export function UsersTable({ users }: UsersTableProps) {
                       </div>
                     </td>
                     <td className="px-5 py-3.5 text-gray-600">{u.email}</td>
-                    <td className="px-5 py-3.5 capitalize text-gray-700">
-                      {u.role}
+                    <td className="px-5 py-3.5">
+                      <UserRoleSelect
+                        userId={u.id}
+                        value={u.role}
+                        canEdit={canManageRoles}
+                      />
                     </td>
                     <td className="px-5 py-3.5">
                       <StatusPill status={u.status} />

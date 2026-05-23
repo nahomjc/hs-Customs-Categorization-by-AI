@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { UserDetailPanel } from "@/components/dashboard/UserDetailPanel";
 import { getDashboardUserDetail } from "@/lib/dashboard/users";
+import { getSessionUserProfile } from "@/lib/auth/require-admin";
 
 export const dynamic = "force-dynamic";
 
@@ -10,7 +11,11 @@ type PageProps = {
 
 export default async function UserDetailPage({ params }: PageProps) {
   const { id } = await params;
-  const user = await getDashboardUserDetail(id);
+  const [user, session] = await Promise.all([
+    getDashboardUserDetail(id),
+    getSessionUserProfile(),
+  ]);
+  const canManageRoles = session?.profile?.role === "admin";
 
   if (!user) {
     return (
@@ -53,7 +58,11 @@ export default async function UserDetailPage({ params }: PageProps) {
         </svg>
         Back to user list
       </Link>
-      <UserDetailPanel user={user} />
+      <UserDetailPanel
+        user={user}
+        canManageRoles={canManageRoles}
+        viewerRole={session?.profile?.role ?? null}
+      />
     </div>
   );
 }
