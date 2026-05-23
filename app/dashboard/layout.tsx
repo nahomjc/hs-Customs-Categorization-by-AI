@@ -9,6 +9,9 @@ import { DashboardNav } from "./DashboardNav";
 
 const inter = Inter({ subsets: ["latin"], display: "swap" });
 
+/** Server actions invoked from dashboard routes (parse/classify). */
+export const maxDuration = 300;
+
 export default async function DashboardLayout({
   children,
 }: {

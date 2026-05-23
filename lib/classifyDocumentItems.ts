@@ -15,9 +15,11 @@ import { groupItemsByHsCode, type ItemWithClassification } from "./groupItems";
 import { and, eq, isNull, sql } from "drizzle-orm";
 
 export const CLASSIFY_BATCH_SIZE = 20;
+export const PRE_CODED_BATCH_SIZE = 60;
 export const CLASSIFY_CONCURRENCY = 6;
 
 type ItemRow = typeof documentItems.$inferSelect;
+type ClassificationInsert = typeof itemClassifications.$inferInsert;
 
 async function getDocumentMode(
   documentId: string,
@@ -46,74 +48,74 @@ async function countTotalItems(documentId: string): Promise<number> {
   return Number(row?.count ?? 0);
 }
 
-async function classifyOneItem(
-  item: ItemRow,
-  mode: "ai" | "pre_coded",
-): Promise<void> {
-  const [existing] = await db
-    .select({ id: itemClassifications.id })
-    .from(itemClassifications)
-    .where(eq(itemClassifications.itemId, item.id))
-    .limit(1);
-  if (existing) return;
-
+function buildPreCodedClassification(item: ItemRow): ClassificationInsert {
   const desc = cleanProductDescription(
     item.detectedDescription || item.rawLine || "",
   );
 
   if (isNonItemLine(desc, item.rawLine)) {
-    await db.insert(itemClassifications).values({
+    return {
       itemId: item.id,
       aiCategory: "Non-item",
       aiHsCode: EXCLUDED_HS,
       cleanDescription: desc.slice(0, 200),
       confidence: "1",
       aiRawResponse: JSON.stringify({ source: "filter", reason: "metadata" }),
-    });
-    return;
+    };
   }
 
   const useDocumentHs =
-    mode === "pre_coded" &&
-    item.sourceHsCode?.trim() &&
-    isPlausibleHsCode(item.sourceHsCode);
+    item.sourceHsCode?.trim() && isPlausibleHsCode(item.sourceHsCode);
+
+  if (useDocumentHs) {
+    const result = classifyFromDocumentHs(desc, item.sourceHsCode ?? "", {
+      unit: item.detectedUnit ?? undefined,
+    });
+    const validated = validateClassification({
+      hsCode: result.hsCode,
+      category: result.category,
+      mode: "document",
+    });
+    return {
+      itemId: item.id,
+      aiCategory: result.category,
+      aiHsCode: validated.hsCode,
+      cleanDescription: result.cleanDescription,
+      confidence: String(result.confidence ?? 0.98),
+      aiRawResponse: result.aiRawResponse,
+    };
+  }
+
+  return {
+    itemId: item.id,
+    aiCategory: "Need review",
+    aiHsCode: "NEED_INFO",
+    cleanDescription: desc,
+    confidence: "0.5",
+    aiRawResponse: JSON.stringify({
+      source: "pre_coded",
+      reason: "missing_document_hs",
+    }),
+  };
+}
+
+async function classifyPreCodedBatch(items: ItemRow[]): Promise<void> {
+  const rows = items.map(buildPreCodedClassification);
+  const chunkSize = 100;
+  for (let i = 0; i < rows.length; i += chunkSize) {
+    const chunk = rows.slice(i, i + chunkSize);
+    if (chunk.length > 0) {
+      await db.insert(itemClassifications).values(chunk);
+    }
+  }
+}
+
+async function classifyOneItem(item: ItemRow): Promise<void> {
+  const desc = cleanProductDescription(
+    item.detectedDescription || item.rawLine || "",
+  );
 
   try {
-    if (useDocumentHs) {
-      const result = classifyFromDocumentHs(desc, item.sourceHsCode ?? "", {
-        unit: item.detectedUnit ?? undefined,
-      });
-      const validated = validateClassification({
-        hsCode: result.hsCode,
-        category: result.category,
-        mode: "document",
-      });
-      await db.insert(itemClassifications).values({
-        itemId: item.id,
-        aiCategory: result.category,
-        aiHsCode: validated.hsCode,
-        cleanDescription: result.cleanDescription,
-        confidence: String(result.confidence ?? 0.98),
-        aiRawResponse: result.aiRawResponse,
-      });
-      return;
-    }
-
-    if (mode === "pre_coded") {
-      await db.insert(itemClassifications).values({
-        itemId: item.id,
-        aiCategory: "Need review",
-        aiHsCode: "NEED_INFO",
-        cleanDescription: desc,
-        confidence: "0.5",
-        aiRawResponse: JSON.stringify({
-          source: "pre_coded",
-          reason: "missing_document_hs",
-        }),
-      });
-      return;
-    }
-
     const result = await classifyItem(desc, {
       unit: item.detectedUnit ?? undefined,
     });
@@ -131,7 +133,7 @@ async function classifyOneItem(
     const validated = validateClassification({
       hsCode: ruleResult.hsCode,
       category: ruleResult.category,
-      mode: useDocumentHs ? "document" : "ai",
+      mode: "ai",
     });
     await db.insert(itemClassifications).values({
       itemId: item.id,
@@ -193,15 +195,18 @@ export async function finalizeDocumentGrouping(
   );
 
   await db.delete(groupedItems).where(eq(groupedItems.documentId, documentId));
-  for (const g of grouped) {
-    await db.insert(groupedItems).values({
-      documentId,
-      hsCode: g.hsCode,
-      category: g.category,
-      finalDescription: g.finalDescription,
-      totalQuantity: g.totalQuantity,
-      unit: g.unit,
-    });
+
+  if (grouped.length > 0) {
+    await db.insert(groupedItems).values(
+      grouped.map((g) => ({
+        documentId,
+        hsCode: g.hsCode,
+        category: g.category,
+        finalDescription: g.finalDescription,
+        totalQuantity: g.totalQuantity,
+        unit: g.unit,
+      })),
+    );
   }
 
   await db
@@ -246,7 +251,9 @@ export async function classifyDocumentBatch(documentId: string): Promise<{
       ),
     )
     .orderBy(documentItems.lineIndex)
-    .limit(CLASSIFY_BATCH_SIZE);
+    .limit(
+      docMode === "pre_coded" ? PRE_CODED_BATCH_SIZE : CLASSIFY_BATCH_SIZE,
+    );
 
   const pending = pendingRows.map((r) => r.item);
 
@@ -260,14 +267,23 @@ export async function classifyDocumentBatch(documentId: string): Promise<{
     .set({ status: "ai_processed", updatedAt: new Date() })
     .where(eq(documents.id, documentId));
 
+  const batchStarted = Date.now();
   console.log(
     `[classifyDocumentBatch] ${documentId} | mode=${docMode} | batch=${pending.length}/${totalItems}`,
   );
 
-  await runWithConcurrency(
-    pending,
-    (item) => classifyOneItem(item, docMode),
-    CLASSIFY_CONCURRENCY,
+  if (docMode === "pre_coded") {
+    await classifyPreCodedBatch(pending);
+  } else {
+    await runWithConcurrency(
+      pending,
+      (item) => classifyOneItem(item),
+      CLASSIFY_CONCURRENCY,
+    );
+  }
+
+  console.log(
+    `[classifyDocumentBatch] ${documentId} | batch done ${Date.now() - batchStarted}ms`,
   );
 
   const classifiedCount = await countClassified(documentId);

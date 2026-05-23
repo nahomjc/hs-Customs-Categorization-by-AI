@@ -14,6 +14,8 @@ export async function parseDocumentFromBuffer(
   const extractedText = await extractTextFromBuffer(buffer, fileType);
   const { rows, mode } = parsePackingListFromText(extractedText);
 
+  const started = Date.now();
+
   await db
     .update(documents)
     .set({
@@ -23,28 +25,34 @@ export async function parseDocumentFromBuffer(
       updatedAt: new Date(),
     })
     .where(eq(documents.id, documentId));
+  const itemValues = rows.map((p) => ({
+    documentId,
+    rawLine: p.rawLine,
+    detectedDescription: p.description,
+    detectedQuantity: normalizeLineQuantity(p.quantity),
+    detectedUnit: p.unit,
+    sourceHsCode: p.sourceHsCode,
+    lineNumber: p.lineNumber,
+    specification: p.specification,
+    lineIndex: p.lineIndex,
+  }));
 
-  await db
-    .delete(documentItems)
-    .where(eq(documentItems.documentId, documentId));
+  await db.transaction(async (tx) => {
+    await tx
+      .delete(documentItems)
+      .where(eq(documentItems.documentId, documentId));
 
-  for (const p of rows) {
-    const quantity = normalizeLineQuantity(p.quantity);
-    await db.insert(documentItems).values({
-      documentId,
-      rawLine: p.rawLine,
-      detectedDescription: p.description,
-      detectedQuantity: quantity,
-      detectedUnit: p.unit,
-      sourceHsCode: p.sourceHsCode,
-      lineNumber: p.lineNumber,
-      specification: p.specification,
-      lineIndex: p.lineIndex,
-    });
-  }
+    const chunkSize = 100;
+    for (let i = 0; i < itemValues.length; i += chunkSize) {
+      const chunk = itemValues.slice(i, i + chunkSize);
+      if (chunk.length > 0) {
+        await tx.insert(documentItems).values(chunk);
+      }
+    }
+  });
 
   console.log(
-    `[parseDocument] ${documentId} | mode=${mode} | items=${rows.length}`
+    `[parseDocument] ${documentId} | mode=${mode} | items=${rows.length} | db=${Date.now() - started}ms`
   );
 
   return { itemCount: rows.length, classificationMode: mode };

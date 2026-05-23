@@ -10,7 +10,8 @@ import { eq } from "drizzle-orm";
 import { DocumentView } from "./DocumentView";
 
 export const dynamic = "force-dynamic";
-export const maxDuration = 60;
+/** Vercel Hobby caps at 60s; Pro allows up to 300s. */
+export const maxDuration = 300;
 
 function getDbError(e: unknown): string {
   const err = e as { cause?: { message?: string }; message?: string };
