@@ -10,6 +10,7 @@ import { eq } from "drizzle-orm";
 import { DocumentView } from "./DocumentView";
 
 export const dynamic = "force-dynamic";
+export const maxDuration = 60;
 
 function getDbError(e: unknown): string {
   const err = e as { cause?: { message?: string }; message?: string };
@@ -28,7 +29,7 @@ export default async function DocumentPage({
     doc = rows[0];
   } catch (e) {
     console.error("[DocumentPage] db error", getDbError(e));
-    throw new Error("Database error: " + getDbError(e));
+    throw new Error(`Database error: ${getDbError(e)}`);
   }
   if (!doc) notFound();
 
@@ -46,7 +47,7 @@ export default async function DocumentPage({
     .from(documentItems)
     .leftJoin(
       itemClassifications,
-      eq(documentItems.id, itemClassifications.itemId)
+      eq(documentItems.id, itemClassifications.itemId),
     )
     .where(eq(documentItems.documentId, id))
     .orderBy(documentItems.lineIndex);
