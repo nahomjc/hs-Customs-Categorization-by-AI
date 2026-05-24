@@ -46,11 +46,21 @@ export function DocumentView(props: {
   status: string | null;
   fileName: string | null;
   classificationMode: string | null;
+  defaultExportFormat?: "xlsx" | "csv";
   items: Item[];
   grouped: Grouped[];
 }) {
   const router = useRouter();
-  const { documentId, fileName, classificationMode, items, grouped } = props;
+  const {
+    documentId,
+    fileName,
+    classificationMode,
+    defaultExportFormat = "xlsx",
+    items,
+    grouped,
+  } = props;
+  const exportLabel =
+    defaultExportFormat === "csv" ? "Download CSV" : "Download Excel";
   const isPreCoded = classificationMode === "pre_coded";
   const hasDocumentHs = items.some((i) => i.sourceHsCode);
   const [status, setStatus] = useState(props.status ?? "uploaded");
@@ -542,7 +552,7 @@ export function DocumentView(props: {
               </div>
             </div>
             <a
-              href={`/api/documents/${documentId}/download`}
+              href={`/api/documents/${documentId}/download?format=${defaultExportFormat}`}
               className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 font-semibold text-sm transition-colors shadow-sm shrink-0 w-full sm:w-auto"
             >
               <svg
@@ -559,7 +569,7 @@ export function DocumentView(props: {
                   d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"
                 />
               </svg>
-              Download Excel
+              {exportLabel}
             </a>
           </div>
 

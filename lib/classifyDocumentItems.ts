@@ -213,6 +213,11 @@ export async function finalizeDocumentGrouping(
     .update(documents)
     .set({ status: "completed", updatedAt: new Date() })
     .where(eq(documents.id, documentId));
+
+  const { maybeNotifyDocumentComplete } = await import(
+    "@/lib/settings/notify-document"
+  );
+  void maybeNotifyDocumentComplete(documentId);
 }
 
 export async function classifyDocumentBatch(documentId: string): Promise<{

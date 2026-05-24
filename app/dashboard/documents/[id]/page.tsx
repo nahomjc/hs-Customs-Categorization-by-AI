@@ -1,10 +1,14 @@
 import { notFound } from "next/navigation";
 import { db } from "@/db";
+import { clampPreferencesForRole } from "@/lib/auth/settings-meta";
+import { createClient } from "@/lib/supabase/server";
+import { getUserPreferences } from "@/lib/settings/user-settings";
 import {
   documents,
   documentItems,
   itemClassifications,
   groupedItems,
+  users,
 } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { DocumentView } from "./DocumentView";
@@ -61,12 +65,31 @@ export default async function DocumentPage({
     .from(groupedItems)
     .where(eq(groupedItems.documentId, id));
 
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  let defaultExportFormat: "xlsx" | "csv" = "xlsx";
+  if (user?.id) {
+    const [profile] = await db
+      .select({ role: users.role })
+      .from(users)
+      .where(eq(users.id, user.id))
+      .limit(1);
+    const prefs = clampPreferencesForRole(
+      await getUserPreferences(user.id),
+      profile?.role
+    );
+    defaultExportFormat = prefs.defaultExportFormat;
+  }
+
   return (
     <DocumentView
       documentId={id}
       status={doc.status}
       fileName={doc.originalFileName}
       classificationMode={doc.classificationMode}
+      defaultExportFormat={defaultExportFormat}
       items={items}
       grouped={grouped}
     />

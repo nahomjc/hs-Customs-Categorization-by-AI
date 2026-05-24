@@ -19,6 +19,8 @@ type SettingsPanelProps = {
   fullName: string | null;
   role: string;
   preferences: UserPreferences;
+  /** Admins and assessors can set tenant-wide document scope. */
+  canManageScope?: boolean;
 };
 
 export function SettingsPanel({
@@ -26,6 +28,7 @@ export function SettingsPanel({
   fullName: initialName,
   role,
   preferences: initialPrefs,
+  canManageScope = false,
 }: SettingsPanelProps) {
   const router = useRouter();
   const [fullName, setFullName] = useState(initialName ?? "");
@@ -123,41 +126,181 @@ export function SettingsPanel({
               </button>
             }
           />
-        <div className="p-5 sm:p-6 space-y-5">
-          <ToggleRow
-            label="Email when classification completes"
-            description="Receive a notification after a document finishes processing."
-            checked={prefs.emailOnComplete}
-            onChange={(v) => setPrefs((p) => ({ ...p, emailOnComplete: v }))}
-          />
-          <ToggleRow
-            label="Open document after upload"
-            description="Navigate to the document view automatically when upload succeeds."
-            checked={prefs.autoOpenDocument}
-            onChange={(v) => setPrefs((p) => ({ ...p, autoOpenDocument: v }))}
-          />
-          <div>
-            <label
-              htmlFor="export-format"
-              className="block text-sm font-medium text-gray-700 mb-1.5"
-            >
-              Default export format
-            </label>
-            <select
-              id="export-format"
-              value={prefs.defaultExportFormat}
-              onChange={(e) =>
-                setPrefs((p) => ({
-                  ...p,
-                  defaultExportFormat: e.target.value as "xlsx" | "csv",
-                }))
-              }
-              className={fieldClass}
-            >
-              <option value="xlsx">Excel (.xlsx)</option>
-              <option value="csv">CSV</option>
-            </select>
+        <div className="p-5 sm:p-6 space-y-6">
+          <div className="space-y-5">
+            <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">
+              Notifications
+            </p>
+            <ToggleRow
+              label="Email when classification completes"
+              description="Receive a notification after a document finishes processing."
+              checked={prefs.emailOnComplete}
+              onChange={(v) => setPrefs((p) => ({ ...p, emailOnComplete: v }))}
+            />
+            <ToggleRow
+              label="Email when processing fails"
+              description="Get alerted if parsing or classification cannot finish."
+              checked={prefs.emailOnFailure}
+              onChange={(v) => setPrefs((p) => ({ ...p, emailOnFailure: v }))}
+            />
           </div>
+
+          <div className="space-y-5 pt-2 border-t border-gray-100">
+            <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">
+              Upload &amp; export
+            </p>
+            <ToggleRow
+              label="Open document after upload"
+              description="Otherwise go to History after a successful upload."
+              checked={prefs.autoOpenDocument}
+              onChange={(v) => setPrefs((p) => ({ ...p, autoOpenDocument: v }))}
+            />
+            <div>
+              <label
+                htmlFor="export-format"
+                className="block text-sm font-medium text-gray-700 mb-1.5"
+              >
+                Default export format
+              </label>
+              <select
+                id="export-format"
+                value={prefs.defaultExportFormat}
+                onChange={(e) =>
+                  setPrefs((p) => ({
+                    ...p,
+                    defaultExportFormat: e.target.value as "xlsx" | "csv",
+                  }))
+                }
+                className={fieldClass}
+              >
+                <option value="xlsx">Excel (.xlsx)</option>
+                <option value="csv">CSV</option>
+              </select>
+            </div>
+            <div>
+              <label
+                htmlFor="classification-mode"
+                className="block text-sm font-medium text-gray-700 mb-1.5"
+              >
+                Classification mode
+              </label>
+              <select
+                id="classification-mode"
+                value={prefs.defaultClassificationMode}
+                onChange={(e) =>
+                  setPrefs((p) => ({
+                    ...p,
+                    defaultClassificationMode: e.target.value as
+                      | "auto"
+                      | "ai"
+                      | "pre_coded",
+                  }))
+                }
+                className={fieldClass}
+              >
+                <option value="auto">Auto-detect from file</option>
+                <option value="ai">Always use AI classification</option>
+                <option value="pre_coded">Pre-coded HS (from document)</option>
+              </select>
+            </div>
+          </div>
+
+          <div className="space-y-5 pt-2 border-t border-gray-100">
+            <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">
+              Dashboard &amp; lists
+            </p>
+            {canManageScope && (
+              <div>
+                <label
+                  htmlFor="document-scope"
+                  className="block text-sm font-medium text-gray-700 mb-1.5"
+                >
+                  Document visibility
+                </label>
+                <select
+                  id="document-scope"
+                  value={prefs.documentScope}
+                  onChange={(e) =>
+                    setPrefs((p) => ({
+                      ...p,
+                      documentScope: e.target.value as "mine" | "tenant",
+                    }))
+                  }
+                  className={fieldClass}
+                >
+                  <option value="mine">Only my uploads</option>
+                  <option value="tenant">All tenant documents</option>
+                </select>
+              </div>
+            )}
+            <div>
+              <label
+                htmlFor="history-page-size"
+                className="block text-sm font-medium text-gray-700 mb-1.5"
+              >
+                History list size
+              </label>
+              <select
+                id="history-page-size"
+                value={prefs.historyPageSize}
+                onChange={(e) =>
+                  setPrefs((p) => ({
+                    ...p,
+                    historyPageSize: Number(e.target.value) as 25 | 50 | 100,
+                  }))
+                }
+                className={fieldClass}
+              >
+                <option value={25}>25 documents</option>
+                <option value={50}>50 documents</option>
+                <option value={100}>100 documents</option>
+              </select>
+            </div>
+            <div>
+              <label
+                htmlFor="analytics-range"
+                className="block text-sm font-medium text-gray-700 mb-1.5"
+              >
+                Default analytics range
+              </label>
+              <select
+                id="analytics-range"
+                value={prefs.defaultAnalyticsRange}
+                onChange={(e) =>
+                  setPrefs((p) => ({
+                    ...p,
+                    defaultAnalyticsRange: e.target.value as
+                      | "7d"
+                      | "30d"
+                      | "90d"
+                      | "month",
+                  }))
+                }
+                className={fieldClass}
+              >
+                <option value="7d">Last 7 days</option>
+                <option value="30d">Last 30 days</option>
+                <option value="90d">Last 90 days</option>
+                <option value="month">This month</option>
+              </select>
+            </div>
+          </div>
+
+          {role === "admin" && (
+            <div className="space-y-5 pt-2 border-t border-gray-100">
+              <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">
+                User management
+              </p>
+              <ToggleRow
+                label="Show inactive users"
+                description="Include inactive accounts on the user list."
+                checked={prefs.showInactiveUsers}
+                onChange={(v) =>
+                  setPrefs((p) => ({ ...p, showInactiveUsers: v }))
+                }
+              />
+            </div>
+          )}
         </div>
       </DashCard>
 

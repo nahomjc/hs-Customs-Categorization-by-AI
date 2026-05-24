@@ -1,6 +1,8 @@
 import { SettingsPanel } from "@/components/dashboard/SettingsPanel";
 import { PageHeader } from "@/components/dashboard/ui";
-import { parsePreferences } from "@/lib/auth/settings-meta";
+import { clampPreferencesForRole } from "@/lib/auth/settings-meta";
+import { canUseTenantDocumentScope } from "@/lib/settings/document-scope";
+import { getUserPreferences } from "@/lib/settings/user-settings";
 import { getDashboardUserDetail } from "@/lib/dashboard/users";
 import { DEFAULT_TENANT_ID } from "@/lib/auth/constants";
 import { createClient } from "@/lib/supabase/server";
@@ -29,7 +31,11 @@ export default async function SettingsPage() {
     tenantId: DEFAULT_TENANT_ID,
   };
 
-  const preferences = parsePreferences(profile.meta);
+  const role = profile.role ?? "user";
+  const preferences = clampPreferencesForRole(
+    await getUserPreferences(user.id),
+    role
+  );
 
   return (
     <div className="space-y-8">
@@ -40,8 +46,9 @@ export default async function SettingsPage() {
       <SettingsPanel
         email={profile.email ?? user.email}
         fullName={profile.fullName}
-        role={profile.role ?? "user"}
+        role={role}
         preferences={preferences}
+        canManageScope={canUseTenantDocumentScope(role)}
       />
     </div>
   );

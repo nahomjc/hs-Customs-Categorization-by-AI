@@ -1,6 +1,7 @@
 import { db } from "@/db";
 import { users } from "@/db/schema/users";
 import { DEFAULT_TENANT_ID } from "@/lib/auth/constants";
+import { ensureUserSettingsRow } from "@/lib/settings/user-settings";
 import { and, eq, sql } from "drizzle-orm";
 
 export async function ensureUserProfile(input: {
@@ -51,4 +52,9 @@ export async function ensureUserProfile(input: {
       .set({ role: "admin", updatedAt: now })
       .where(eq(users.id, input.id));
   }
+
+  await ensureUserSettingsRow({
+    userId: input.id,
+    tenantId,
+  });
 }

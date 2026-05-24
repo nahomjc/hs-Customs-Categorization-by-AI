@@ -1,16 +1,34 @@
 import { db } from "@/db";
 import { documentItems, groupedItems, itemClassifications } from "@/db/schema";
-import { eq } from "drizzle-orm";
+import { createClient } from "@/lib/supabase/server";
 import {
   buildLineItemExportRows,
   generateCategorizedExcel,
 } from "@/lib/generateExcel";
+import { generateCategorizedCsv } from "@/lib/generateCsv";
+import { getUserPreferences } from "@/lib/settings/user-settings";
+import { eq } from "drizzle-orm";
 
 export async function GET(
-  _req: Request,
+  req: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
+  const { searchParams } = new URL(req.url);
+  const formatParam = searchParams.get("format");
+
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  let format: "xlsx" | "csv" = "xlsx";
+  if (formatParam === "csv" || formatParam === "xlsx") {
+    format = formatParam;
+  } else if (user?.id) {
+    const prefs = await getUserPreferences(user.id);
+    format = prefs.defaultExportFormat;
+  }
 
   const rows = await db
     .select()
@@ -46,6 +64,17 @@ export async function GET(
     .orderBy(documentItems.lineIndex);
 
   const lineItems = buildLineItemExportRows(items);
+
+  if (format === "csv") {
+    const buffer = generateCategorizedCsv(grouped, { lineItems });
+    return new Response(new Uint8Array(buffer), {
+      headers: {
+        "Content-Type": "text/csv; charset=utf-8",
+        "Content-Disposition":
+          "attachment; filename=categorized-packing-list.csv",
+      },
+    });
+  }
 
   const buffer = await generateCategorizedExcel(grouped, { lineItems });
 

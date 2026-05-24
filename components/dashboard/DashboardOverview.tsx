@@ -18,7 +18,11 @@ import {
 } from "@/components/dashboard/ui";
 import { db } from "@/db";
 import { documents } from "@/db/schema";
-import { desc, eq, inArray, sql } from "drizzle-orm";
+import { clampPreferencesForRole } from "@/lib/auth/settings-meta";
+import { getSessionUserProfile } from "@/lib/auth/require-admin";
+import { documentScopeFilter } from "@/lib/settings/document-scope";
+import { getUserPreferences } from "@/lib/settings/user-settings";
+import { and, desc, eq, inArray, sql, type SQL } from "drizzle-orm";
 
 const STATUS_LABELS: Record<string, string> = {
   uploaded: "Uploaded",
@@ -61,6 +65,29 @@ export async function DashboardOverview() {
 
   try {
     const inProgressStatuses = ["uploaded", "parsed", "ai_processed", "grouped"];
+    const session = await getSessionUserProfile();
+    const authUser = session?.authUser;
+    const prefs =
+      authUser?.id != null
+        ? clampPreferencesForRole(
+            await getUserPreferences(authUser.id),
+            session?.profile?.role
+          )
+        : null;
+    const scope =
+      authUser?.email && authUser.id && prefs
+        ? documentScopeFilter(
+            {
+              id: authUser.id,
+              email: authUser.email,
+              role: session?.profile?.role,
+            },
+            prefs
+          )
+        : undefined;
+
+    const withScope = (extra?: SQL) =>
+      extra && scope ? and(scope, extra) : extra ?? scope;
 
     const [
       recentRows,
@@ -71,43 +98,73 @@ export async function DashboardOverview() {
       statusRows,
       dailyRows,
     ] = await Promise.all([
-      db
-        .select({
-          id: documents.id,
-          originalFileName: documents.originalFileName,
-          status: documents.status,
-          createdAt: documents.createdAt,
-        })
-        .from(documents)
-        .orderBy(desc(documents.createdAt))
-        .limit(8),
-      db.select({ count: sql<number>`count(*)::int` }).from(documents),
+      scope
+        ? db
+            .select({
+              id: documents.id,
+              originalFileName: documents.originalFileName,
+              status: documents.status,
+              createdAt: documents.createdAt,
+            })
+            .from(documents)
+            .where(scope)
+            .orderBy(desc(documents.createdAt))
+            .limit(8)
+        : db
+            .select({
+              id: documents.id,
+              originalFileName: documents.originalFileName,
+              status: documents.status,
+              createdAt: documents.createdAt,
+            })
+            .from(documents)
+            .orderBy(desc(documents.createdAt))
+            .limit(8),
+      scope
+        ? db
+            .select({ count: sql<number>`count(*)::int` })
+            .from(documents)
+            .where(scope)
+        : db.select({ count: sql<number>`count(*)::int` }).from(documents),
       db
         .select({ count: sql<number>`count(*)::int` })
         .from(documents)
-        .where(eq(documents.status, "completed")),
+        .where(withScope(eq(documents.status, "completed"))!),
       db
         .select({ count: sql<number>`count(*)::int` })
         .from(documents)
-        .where(inArray(documents.status, inProgressStatuses)),
+        .where(withScope(inArray(documents.status, inProgressStatuses))!),
       db
         .select({ count: sql<number>`count(*)::int` })
         .from(documents)
-        .where(eq(documents.status, "failed")),
-      db
-        .select({
-          status: documents.status,
-          count: sql<number>`count(*)::int`,
-        })
-        .from(documents)
-        .groupBy(documents.status),
+        .where(withScope(eq(documents.status, "failed"))!),
+      scope
+        ? db
+            .select({
+              status: documents.status,
+              count: sql<number>`count(*)::int`,
+            })
+            .from(documents)
+            .where(scope)
+            .groupBy(documents.status)
+        : db
+            .select({
+              status: documents.status,
+              count: sql<number>`count(*)::int`,
+            })
+            .from(documents)
+            .groupBy(documents.status),
       db
         .select({
           day: sql<string>`to_char(date_trunc('day', ${documents.createdAt}), 'YYYY-MM-DD')`,
           count: sql<number>`count(*)::int`,
         })
         .from(documents)
-        .where(sql`${documents.createdAt} >= now() - interval '7 days'`)
+        .where(
+          withScope(
+            sql`${documents.createdAt} >= now() - interval '7 days'`
+          )!
+        )
         .groupBy(sql`date_trunc('day', ${documents.createdAt})`)
         .orderBy(sql`date_trunc('day', ${documents.createdAt})`),
     ]);

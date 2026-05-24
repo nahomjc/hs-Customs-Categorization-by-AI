@@ -26,12 +26,63 @@ export function toDateKey(d: Date): string {
   return x.toISOString().slice(0, 10);
 }
 
-export function parseAnalyticsRange(params: {
-  from?: string;
-  to?: string;
-}): { from: Date; to: Date; fromKey: string; toKey: string } {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
+import type { AnalyticsRangePreset } from "@/lib/settings/preferences";
+
+function startOfToday(): Date {
+  const d = new Date();
+  d.setHours(0, 0, 0, 0);
+  return d;
+}
+
+export function analyticsPresetToRange(
+  preset: AnalyticsRangePreset
+): { from: Date; to: Date } {
+  const to = startOfToday();
+  const from = new Date(to);
+
+  switch (preset) {
+    case "7d":
+      from.setDate(from.getDate() - 6);
+      break;
+    case "90d":
+      from.setDate(from.getDate() - 89);
+      break;
+    case "month":
+      return {
+        from: new Date(to.getFullYear(), to.getMonth(), 1),
+        to,
+      };
+    case "30d":
+    default:
+      from.setDate(from.getDate() - 29);
+      break;
+  }
+
+  return { from, to };
+}
+
+export function parseAnalyticsRange(
+  params: {
+    from?: string;
+    to?: string;
+  },
+  options?: { defaultPreset?: AnalyticsRangePreset }
+): { from: Date; to: Date; fromKey: string; toKey: string } {
+  const hasExplicit =
+    (params.from && /^\d{4}-\d{2}-\d{2}$/.test(params.from)) ||
+    (params.to && /^\d{4}-\d{2}-\d{2}$/.test(params.to));
+
+  if (!hasExplicit && options?.defaultPreset) {
+    const { from, to } = analyticsPresetToRange(options.defaultPreset);
+    return {
+      from,
+      to,
+      fromKey: toDateKey(from),
+      toKey: toDateKey(to),
+    };
+  }
+
+  const today = startOfToday();
 
   let to = today;
   if (params.to && /^\d{4}-\d{2}-\d{2}$/.test(params.to)) {

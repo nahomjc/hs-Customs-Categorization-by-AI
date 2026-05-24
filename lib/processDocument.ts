@@ -9,10 +9,14 @@ import { eq } from "drizzle-orm";
 export async function parseDocumentFromBuffer(
   documentId: string,
   buffer: Buffer,
-  fileType: FileType
+  fileType: FileType,
+  options?: { classificationModeOverride?: "ai" | "pre_coded" }
 ): Promise<{ itemCount: number; classificationMode: string }> {
   const extractedText = await extractTextFromBuffer(buffer, fileType);
-  const { rows, mode } = parsePackingListFromText(extractedText);
+  const parsed = parsePackingListFromText(extractedText);
+  const mode =
+    options?.classificationModeOverride ?? parsed.mode;
+  const rows = parsed.rows;
 
   const started = Date.now();
 

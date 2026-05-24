@@ -6,6 +6,7 @@ import { eq } from "drizzle-orm";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { parseDocumentFromBuffer } from "@/lib/processDocument";
 import { classifyDocumentBatch } from "@/lib/classifyDocumentItems";
+import { getPreferencesForUploader } from "@/lib/settings/user-settings";
 import type { FileType } from "@/lib/extractText";
 
 const BUCKET = "packing-lists";
@@ -46,7 +47,14 @@ export async function startProcessingDocument(documentId: string) {
   const fileType = doc.fileType as FileType;
 
   try {
-    await parseDocumentFromBuffer(documentId, buffer, fileType);
+    const prefs = await getPreferencesForUploader(doc.uploadedBy);
+    const classificationModeOverride =
+      prefs.defaultClassificationMode === "auto"
+        ? undefined
+        : prefs.defaultClassificationMode;
+    await parseDocumentFromBuffer(documentId, buffer, fileType, {
+      classificationModeOverride,
+    });
     return { success: true as const, phase: "classify" as const };
   } catch (e) {
     const message =
@@ -56,6 +64,10 @@ export async function startProcessingDocument(documentId: string) {
       .update(documents)
       .set({ status: "failed", updatedAt: new Date() })
       .where(eq(documents.id, documentId));
+    const { maybeNotifyDocumentFailed } = await import(
+      "@/lib/settings/notify-document"
+    );
+    void maybeNotifyDocumentFailed(documentId, message);
     return { error: message };
   }
 }
@@ -88,6 +100,10 @@ export async function runClassificationBatch(documentId: string) {
         .update(documents)
         .set({ status: "failed", updatedAt: new Date() })
         .where(eq(documents.id, documentId));
+      const { maybeNotifyDocumentFailed } = await import(
+        "@/lib/settings/notify-document"
+      );
+      void maybeNotifyDocumentFailed(documentId, result.error);
       return { error: result.error };
     }
     return {

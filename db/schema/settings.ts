@@ -9,6 +9,7 @@ import {
   varchar,
 } from "drizzle-orm/pg-core";
 import { users } from "./users";
+import { DEFAULT_PREFERENCES_JSON } from "@/lib/settings/preferences";
 
 export const settings = pgTable(
   "settings",
@@ -16,7 +17,9 @@ export const settings = pgTable(
     id: uuid("id").defaultRandom().primaryKey().notNull(),
     tenantId: varchar("tenant_id", { length: 30 }).notNull(),
     userId: uuid("user_id").notNull(),
-    preferences: jsonb("preferences").default({}).notNull(),
+    preferences: jsonb("preferences")
+      .default(DEFAULT_PREFERENCES_JSON)
+      .notNull(),
     createdAt: timestamp("created_at", { withTimezone: true })
       .defaultNow()
       .notNull(),

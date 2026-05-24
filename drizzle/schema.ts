@@ -65,7 +65,7 @@ export const settings = pgTable("settings", {
 	id: uuid().defaultRandom().primaryKey().notNull(),
 	tenantId: varchar("tenant_id", { length: 30 }).notNull(),
 	userId: uuid("user_id").notNull(),
-	preferences: jsonb().default({"emailOnComplete":true,"autoOpenDocument":true,"defaultExportFormat":"xlsx"}).notNull(),
+	preferences: jsonb().default({"emailOnComplete":true,"emailOnFailure":true,"autoOpenDocument":true,"defaultExportFormat":"xlsx","defaultClassificationMode":"auto","documentScope":"mine","showInactiveUsers":false,"historyPageSize":50,"defaultAnalyticsRange":"30d"}).notNull(),
 	createdAt: timestamp("created_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
 	updatedAt: timestamp("updated_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
 }, (table) => {
