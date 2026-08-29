@@ -4,9 +4,8 @@ import * as schema from "./schema";
 
 const connectionString = process.env.DATABASE_URL!;
 
-// Keep pool small to avoid "max clients reached" on Supabase Session mode (limited pool_size).
 const client = postgres(connectionString, {
-  max: 2,
+  max: 10,
   idle_timeout: 20,
   connect_timeout: 10,
 });

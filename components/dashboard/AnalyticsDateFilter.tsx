@@ -19,7 +19,7 @@ function startOfToday(): Date {
 const PRESETS: Preset[] = [
   {
     id: "7d",
-    label: "Last 7 days",
+    label: "7 days",
     getRange: () => {
       const to = startOfToday();
       const from = new Date(to);
@@ -29,7 +29,7 @@ const PRESETS: Preset[] = [
   },
   {
     id: "30d",
-    label: "Last 30 days",
+    label: "30 days",
     getRange: () => {
       const to = startOfToday();
       const from = new Date(to);
@@ -39,7 +39,7 @@ const PRESETS: Preset[] = [
   },
   {
     id: "90d",
-    label: "Last 90 days",
+    label: "90 days",
     getRange: () => {
       const to = startOfToday();
       const from = new Date(to);
@@ -102,50 +102,57 @@ export function AnalyticsDateFilter({
   })?.id;
 
   return (
-    <div className="landing-float-card bg-white rounded-2xl border border-gray-100 p-4 sm:p-5">
-      <div className="flex flex-col lg:flex-row lg:items-end gap-4">
-        <div className="flex-1 min-w-0">
-          <p className="text-xs font-semibold uppercase tracking-wider text-gray-500 mb-2">
-            Date range
+    <div className="rounded-2xl border border-slate-200/70 bg-white p-4 shadow-[0_2px_16px_-6px_rgba(15,23,42,0.06)] sm:p-5">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-end">
+        <div className="min-w-0 flex-1">
+          <p className="mb-2.5 text-[11px] font-bold uppercase tracking-widest text-slate-400">
+            Quick ranges
           </p>
-          <div className="flex flex-wrap gap-2">
-            {PRESETS.map((preset) => (
-              <button
-                key={preset.id}
-                type="button"
-                onClick={() => apply(preset.getRange().from, preset.getRange().to)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
-                  activePreset === preset.id
-                    ? "bg-[#007bff] text-white shadow-sm"
-                    : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-                }`}
-              >
-                {preset.label}
-              </button>
-            ))}
+          <div className="flex flex-wrap gap-1.5 rounded-2xl bg-slate-100/80 p-1">
+            {PRESETS.map((preset) => {
+              const isActive = activePreset === preset.id;
+              return (
+                <button
+                  key={preset.id}
+                  type="button"
+                  onClick={() => apply(preset.getRange().from, preset.getRange().to)}
+                  className={`rounded-xl px-3.5 py-2 text-xs font-semibold transition-all ${
+                    isActive
+                      ? "bg-white text-slate-900 shadow-sm shadow-slate-200/80"
+                      : "text-slate-500 hover:text-slate-700"
+                  }`}
+                >
+                  {preset.label}
+                </button>
+              );
+            })}
           </div>
         </div>
 
-        <div className="flex flex-col sm:flex-row gap-3 sm:items-end">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
           <label className="block">
-            <span className="text-xs font-medium text-gray-500 mb-1 block">From</span>
+            <span className="mb-1 block text-[11px] font-bold uppercase tracking-wider text-slate-400">
+              From
+            </span>
             <input
               type="date"
               value={draftFrom}
               max={draftTo}
               onChange={(e) => setDraftFrom(e.target.value)}
-              className="w-full sm:w-auto py-2 px-3 text-sm border border-gray-200 rounded-xl focus:outline-none focus:border-[#007bff] focus:ring-[3px] focus:ring-[#007bff]/12"
+              className="w-full rounded-xl border border-slate-200 bg-slate-50/50 px-3 py-2 text-sm text-slate-900 focus:border-indigo-400 focus:bg-white focus:outline-none focus:ring-[3px] focus:ring-indigo-500/15 sm:w-auto"
             />
           </label>
           <label className="block">
-            <span className="text-xs font-medium text-gray-500 mb-1 block">To</span>
+            <span className="mb-1 block text-[11px] font-bold uppercase tracking-wider text-slate-400">
+              To
+            </span>
             <input
               type="date"
               value={draftTo}
               min={draftFrom}
               max={toDateKey(startOfToday())}
               onChange={(e) => setDraftTo(e.target.value)}
-              className="w-full sm:w-auto py-2 px-3 text-sm border border-gray-200 rounded-xl focus:outline-none focus:border-[#007bff] focus:ring-[3px] focus:ring-[#007bff]/12"
+              className="w-full rounded-xl border border-slate-200 bg-slate-50/50 px-3 py-2 text-sm text-slate-900 focus:border-indigo-400 focus:bg-white focus:outline-none focus:ring-[3px] focus:ring-indigo-500/15 sm:w-auto"
             />
           </label>
           <button
@@ -153,9 +160,9 @@ export function AnalyticsDateFilter({
             onClick={() => {
               if (draftFrom && draftTo) apply(draftFrom, draftTo);
             }}
-            className="px-4 py-2 rounded-xl bg-gray-900 text-white text-sm font-semibold hover:bg-gray-800 transition-colors shrink-0"
+            className="shrink-0 rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 px-5 py-2 text-sm font-semibold text-white shadow-md shadow-indigo-500/20 transition-all hover:shadow-lg hover:shadow-indigo-500/25"
           >
-            Apply
+            Apply range
           </button>
         </div>
       </div>

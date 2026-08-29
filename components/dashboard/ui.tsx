@@ -86,7 +86,7 @@ export function DashCard({
 }) {
   return (
     <div
-      className={`landing-float-card bg-white rounded-2xl overflow-hidden ${className}`}
+      className={`rounded-3xl border border-slate-200/70 bg-white overflow-hidden shadow-[0_4px_24px_-8px_rgba(15,23,42,0.08)] ${className}`}
     >
       {children}
     </div>
@@ -101,8 +101,8 @@ export function DashCardHeader({
   action?: ReactNode;
 }) {
   return (
-    <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between flex-wrap gap-3">
-      <h2 className="font-semibold text-gray-900">{title}</h2>
+    <div className="border-b border-slate-100 px-5 py-4 flex items-center justify-between flex-wrap gap-3">
+      <h2 className="font-bold text-slate-900">{title}</h2>
       {action}
     </div>
   );
@@ -129,7 +129,7 @@ export function DashButton({
     "inline-flex items-center justify-center gap-2 font-semibold text-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed";
   const variants = {
     primary:
-      "px-5 py-2.5 rounded-full bg-[#007bff] text-white hover:bg-[#0069d9] shadow-md shadow-blue-500/20",
+      "px-5 py-2.5 rounded-2xl bg-gradient-to-r from-indigo-600 via-violet-600 to-indigo-600 text-white hover:shadow-lg hover:shadow-indigo-500/25 shadow-md shadow-indigo-500/20",
     secondary:
       "px-5 py-2.5 rounded-full border border-gray-200 bg-white text-gray-900 hover:bg-gray-50",
     ghost:

@@ -51,11 +51,18 @@ CREATE TABLE IF NOT EXISTS grouped_items (
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
--- 5. hs_code_reference – optional lookup table (Phase 2)
+-- 5. hs_code_reference – Ethiopian tariff / HS nomenclature lookup
 CREATE TABLE IF NOT EXISTS hs_code_reference (
-  hs_code VARCHAR(20) PRIMARY KEY,
-  category VARCHAR(100),
-  description TEXT
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  heading VARCHAR(20),
+  hs_code VARCHAR(20),
+  tariff_no VARCHAR(20) NOT NULL UNIQUE,
+  description TEXT NOT NULL,
+  std_unit VARCHAR(30),
+  duty_rate VARCHAR(30),
+  chapter VARCHAR(2),
+  normalized_hs VARCHAR(20),
+  imported_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
 -- Indexes for common queries

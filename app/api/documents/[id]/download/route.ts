@@ -1,6 +1,6 @@
 import { db } from "@/db";
 import { documentItems, groupedItems, itemClassifications } from "@/db/schema";
-import { createClient } from "@/lib/supabase/server";
+import { getAuthUser } from "@/lib/auth/session";
 import {
   buildLineItemExportRows,
   generateCategorizedExcel,
@@ -17,10 +17,7 @@ export async function GET(
   const { searchParams } = new URL(req.url);
   const formatParam = searchParams.get("format");
 
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getAuthUser();
 
   let format: "xlsx" | "csv" = "xlsx";
   if (formatParam === "csv" || formatParam === "xlsx") {
@@ -33,7 +30,8 @@ export async function GET(
   const rows = await db
     .select()
     .from(groupedItems)
-    .where(eq(groupedItems.documentId, id));
+    .where(eq(groupedItems.documentId, id))
+    .orderBy(groupedItems.hsCode);
   const grouped = rows.map((r) => ({
     hsCode: r.hsCode,
     category: r.category,

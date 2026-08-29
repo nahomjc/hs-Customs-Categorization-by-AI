@@ -77,7 +77,7 @@ export function DocumentChat({ documentId }: { documentId: string }) {
           setOpen((o) => !o);
           if (open) setExpanded(false);
         }}
-        className="fixed bottom-6 right-6 z-50 flex items-center gap-2 px-4 py-3 rounded-xl bg-[var(--dark-bg)] text-[var(--dark-foreground)] shadow-lg hover:bg-[var(--dark-bg-elevated)] transition-colors font-medium text-sm"
+        className="fixed bottom-6 right-6 z-50 flex items-center gap-2.5 rounded-2xl bg-gradient-to-r from-indigo-600 via-violet-600 to-indigo-600 px-5 py-3.5 text-sm font-semibold text-white shadow-xl shadow-indigo-500/30 transition-all hover:shadow-2xl hover:shadow-indigo-500/40 hover:-translate-y-0.5"
         aria-expanded={open}
         aria-label={open ? "Close chat" : "Ask AI"}
       >
@@ -101,16 +101,16 @@ export function DocumentChat({ documentId }: { documentId: string }) {
       {/* Chat panel */}
       {open && (
         <div
-          className={`fixed z-50 flex flex-col overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--background-card)] shadow-xl transition-[width,height,inset] ${
+          className={`fixed z-50 flex flex-col overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-2xl shadow-slate-900/10 transition-[width,height,inset] ${
             expanded
               ? "inset-4 md:inset-8 max-w-none h-[calc(100vh-2rem)] md:h-[calc(100vh-4rem)]"
               : "bottom-24 right-6 w-full max-w-md"
           }`}
           style={expanded ? undefined : { maxHeight: "min(70vh, 520px)" }}
         >
-          <div className="px-4 py-3 border-b border-[var(--border)] bg-[var(--background)]/50 flex items-center justify-between gap-2 shrink-0">
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-lg bg-[var(--accent-light)] flex items-center justify-center text-[var(--accent)]">
+          <div className="flex shrink-0 items-center justify-between gap-2 border-b border-slate-100 bg-gradient-to-r from-indigo-50/80 to-violet-50/50 px-4 py-3.5">
+            <div className="flex items-center gap-2.5">
+              <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-600 to-violet-600 text-white shadow-md shadow-indigo-500/20">
                 <svg
                   className="w-4 h-4"
                   fill="none"
@@ -125,9 +125,14 @@ export function DocumentChat({ documentId }: { documentId: string }) {
                   />
                 </svg>
               </div>
-              <span className="font-semibold text-[var(--foreground)] text-sm">
-                Ask AI
-              </span>
+              <div>
+                <span className="text-sm font-bold text-slate-900">
+                  AI Assistant
+                </span>
+                <span className="block text-[10px] font-medium text-slate-500">
+                  Ask about this document
+                </span>
+              </div>
             </div>
             <button
               type="button"
@@ -187,10 +192,10 @@ export function DocumentChat({ documentId }: { documentId: string }) {
                 }`}
               >
                 <div
-                  className={`max-w-[85%] rounded-lg px-3 py-2 text-sm ${
+                  className={`max-w-[85%] rounded-2xl px-3.5 py-2.5 text-sm ${
                     msg.role === "user"
-                      ? "bg-[var(--accent)] text-white"
-                      : "bg-[var(--background)] text-[var(--foreground)] border border-[var(--border)]"
+                      ? "bg-gradient-to-r from-indigo-600 to-violet-600 text-white shadow-md shadow-indigo-500/15"
+                      : "border border-slate-200 bg-slate-50 text-slate-800"
                   }`}
                 >
                   <p className="whitespace-pre-wrap">{msg.content}</p>
@@ -224,7 +229,7 @@ export function DocumentChat({ documentId }: { documentId: string }) {
                 onKeyDown={handleKeyDown}
                 placeholder="Ask about items, HS codes, quantities…"
                 rows={2}
-                className="flex-1 resize-none rounded-lg border border-[var(--border)] px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-[var(--accent)] focus:border-[var(--accent)] outline-none"
+                className="flex-1 resize-none rounded-xl border border-slate-200 px-3 py-2.5 text-sm bg-white focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-400 outline-none"
                 disabled={loading}
                 aria-label="Message"
               />
@@ -232,7 +237,7 @@ export function DocumentChat({ documentId }: { documentId: string }) {
                 type="button"
                 onClick={send}
                 disabled={!input.trim() || loading}
-                className="shrink-0 px-4 py-2 rounded-lg bg-[var(--accent)] text-white font-medium text-sm hover:bg-[var(--accent-hover)] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                className="shrink-0 rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 px-4 py-2.5 text-sm font-semibold text-white shadow-md shadow-indigo-500/20 hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed transition-all"
               >
                 Send
               </button>

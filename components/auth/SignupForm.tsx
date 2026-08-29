@@ -5,9 +5,8 @@ import { useState } from "react";
 import { toast } from "sonner";
 import { PasswordInput } from "@/components/auth/PasswordInput";
 
+import { authClient } from "@/lib/auth/auth-client";
 import { getAuthErrorMessage } from "@/lib/auth/auth-error-message";
-import { getRedirectOrigin } from "@/lib/auth/redirect-origin";
-import { createClient } from "@/lib/supabase/client";
 
 export function SignupForm() {
   const [loading, setLoading] = useState(false);
@@ -23,28 +22,21 @@ export function SignupForm() {
     const password = String(form.get("password") ?? "");
     const fullName = String(form.get("fullName") ?? "").trim();
 
-    const origin = getRedirectOrigin();
-    const supabase = createClient();
-    const { data, error } = await supabase.auth.signUp({
+    const { data, error } = await authClient.signUp.email({
       email,
       password,
-      options: {
-        emailRedirectTo: `${origin}/auth/callback?next=/dashboard`,
-        data: {
-          full_name: fullName || undefined,
-          name: fullName || undefined,
-        },
-      },
+      name: fullName || email,
+      callbackURL: "/dashboard",
     });
 
     setLoading(false);
 
     if (error) {
-      toast.error(getAuthErrorMessage(error));
+      toast.error(getAuthErrorMessage({ message: error.message, status: error.status }));
       return;
     }
 
-    if (data.session) {
+    if (data?.token) {
       toast.success("Account created. Welcome!");
       window.location.href = "/dashboard";
       return;

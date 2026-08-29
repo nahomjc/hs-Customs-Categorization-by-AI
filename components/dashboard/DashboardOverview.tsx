@@ -13,7 +13,6 @@ import {
   DashCard,
   DashCardHeader,
   DashLink,
-  PageHeader,
   StatusBadge,
 } from "@/components/dashboard/ui";
 import { db } from "@/db";
@@ -190,10 +189,24 @@ export async function DashboardOverview() {
 
   return (
     <div className="w-full min-w-0 space-y-6">
-      <PageHeader
-        title="Dashboard"
-        description="Overview of packing list uploads, HS classification, and exports."
-        action={
+      {/* Welcome hero */}
+      <div className="relative overflow-hidden rounded-3xl border border-slate-200/70 bg-white shadow-[0_8px_40px_-12px_rgba(15,23,42,0.1)]">
+        <div className="pointer-events-none absolute inset-0" aria-hidden>
+          <div className="absolute -right-16 -top-16 h-48 w-48 rounded-full bg-indigo-400/15 blur-3xl" />
+          <div className="absolute -bottom-12 left-1/4 h-40 w-40 rounded-full bg-violet-400/10 blur-3xl" />
+        </div>
+        <div className="relative flex flex-col gap-4 px-5 py-5 sm:flex-row sm:items-center sm:justify-between sm:px-7 sm:py-6">
+          <div>
+            <p className="text-[11px] font-bold uppercase tracking-widest text-indigo-600">
+              Overview
+            </p>
+            <h1 className="mt-1 text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">
+              Dashboard
+            </h1>
+            <p className="mt-1.5 max-w-xl text-sm text-slate-500">
+              Track uploads, classification progress, and export-ready packing lists.
+            </p>
+          </div>
           <DashButton href="/dashboard/upload" variant="primary">
             <svg
               className="w-5 h-5"
@@ -212,8 +225,8 @@ export async function DashboardOverview() {
             </svg>
             Upload packing list
           </DashButton>
-        }
-      />
+        </div>
+      </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
         <DashboardStatCard
@@ -316,7 +329,7 @@ export async function DashboardOverview() {
           <DashCardHeader
             title="Uploads — last 7 days"
             action={
-              <span className="text-xs font-medium text-gray-500 bg-gray-100 px-2.5 py-1 rounded-full tabular-nums">
+              <span className="rounded-full bg-indigo-50 px-2.5 py-1 text-xs font-semibold text-indigo-700 tabular-nums">
                 {weekTotal} total
               </span>
             }
@@ -346,17 +359,17 @@ export async function DashboardOverview() {
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
-              <tr className="bg-gray-50/80 text-left border-b border-gray-100">
-                <th className="px-5 py-3 font-medium text-gray-500 uppercase tracking-wider text-xs">
+              <tr className="border-b border-slate-100 bg-slate-50/80 text-left">
+                <th className="px-5 py-3 text-xs font-bold uppercase tracking-wider text-slate-500">
                   File
                 </th>
-                <th className="px-5 py-3 font-medium text-gray-500 uppercase tracking-wider text-xs w-28">
+                <th className="px-5 py-3 w-28 text-xs font-bold uppercase tracking-wider text-slate-500">
                   Date
                 </th>
-                <th className="px-5 py-3 font-medium text-gray-500 uppercase tracking-wider text-xs w-32">
+                <th className="px-5 py-3 w-32 text-xs font-bold uppercase tracking-wider text-slate-500">
                   Status
                 </th>
-                <th className="px-5 py-3 font-medium text-gray-500 uppercase tracking-wider text-xs w-24 text-right">
+                <th className="px-5 py-3 w-24 text-right text-xs font-bold uppercase tracking-wider text-slate-500">
                   Action
                 </th>
               </tr>
@@ -366,9 +379,9 @@ export async function DashboardOverview() {
                 <tr>
                   <td colSpan={4} className="p-0">
                     <div className="flex flex-col items-center justify-center py-16 px-6 text-center">
-                      <div className="w-14 h-14 rounded-2xl bg-blue-50 flex items-center justify-center mb-4 text-[#007bff]">
+                      <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-500 to-violet-600 text-white shadow-lg shadow-indigo-500/25">
                         <svg
-                          className="w-7 h-7 opacity-60"
+                          className="h-8 w-8"
                           fill="none"
                           stroke="currentColor"
                           viewBox="0 0 24 24"
@@ -383,14 +396,14 @@ export async function DashboardOverview() {
                           />
                         </svg>
                       </div>
-                      <p className="font-semibold text-gray-900">No documents yet</p>
-                      <p className="mt-1 text-sm text-gray-500 max-w-xs">
+                      <p className="font-bold text-slate-900">No documents yet</p>
+                      <p className="mt-1 max-w-xs text-sm text-slate-500">
                         Upload a packing list to get started with HS code
                         categorization.
                       </p>
                       <Link
                         href="/dashboard/upload"
-                        className="mt-5 inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-[#007bff] text-white text-sm font-semibold hover:bg-[#0069d9] transition-colors shadow-md shadow-blue-500/20"
+                        className="mt-5 inline-flex items-center gap-2 rounded-2xl bg-gradient-to-r from-indigo-600 to-violet-600 px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-indigo-500/20 transition-all hover:shadow-indigo-500/30"
                       >
                         Upload your first file
                       </Link>
@@ -401,14 +414,14 @@ export async function DashboardOverview() {
                 recent.map((doc) => (
                   <tr
                     key={doc.id}
-                    className="border-t border-gray-50 hover:bg-gray-50/50 transition-colors"
+                    className="border-t border-slate-50 transition-colors hover:bg-indigo-50/20"
                   >
                     <td className="px-5 py-3.5">
-                      <span className="font-medium text-gray-900 truncate block max-w-[200px] sm:max-w-md">
+                      <span className="block max-w-[200px] truncate font-semibold text-slate-900 sm:max-w-md">
                         {doc.originalFileName ?? "—"}
                       </span>
                     </td>
-                    <td className="px-5 py-3.5 text-gray-500 whitespace-nowrap">
+                    <td className="px-5 py-3.5 whitespace-nowrap text-slate-500">
                       {formatDate(doc.createdAt)}
                     </td>
                     <td className="px-5 py-3.5">
@@ -420,7 +433,7 @@ export async function DashboardOverview() {
                     <td className="px-5 py-3.5 text-right">
                       <Link
                         href={`/dashboard/documents/${doc.id}`}
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium text-[#007bff] bg-blue-50 hover:bg-blue-100 transition-colors"
+                        className="inline-flex items-center gap-1.5 rounded-xl bg-indigo-50 px-3 py-1.5 text-sm font-semibold text-indigo-700 transition-colors hover:bg-indigo-100"
                       >
                         View
                         <svg

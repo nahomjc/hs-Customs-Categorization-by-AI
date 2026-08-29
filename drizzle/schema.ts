@@ -56,9 +56,23 @@ export const groupedItems = pgTable("grouped_items", {
 });
 
 export const hsCodeReference = pgTable("hs_code_reference", {
-	hsCode: varchar("hs_code", { length: 20 }).primaryKey().notNull(),
-	category: varchar({ length: 100 }),
-	description: text(),
+	id: uuid().defaultRandom().primaryKey().notNull(),
+	heading: varchar({ length: 20 }),
+	hsCode: varchar("hs_code", { length: 20 }),
+	tariffNo: varchar("tariff_no", { length: 20 }).notNull(),
+	description: text().notNull(),
+	stdUnit: varchar("std_unit", { length: 30 }),
+	dutyRate: varchar("duty_rate", { length: 30 }),
+	chapter: varchar({ length: 2 }),
+	normalizedHs: varchar("normalized_hs", { length: 20 }),
+	importedAt: timestamp("imported_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+}, (table) => {
+	return {
+		hsCodeReferenceTariffNoUnique: unique("hs_code_reference_tariff_no_unique").on(table.tariffNo),
+		idxHsRefHsCode: index("idx_hs_ref_hs_code").using("btree", table.hsCode.asc().nullsLast().op("text_ops")),
+		idxHsRefNormalizedHs: index("idx_hs_ref_normalized_hs").using("btree", table.normalizedHs.asc().nullsLast().op("text_ops")),
+		idxHsRefChapter: index("idx_hs_ref_chapter").using("btree", table.chapter.asc().nullsLast().op("text_ops")),
+	}
 });
 
 export const settings = pgTable("settings", {

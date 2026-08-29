@@ -1,39 +1,39 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { useState } from "react";
 import { toast } from "sonner";
-import { createClient } from "@/lib/supabase/client";
+import { authClient } from "@/lib/auth/auth-client";
 
 export function ResetPasswordForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const token = searchParams.get("token") ?? "";
   const [loading, setLoading] = useState(false);
-  const [ready, setReady] = useState(false);
-  const [checking, setChecking] = useState(true);
-
-  useEffect(() => {
-    const supabase = createClient();
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setReady(!!session);
-      setChecking(false);
-    });
-  }, []);
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
+
+    if (!token) {
+      toast.error("Reset link is invalid or expired");
+      return;
+    }
+
     setLoading(true);
 
     const form = new FormData(e.currentTarget);
     const password = String(form.get("password") ?? "");
 
-    const supabase = createClient();
-    const { error } = await supabase.auth.updateUser({ password });
+    const { error } = await authClient.resetPassword({
+      newPassword: password,
+      token,
+    });
 
     setLoading(false);
 
     if (error) {
-      toast.error(error.message);
+      toast.error(error.message ?? "Could not reset password");
       return;
     }
 
@@ -42,13 +42,7 @@ export function ResetPasswordForm() {
     router.refresh();
   }
 
-  if (checking) {
-    return (
-      <p className="auth-muted text-center py-4">Verifying reset link…</p>
-    );
-  }
-
-  if (!ready) {
+  if (!token) {
     return (
       <div className="space-y-5 text-center">
         <p className="auth-muted leading-relaxed">

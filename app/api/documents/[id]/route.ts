@@ -1,9 +1,7 @@
 import { db } from "@/db";
 import { documents } from "@/db/schema";
-import { createAdminClient } from "@/lib/supabase/admin";
+import { removeObject } from "@/lib/storage/r2";
 import { eq } from "drizzle-orm";
-
-const BUCKET = "packing-lists";
 
 export async function DELETE(
   _req: Request,
@@ -21,10 +19,9 @@ export async function DELETE(
   }
 
   try {
-    const supabase = createAdminClient();
-    await supabase.storage.from(BUCKET).remove([doc.originalFileUrl]);
+    await removeObject(doc.originalFileUrl);
   } catch {
-    // Ignore storage errors (e.g. file already gone or bucket missing)
+    // Ignore storage errors (e.g. file already gone)
   }
 
   try {

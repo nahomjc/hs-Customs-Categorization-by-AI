@@ -5,17 +5,14 @@ import { documents } from "@/db/schema";
 import { completeChat, type ChatMessage } from "@/lib/ai/openrouter-chat";
 import { DEFAULT_TENANT_ID } from "@/lib/auth/constants";
 import { documentsUploadedByUser } from "@/lib/dashboard/document-ownership";
-import { createClient } from "@/lib/supabase/server";
+import { getAuthUser } from "@/lib/auth/session";
 
 const MAX_HISTORY = 12;
 
 type ClientMessage = { role: "user" | "assistant"; content: string };
 
 export async function POST(request: Request) {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getAuthUser();
 
   if (!user?.id) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -44,11 +41,7 @@ export async function POST(request: Request) {
         .slice(-MAX_HISTORY)
     : [];
 
-  const displayName =
-    (user.user_metadata?.full_name as string | undefined) ??
-    (user.user_metadata?.name as string | undefined) ??
-    user.email ??
-    "User";
+  const displayName = user.name ?? user.email ?? "User";
 
   let recentDocsSummary = "No documents uploaded yet.";
   try {

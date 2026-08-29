@@ -1,4 +1,5 @@
 import { isHsCodeFormat, normalizeHsCode } from "./hsCodeUtils";
+import { findInCacheSync, isReferencePopulated } from "./hsReferenceCache";
 
 /**
  * Allowed HS codes for assessor-style classification.
@@ -33,6 +34,7 @@ export const ALLOWED_HS_CODES = [
   "6302", // Bed linen
   "9703", // Sculptures and statuary (artwork — not 6702 artificial plants)
   "8413", // Pumps for liquids (e.g. fountain pumps)
+  "7019", // Glass fibres / fibreglass insulation
   "9403.90",
   "9405.90",
   "9999", // Only for "Unclassified" when item is real but unclear — assessor fallback
@@ -117,6 +119,16 @@ export function validateClassification({
   if (mode === "document" && hsCode && isHsCodeFormat(hsCode)) {
     const n = normalizeHsCode(hsCode);
     return { status: "valid", hsCode: n?.display ?? hsCode.trim() };
+  }
+
+  if (isReferencePopulated()) {
+    const ref = findInCacheSync(hsCode ?? "");
+    if (ref?.normalizedHs || ref?.hsCode) {
+      return {
+        status: "valid",
+        hsCode: ref.normalizedHs ?? ref.hsCode ?? hsCode?.trim() ?? "",
+      };
+    }
   }
 
   if (isAllowedHsCode(hsCode)) {

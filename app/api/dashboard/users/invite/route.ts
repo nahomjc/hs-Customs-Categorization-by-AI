@@ -1,15 +1,11 @@
 import { NextResponse } from "next/server";
 import { inviteDashboardUser } from "@/lib/dashboard/invite-user";
-import { createClient } from "@/lib/supabase/server";
+import { requireAdmin } from "@/lib/auth/require-admin";
 
 export async function POST(request: Request) {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user?.id) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const admin = await requireAdmin();
+  if (!admin.ok) {
+    return NextResponse.json({ error: admin.error }, { status: admin.status });
   }
 
   let body: {
@@ -58,7 +54,7 @@ export async function POST(request: Request) {
       userId,
       resent,
       message: resent
-        ? "User already existed in auth — password updated and invite email resent."
+        ? "User already existed — password updated and invite email resent."
         : "User created and invite email sent.",
     });
   } catch (err) {

@@ -1,8 +1,9 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
-import { signOut } from "@/app/auth/actions";
+import { authClient } from "@/lib/auth/auth-client";
 
 export type UserMenuUser = {
   email: string;
@@ -27,6 +28,7 @@ type UserMenuProps = {
 };
 
 export function UserMenu({ user }: UserMenuProps) {
+  const router = useRouter();
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
   const displayName = user.name || user.email;
@@ -58,20 +60,35 @@ export function UserMenu({ user }: UserMenuProps) {
         aria-expanded={open}
         aria-haspopup="menu"
         aria-label="Account menu"
-        className="flex items-center rounded-full ring-2 ring-transparent hover:ring-[#007bff]/20 focus-visible:ring-[#007bff]/40 transition-shadow"
+        className="flex items-center gap-2.5 rounded-full border border-transparent py-1 pl-2 pr-1.5 transition-colors hover:border-slate-200 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/30"
       >
+        <span className="hidden max-w-[10rem] truncate text-sm font-semibold text-slate-700 sm:block">
+          {displayName}
+        </span>
         {user.avatarUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
             src={user.avatarUrl}
             alt=""
-            className="w-9 h-9 rounded-full object-cover border border-gray-200"
+            className="h-9 w-9 rounded-full border border-slate-200 object-cover"
           />
         ) : (
-          <span className="w-9 h-9 rounded-full bg-[#007bff] text-white flex items-center justify-center text-sm font-semibold border border-[#0069d9]/30">
+          <span className="flex h-9 w-9 items-center justify-center rounded-full border border-indigo-600/20 bg-gradient-to-br from-indigo-600 to-violet-600 text-sm font-semibold text-white">
             {initials}
           </span>
         )}
+        <svg
+          className={`hidden h-4 w-4 shrink-0 text-slate-400 transition-transform sm:block ${
+            open ? "rotate-180" : ""
+          }`}
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24"
+          aria-hidden
+        >
+          <title>Toggle menu</title>
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+        </svg>
       </button>
 
       {open ? (
@@ -105,16 +122,20 @@ export function UserMenu({ user }: UserMenuProps) {
             <DashboardIcon />
             Dashboard
           </Link>
-          <form action={signOut} className="border-t border-gray-100">
-            <button
-              type="submit"
-              role="menuitem"
-              className="flex w-full items-center gap-2 px-3 py-2.5 text-sm text-red-600 hover:bg-red-50 transition-colors"
-            >
-              <LogoutIcon />
-              Logout
-            </button>
-          </form>
+          <button
+            type="button"
+            role="menuitem"
+            onClick={async () => {
+              setOpen(false);
+              await authClient.signOut();
+              router.push("/login");
+              router.refresh();
+            }}
+            className="flex w-full items-center gap-2 px-3 py-2.5 text-sm text-red-600 hover:bg-red-50 transition-colors"
+          >
+            <LogoutIcon />
+            Logout
+          </button>
         </div>
       ) : null}
     </div>

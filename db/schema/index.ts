@@ -1,3 +1,4 @@
+export * from "./auth";
 export * from "./demoRequests";
 export * from "./users";
 export * from "./settings";

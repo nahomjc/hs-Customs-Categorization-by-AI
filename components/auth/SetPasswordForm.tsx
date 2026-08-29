@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { toast } from "sonner";
 import { PasswordInput } from "@/components/auth/PasswordInput";
-import { createClient } from "@/lib/supabase/client";
+import { authClient } from "@/lib/auth/auth-client";
 
 export function SetPasswordForm() {
   const router = useRouter();
@@ -15,6 +15,7 @@ export function SetPasswordForm() {
     setLoading(true);
 
     const form = new FormData(e.currentTarget);
+    const currentPassword = String(form.get("currentPassword") ?? "");
     const password = String(form.get("password") ?? "");
     const confirm = String(form.get("confirmPassword") ?? "");
 
@@ -30,18 +31,20 @@ export function SetPasswordForm() {
       return;
     }
 
-    const supabase = createClient();
-    const { error } = await supabase.auth.updateUser({
-      password,
-      data: { must_change_password: false },
+    const { error } = await authClient.changePassword({
+      currentPassword,
+      newPassword: password,
+      revokeOtherSessions: true,
     });
 
     setLoading(false);
 
     if (error) {
-      toast.error(error.message);
+      toast.error(error.message ?? "Could not update password");
       return;
     }
+
+    await fetch("/api/account/clear-must-change-password", { method: "POST" });
 
     toast.success("Password saved. Welcome to Impact Logistics!");
     router.push("/dashboard");
@@ -51,9 +54,21 @@ export function SetPasswordForm() {
   return (
     <form onSubmit={handleSubmit} className="space-y-5">
       <p className="auth-muted text-sm leading-relaxed">
-        Your administrator created your account with a temporary password. Choose a
-        new password you will use from now on.
+        Your administrator created your account with a temporary password. Enter
+        that password below, then choose a new one.
       </p>
+      <div>
+        <label htmlFor="currentPassword" className="auth-label">
+          Temporary password
+        </label>
+        <PasswordInput
+          id="currentPassword"
+          name="currentPassword"
+          required
+          autoComplete="current-password"
+          placeholder="From your invite email"
+        />
+      </div>
       <div>
         <label htmlFor="password" className="auth-label">
           New password

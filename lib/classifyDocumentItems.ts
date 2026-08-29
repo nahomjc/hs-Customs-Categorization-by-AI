@@ -7,11 +7,14 @@ import {
 } from "@/db/schema";
 import { classifyItem } from "./classifyItem";
 import { classifyFromDocumentHs } from "./classifyFromDocumentHs";
+import { classifyFromReferenceDescription } from "./classifyFromReference";
 import { EXCLUDED_HS, validateClassification } from "./allowedHsCodes";
-import { classifyByRulesOnly } from "./assessorRules";
+import { applyAssessorRules, classifyByRulesOnly } from "./assessorRules";
 import { cleanProductDescription, isNonItemLine } from "./packingListFilters";
 import { isPlausibleHsCode } from "./hsCodeUtils";
 import { groupItemsByHsCode, type ItemWithClassification } from "./groupItems";
+import { loadHsReferenceCache } from "./hsReference";
+import { isReferencePopulated } from "./hsReferenceCache";
 import { and, eq, isNull, sql } from "drizzle-orm";
 
 export const CLASSIFY_BATCH_SIZE = 20;
@@ -71,19 +74,36 @@ function buildPreCodedClassification(item: ItemRow): ClassificationInsert {
     const result = classifyFromDocumentHs(desc, item.sourceHsCode ?? "", {
       unit: item.detectedUnit ?? undefined,
     });
+    const assessed = applyAssessorRules(desc, result);
     const validated = validateClassification({
-      hsCode: result.hsCode,
-      category: result.category,
+      hsCode: assessed.hsCode,
+      category: assessed.category,
       mode: "document",
     });
     return {
       itemId: item.id,
-      aiCategory: result.category,
+      aiCategory: assessed.category,
       aiHsCode: validated.hsCode,
-      cleanDescription: result.cleanDescription,
-      confidence: String(result.confidence ?? 0.98),
+      cleanDescription: assessed.cleanDescription,
+      confidence: String(assessed.confidence ?? result.confidence ?? 0.98),
       aiRawResponse: result.aiRawResponse,
     };
+  }
+
+  if (isReferencePopulated()) {
+    const refResult = classifyFromReferenceDescription(desc, {
+      unit: item.detectedUnit ?? undefined,
+    });
+    if (refResult) {
+      return {
+        itemId: item.id,
+        aiCategory: refResult.category,
+        aiHsCode: refResult.hsCode,
+        cleanDescription: refResult.cleanDescription,
+        confidence: String(refResult.confidence ?? 0.9),
+        aiRawResponse: refResult.aiRawResponse,
+      };
+    }
   }
 
   return {
@@ -114,6 +134,26 @@ async function classifyOneItem(item: ItemRow): Promise<void> {
   const desc = cleanProductDescription(
     item.detectedDescription || item.rawLine || "",
   );
+
+  if (isReferencePopulated()) {
+    const refResult = classifyFromReferenceDescription(desc, {
+      unit: item.detectedUnit ?? undefined,
+    });
+    if (refResult) {
+      const assessed = applyAssessorRules(desc, refResult);
+      const hsCode =
+        assessed.isImportItem === false ? EXCLUDED_HS : assessed.hsCode;
+      await db.insert(itemClassifications).values({
+        itemId: item.id,
+        aiCategory: assessed.category,
+        aiHsCode: hsCode,
+        cleanDescription: assessed.cleanDescription,
+        confidence: String(assessed.confidence ?? 0.9),
+        aiRawResponse: refResult.aiRawResponse,
+      });
+      return;
+    }
+  }
 
   try {
     const result = await classifyItem(desc, {
@@ -228,6 +268,8 @@ export async function classifyDocumentBatch(documentId: string): Promise<{
 }> {
   const totalItems = await countTotalItems(documentId);
   const docMode = await getDocumentMode(documentId);
+
+  await loadHsReferenceCache();
 
   if (totalItems === 0) {
     await db

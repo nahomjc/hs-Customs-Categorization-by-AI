@@ -1,9 +1,17 @@
+import {
+  extractPackingListQuantity,
+  normalizeLineQuantity,
+  normalizePackingUnit,
+  rejectModelSuffixQuantity,
+  stripPackingListQuantityTokens,
+} from "./packingListFilters";
+
 /**
  * Splits extracted text into raw item lines and detects description, quantity, unit.
  * Handles messy packing list format: "Description Country N PCS" or "Description  N  PCS"
  */
 const UNIT_PATTERN =
-  /\b(PCS|PC|Pieces?|SETS?|SET|UNITS?|BOX(?:ES)?|CARTONS?|ROLLS?|SQM|M2|KG|KGS|LBS|METERS?|M\b|NO\.?S?\.?)\s*$/i;
+  /\b(PCS|PC|Pieces?|SETS?|SET|UNITS?|BOX(?:ES)?|CARTONS?|CTNS?|ROLLS?|SQM|M2|KG|KGS|LBS|METERS?|M\b|NO\.?S?\.?|Pcs|sketche)\s*$/i;
 const NUMBER_PATTERN = /(\d+(?:\.\d+)?)\s*$/;
 
 export interface ParsedLine {
@@ -40,21 +48,28 @@ function parseOneLine(line: string): {
   quantity: number | null;
   unit: string | null;
 } {
+  const packed = extractPackingListQuantity(line);
   let rest = line;
-  let quantity: number | null = null;
-  let unit: string | null = null;
+  let quantity: number | null = packed?.quantity ?? null;
+  let unit: string | null = packed?.unit ?? null;
 
-  const unitMatch = rest.match(UNIT_PATTERN);
-  if (unitMatch) {
-    unit = unitMatch[1].toUpperCase().replace(/\s+/g, "");
-    rest = rest.slice(0, unitMatch.index).trim();
+  if (packed) {
+    rest = stripPackingListQuantityTokens(rest);
+  } else {
+    const unitMatch = rest.match(UNIT_PATTERN);
+    if (unitMatch) {
+      unit = normalizePackingUnit(unitMatch[1]);
+      rest = rest.slice(0, unitMatch.index).trim();
+    }
+
+    const numMatch = rest.match(NUMBER_PATTERN);
+    if (numMatch) {
+      quantity = normalizeLineQuantity(Number.parseFloat(numMatch[1]));
+      rest = rest.slice(0, numMatch.index).trim();
+    }
   }
 
-  const numMatch = rest.match(NUMBER_PATTERN);
-  if (numMatch) {
-    quantity = parseFloat(numMatch[1]);
-    rest = rest.slice(0, numMatch.index).trim();
-  }
+  quantity = rejectModelSuffixQuantity(line, quantity);
 
   const description = rest.replace(/\s+/g, " ").trim() || line;
   return { description, quantity, unit };

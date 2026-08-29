@@ -5,23 +5,41 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { DashLink } from "@/components/dashboard/ui";
 
-const ALLOWED = [
-  "application/pdf",
-  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-];
-const EXT: Record<string, "pdf" | "xlsx" | "docx"> = {
+type UploadFileType = "pdf" | "xlsx" | "docx" | "csv";
+
+const MIME_TO_TYPE: Record<string, UploadFileType> = {
   "application/pdf": "pdf",
   "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": "xlsx",
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document":
     "docx",
+  "text/csv": "csv",
+  "application/csv": "csv",
+  "text/comma-separated-values": "csv",
+};
+
+const EXT_TO_TYPE: Record<string, UploadFileType> = {
+  pdf: "pdf",
+  docx: "docx",
+  xlsx: "xlsx",
+  csv: "csv",
 };
 
 const FORMATS = [
   { ext: "PDF", label: "PDF" },
   { ext: "DOCX", label: "Word" },
   { ext: "XLSX", label: "Excel" },
+  { ext: "CSV", label: "CSV" },
 ] as const;
+
+function detectUploadFileType(file: File): UploadFileType | null {
+  const mimeType = MIME_TO_TYPE[file.type];
+  if (mimeType) return mimeType;
+
+  const ext = file.name.split(".").pop()?.toLowerCase();
+  if (ext && EXT_TO_TYPE[ext]) return EXT_TO_TYPE[ext];
+
+  return null;
+}
 
 type UploadFormProps = {
   autoOpenDocument: boolean;
@@ -34,14 +52,21 @@ export function UploadForm({ autoOpenDocument }: UploadFormProps) {
   const [dragActive, setDragActive] = useState(false);
   const router = useRouter();
 
+  const acceptFile = (f: File) => {
+    const type = detectUploadFileType(f);
+    if (type) {
+      setFile(f);
+      setError(null);
+    } else {
+      setError("Please use PDF, Word, Excel, or CSV.");
+    }
+  };
+
   const onDrop = (e: React.DragEvent) => {
     e.preventDefault();
     setDragActive(false);
     const f = e.dataTransfer.files[0];
-    if (f && ALLOWED.includes(f.type)) {
-      setFile(f);
-      setError(null);
-    } else setError("Please use PDF, Word, or Excel.");
+    if (f) acceptFile(f);
   };
 
   const onDragOver = (e: React.DragEvent) => {
@@ -53,20 +78,23 @@ export function UploadForm({ autoOpenDocument }: UploadFormProps) {
 
   const onSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0];
-    if (f && ALLOWED.includes(f.type)) {
-      setFile(f);
-      setError(null);
-    } else setError("Please use PDF, Word, or Excel.");
+    if (f) acceptFile(f);
   };
 
   const submit = async () => {
     if (!file) return;
+    const fileType = detectUploadFileType(file);
+    if (!fileType) {
+      setError("Please use PDF, Word, Excel, or CSV.");
+      return;
+    }
+
     setLoading(true);
     setError(null);
     try {
       const form = new FormData();
       form.append("file", file);
-      form.append("fileType", EXT[file.type] ?? "pdf");
+      form.append("fileType", fileType);
       const res = await fetch("/api/upload", { method: "POST", body: form });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Upload failed");
@@ -144,7 +172,7 @@ export function UploadForm({ autoOpenDocument }: UploadFormProps) {
             Browse file
             <input
               type="file"
-              accept=".pdf,.docx,.xlsx"
+              accept=".pdf,.docx,.xlsx,.csv,text/csv"
               className="hidden"
               onChange={onSelect}
             />

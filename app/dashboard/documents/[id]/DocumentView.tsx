@@ -9,8 +9,10 @@ import {
   startProcessingDocument,
 } from "@/app/actions";
 import { NEED_INFO_HS } from "@/lib/allowedHsCodes";
-import { parseDocumentClassificationMeta } from "@/lib/classifyFromDocumentHs";
-import { DashLink, StatusBadge, dashInputClass } from "@/components/dashboard/ui";
+import { parseDocumentClassificationMeta } from "@/lib/documentClassificationMeta";
+import { DocumentHeroHeader } from "@/components/dashboard/document/DocumentHeroHeader";
+import { HsCodeBadge } from "@/components/dashboard/document/HsCodeBadge";
+import { DashLink, dashInputClass } from "@/components/dashboard/ui";
 import { DocumentChat } from "./DocumentChat";
 import { DocumentProcessingStepper } from "./DocumentProcessingStepper";
 
@@ -97,6 +99,7 @@ export function DocumentView(props: {
     unit: "PCS",
   });
   const [savingGroupId, setSavingGroupId] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<"groups" | "items">("groups");
 
   const ADD_GROUP_ID = "new";
   const startEditGrouped = (g: Grouped) => {
@@ -360,8 +363,8 @@ export function DocumentView(props: {
 
   if (status !== "completed" && status !== "failed") {
     return (
-      <div className="w-full min-w-0 space-y-4">
-        <DashLink href="/dashboard" className="inline-flex items-center gap-1.5">
+      <div className="w-full min-w-0 space-y-5">
+        <DashLink href="/dashboard" className="inline-flex items-center gap-1.5 text-slate-500 hover:text-slate-900">
           <svg
             aria-hidden="true"
             className="w-4 h-4"
@@ -392,8 +395,8 @@ export function DocumentView(props: {
 
   if (error || status === "failed") {
     return (
-      <div className="w-full min-w-0 space-y-3">
-        <DashLink href="/dashboard" className="inline-flex items-center gap-1.5">
+      <div className="w-full min-w-0 space-y-5">
+        <DashLink href="/dashboard" className="inline-flex items-center gap-1.5 text-slate-500 hover:text-slate-900">
           <svg
             aria-hidden="true"
             className="w-4 h-4"
@@ -410,12 +413,16 @@ export function DocumentView(props: {
           </svg>
           Back to dashboard
         </DashLink>
-        <div className="landing-float-card bg-white rounded-2xl overflow-hidden w-full">
-          <div className="p-6 text-center">
-            <div className="w-12 h-12 rounded-full bg-red-100 flex items-center justify-center mx-auto mb-4">
+        <div className="overflow-hidden rounded-3xl border border-red-100 bg-white shadow-[0_8px_40px_-12px_rgba(15,23,42,0.1)]">
+          <div className="relative px-6 py-10 text-center sm:px-10">
+            <div
+              className="pointer-events-none absolute inset-0 bg-gradient-to-br from-red-50/80 via-white to-orange-50/40"
+              aria-hidden
+            />
+            <div className="relative mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-red-500 to-rose-600 shadow-lg shadow-red-500/20">
               <svg
                 aria-hidden="true"
-                className="w-6 h-6 text-red-600"
+                className="h-8 w-8 text-white"
                 fill="none"
                 stroke="currentColor"
                 viewBox="0 0 24 24"
@@ -428,24 +435,24 @@ export function DocumentView(props: {
                 />
               </svg>
             </div>
-            <h2 className="font-semibold text-[var(--foreground)]">
+            <h2 className="relative text-xl font-bold text-slate-900">
               Processing failed
             </h2>
-            <p className="mt-1 text-sm text-[var(--foreground)]/70">
+            <p className="relative mt-2 text-sm text-slate-600 max-w-md mx-auto">
               {error ?? "An error occurred while processing this document."}
             </p>
-            <div className="mt-5 flex flex-col sm:flex-row gap-3 justify-center">
+            <div className="relative mt-6 flex flex-col sm:flex-row gap-3 justify-center">
               <button
                 type="button"
                 onClick={retryProcessing}
                 disabled={processing}
-                className="inline-flex items-center justify-center px-4 py-2.5 bg-[var(--accent)] text-white rounded-lg text-sm font-medium hover:bg-[var(--accent-hover)] transition-colors disabled:opacity-50"
+                className="inline-flex items-center justify-center px-5 py-2.5 rounded-2xl bg-gradient-to-r from-indigo-600 to-violet-600 text-white text-sm font-semibold shadow-lg shadow-indigo-500/20 hover:shadow-indigo-500/30 transition-all disabled:opacity-50"
               >
                 {processing ? "Retrying…" : "Try again"}
               </button>
               <Link
                 href="/dashboard/upload"
-                className="inline-flex items-center justify-center px-4 py-2.5 border border-gray-200 text-[var(--foreground)] rounded-lg text-sm font-medium hover:bg-gray-50 transition-colors"
+                className="inline-flex items-center justify-center px-5 py-2.5 rounded-2xl border border-slate-200 bg-white text-slate-700 text-sm font-semibold hover:bg-slate-50 transition-colors"
               >
                 Upload new file
               </Link>
@@ -465,204 +472,128 @@ export function DocumentView(props: {
 
   return (
     <>
-      <div className="w-full min-w-0 space-y-3">
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-          <DashLink href="/dashboard" className="inline-flex items-center gap-1.5">
-            <svg
-              aria-hidden="true"
-              className="w-4 h-4"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M15 19l-7-7 7-7"
-              />
-            </svg>
-            Dashboard
-          </DashLink>
-          <StatusBadge label="Completed" status="completed" />
-        </div>
+      <div className="w-full min-w-0 space-y-5 pb-8">
+        <DocumentHeroHeader
+          fileName={fileName}
+          itemCount={itemCount}
+          groupCount={groupCount}
+          reviewCount={reviewCount}
+          exportLabel={exportLabel}
+          downloadHref={`/api/documents/${documentId}/download?format=${defaultExportFormat}`}
+          isPreCoded={isPreCoded}
+        />
 
         {isPreCoded && (
-          <div className="rounded-xl border border-sky-200/80 bg-sky-50 px-3.5 py-2.5 text-sm text-sky-900">
-            <span className="font-semibold">Pre-coded packing list.</span> HS
-            codes from your document were used for grouping.
-            {reviewCount > 0 && (
-              <>
-                {" "}
-                <span className="font-medium">
-                  {reviewCount} line{reviewCount === 1 ? "" : "s"} need review.
+          <div className="flex items-start gap-3 rounded-2xl border border-sky-200/70 bg-gradient-to-r from-sky-50 to-indigo-50/40 px-4 py-3.5">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-sky-500/10 text-sky-600">
+              <svg aria-hidden className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+            </div>
+            <p className="text-sm text-sky-950 leading-relaxed">
+              <span className="font-semibold">Pre-coded packing list.</span> HS codes from your document were used for grouping.
+              {reviewCount > 0 && (
+                <span className="font-medium text-amber-800">
+                  {" "}
+                  {reviewCount} line{reviewCount === 1 ? "" : "s"} flagged for review.
                 </span>
-              </>
-            )}
+              )}
+            </p>
           </div>
         )}
 
-        <div className="landing-float-card bg-white rounded-2xl border border-gray-100 overflow-hidden shadow-sm">
-          {/* Document header */}
-          <div className="px-4 py-3.5 sm:px-5 sm:py-4 border-b border-gray-100 bg-gradient-to-r from-slate-50/90 via-white to-white flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-            <div className="min-w-0 flex-1">
-              <div className="flex items-center gap-2.5">
-                <div className="shrink-0 w-9 h-9 rounded-lg bg-[#007bff]/10 flex items-center justify-center text-[#007bff]">
-                  <svg
-                    aria-hidden="true"
-                    className="w-5 h-5"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={1.5}
-                      d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-                    />
-                  </svg>
-                </div>
-                <div className="min-w-0">
-                  <h1 className="text-base sm:text-lg font-semibold text-gray-900 truncate">
-                    {fileName ?? "Document"}
-                  </h1>
-                  <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-gray-500">
-                    <span>
-                      {itemCount} line item{itemCount !== 1 ? "s" : ""}
-                    </span>
-                    <span className="text-gray-300" aria-hidden>
-                      ·
-                    </span>
-                    <span>
-                      {groupCount} HS group{groupCount !== 1 ? "s" : ""}
-                    </span>
-                    {reviewCount > 0 && (
-                      <>
-                        <span className="text-gray-300" aria-hidden>
-                          ·
-                        </span>
-                        <span className="text-amber-700 font-medium">
-                          {reviewCount} to review
-                        </span>
-                      </>
-                    )}
-                  </div>
-                </div>
-              </div>
-            </div>
-            <a
-              href={`/api/documents/${documentId}/download?format=${defaultExportFormat}`}
-              className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 font-semibold text-sm transition-colors shadow-sm shrink-0 w-full sm:w-auto"
-            >
-              <svg
-                aria-hidden="true"
-                className="w-4 h-4"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
+        <div className="overflow-hidden rounded-3xl border border-slate-200/70 bg-white shadow-[0_4px_24px_-8px_rgba(15,23,42,0.08)]">
+          {/* Tab navigation */}
+          <div className="flex flex-col gap-3 border-b border-slate-100 px-4 py-4 sm:px-6 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex rounded-2xl bg-slate-100/80 p-1">
+              <button
+                type="button"
+                onClick={() => setActiveTab("groups")}
+                className={`inline-flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold transition-all ${
+                  activeTab === "groups"
+                    ? "bg-white text-slate-900 shadow-sm shadow-slate-200/80"
+                    : "text-slate-500 hover:text-slate-700"
+                }`}
               >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"
-                />
-              </svg>
-              {exportLabel}
-            </a>
-          </div>
+                HS Groups
+                <span className={`rounded-full px-2 py-0.5 text-[11px] tabular-nums ${
+                  activeTab === "groups" ? "bg-indigo-100 text-indigo-700" : "bg-slate-200/80 text-slate-600"
+                }`}>
+                  {groupCount}
+                </span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveTab("items")}
+                className={`inline-flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold transition-all ${
+                  activeTab === "items"
+                    ? "bg-white text-slate-900 shadow-sm shadow-slate-200/80"
+                    : "text-slate-500 hover:text-slate-700"
+                }`}
+              >
+                Line Items
+                <span className={`rounded-full px-2 py-0.5 text-[11px] tabular-nums ${
+                  activeTab === "items" ? "bg-violet-100 text-violet-700" : "bg-slate-200/80 text-slate-600"
+                }`}>
+                  {itemCount}
+                </span>
+              </button>
+            </div>
 
-          {/* Grouped by HS code */}
-          <section className="border-b border-gray-100">
-            <div className="px-4 py-3 border-b border-gray-50 bg-gray-50/50 flex flex-col gap-2.5 lg:flex-row lg:items-center lg:justify-between">
-              <div className="flex items-center justify-between gap-2 min-w-0">
-                <h2 className="font-semibold text-gray-900 text-sm shrink-0">
-                  Grouped by HS code
-                </h2>
-                <div className="flex items-center gap-2 shrink-0">
-                  <button
-                    type="button"
-                    onClick={startAddGrouped}
-                    disabled={editingGroupId !== null}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-[#007bff] text-white hover:bg-[#0069d9] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                  >
-                    <svg
-                      aria-hidden="true"
-                      className="w-3.5 h-3.5"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M12 4v16m8-8H4"
-                      />
+            {activeTab === "groups" ? (
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={startAddGrouped}
+                  disabled={editingGroupId !== null}
+                  className="inline-flex items-center gap-1.5 rounded-xl bg-slate-900 px-3.5 py-2 text-xs font-semibold text-white transition-colors hover:bg-slate-800 disabled:opacity-50"
+                >
+                  <svg aria-hidden className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                  </svg>
+                  Add group
+                </button>
+                <div className="relative w-full sm:w-64">
+                  <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">
+                    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                     </svg>
-                    Add group
-                  </button>
-                  <span className="text-xs font-medium text-gray-600 bg-gray-100 px-2 py-0.5 rounded-md tabular-nums">
-                    {filteredGrouped.length === grouped.length
-                      ? `${groupCount} groups`
-                      : `${filteredGrouped.length} / ${groupCount}`}
                   </span>
+                  <input
+                    type="search"
+                    value={searchGrouped}
+                    onChange={(e) => setSearchGrouped(e.target.value)}
+                    placeholder="Search groups…"
+                    className={`${dashInputClass} pr-8 border-slate-200/80 bg-slate-50/50 focus:bg-white`}
+                    aria-label="Search grouped results"
+                  />
                 </div>
               </div>
-              <div className="relative w-full lg:max-w-xs lg:shrink-0">
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none">
-                  <svg
-                    className="w-4 h-4"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                    aria-hidden="true"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
-                    />
+            ) : (
+              <div className="relative w-full sm:w-72">
+                <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">
+                  <svg aria-hidden className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                   </svg>
                 </span>
                 <input
+                  id="detected-items-search"
                   type="search"
-                  value={searchGrouped}
-                  onChange={(e) => setSearchGrouped(e.target.value)}
-                  placeholder="Search groups…"
-                  className={`${dashInputClass} pr-8`}
-                  aria-label="Search grouped results"
+                  value={searchItems}
+                  onChange={(e) => setSearchItems(e.target.value)}
+                  placeholder="Search line items…"
+                  className={`${dashInputClass} pr-8 border-slate-200/80 bg-slate-50/50 focus:bg-white`}
+                  aria-label="Search detected items"
                 />
-                {searchGrouped && (
-                  <button
-                    type="button"
-                    onClick={() => setSearchGrouped("")}
-                    className="absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded text-[var(--foreground)]/50 hover:text-[var(--foreground)] hover:bg-[var(--background)]"
-                    aria-label="Clear search"
-                  >
-                    <svg
-                      aria-hidden="true"
-                      className="w-4 h-4"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M6 18L18 6M6 6l12 12"
-                      />
-                    </svg>
-                  </button>
-                )}
               </div>
-            </div>
-            <div className="overflow-auto max-h-[min(22rem,42vh)]">
+            )}
+          </div>
+
+          {activeTab === "groups" ? (
+          <section>
+            <div className="overflow-auto max-h-[min(32rem,58vh)]">
               <table className="w-full text-sm">
-                <thead className="bg-gray-50 sticky top-0 z-[1] border-b border-gray-100">
+                <thead className="sticky top-0 z-[1] border-b border-slate-100 bg-slate-50/90 backdrop-blur-sm">
                   <tr>
                     <th className="px-3 py-2 text-left w-24 sm:px-4">
                       <button
@@ -929,25 +860,28 @@ export function DocumentView(props: {
                             </>
                           ) : (
                             <>
-                              <td className="px-4 py-2.5 font-mono text-[var(--foreground)]">
-                                {g.hsCode}
+                              <td className="px-4 py-3">
+                                <HsCodeBadge code={g.hsCode} />
                               </td>
-                              <td className="px-4 py-2.5 text-[var(--foreground)]/80 text-xs">
-                                {g.category}
+                              <td className="px-4 py-3">
+                                <span className="inline-flex rounded-lg bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-700">
+                                  {g.category}
+                                </span>
                               </td>
-                              <td className="px-4 py-2.5 text-[var(--foreground)]/80 whitespace-nowrap">
-                                {g.totalQuantity} {g.unit ?? "PCS"}
+                              <td className="px-4 py-3 text-slate-700 whitespace-nowrap tabular-nums">
+                                <span className="font-semibold text-slate-900">{g.totalQuantity}</span>
+                                <span className="ml-1 text-slate-500">{g.unit ?? "PCS"}</span>
                               </td>
-                              <td className="px-4 py-2.5 text-[var(--foreground)]/80 align-top max-w-[180px] md:max-w-none">
-                                <span className="line-clamp-2">
+                              <td className="px-4 py-3 text-slate-600 align-top max-w-[180px] md:max-w-none">
+                                <span className="line-clamp-2 leading-relaxed">
                                   {g.finalDescription}
                                 </span>
                               </td>
-                              <td className="px-4 py-2.5 text-right">
+                              <td className="px-4 py-3 text-right">
                                 <button
                                   type="button"
                                   onClick={() => startEditGrouped(g)}
-                                  className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium text-[var(--foreground)]/80 border border-[var(--border)] hover:bg-[var(--background)] hover:text-[var(--foreground)]"
+                                  className="inline-flex items-center gap-1 rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600 transition-colors hover:border-indigo-200 hover:bg-indigo-50 hover:text-indigo-700"
                                 >
                                   Edit
                                 </button>
@@ -962,80 +896,11 @@ export function DocumentView(props: {
               </table>
             </div>
           </section>
-
-          {/* Detected items */}
+          ) : (
           <section>
-            <div className="px-4 py-3 border-b border-gray-50 bg-gray-50/50 flex flex-col gap-2.5 lg:flex-row lg:items-center lg:justify-between">
-              <div className="flex items-center gap-2 min-w-0">
-                <h2 className="font-semibold text-gray-900 text-sm shrink-0">
-                  Detected items
-                </h2>
-                <span className="text-xs font-medium text-gray-600 bg-gray-100 px-2 py-0.5 rounded-md tabular-nums">
-                  {filteredItems.length === items.length
-                    ? `${itemCount} lines`
-                    : `${filteredItems.length} / ${itemCount}`}
-                </span>
-              </div>
-              <div className="relative w-full lg:max-w-sm lg:shrink-0">
-                <label htmlFor="detected-items-search" className="sr-only">
-                  Search detected items
-                </label>
-                <span
-                  className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
-                  aria-hidden
-                >
-                  <svg
-                    aria-hidden="true"
-                    className="h-4 w-4"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
-                    />
-                  </svg>
-                </span>
-                <input
-                  id="detected-items-search"
-                  type="search"
-                  value={searchItems}
-                  onChange={(e) => setSearchItems(e.target.value)}
-                  placeholder="Search line items…"
-                  className={`${dashInputClass} pr-8`}
-                  aria-label="Search detected items"
-                />
-                    {searchItems && (
-                      <button
-                        type="button"
-                        onClick={() => setSearchItems("")}
-                        className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1.5 text-[var(--foreground)]/50 hover:bg-[var(--background)] hover:text-[var(--foreground)]"
-                        aria-label="Clear search"
-                      >
-                        <svg
-                          aria-hidden="true"
-                          className="h-4 w-4"
-                          fill="none"
-                          stroke="currentColor"
-                          viewBox="0 0 24 24"
-                        >
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            strokeWidth={2}
-                            d="M6 18L18 6M6 6l12 12"
-                          />
-                        </svg>
-                      </button>
-                    )}
-              </div>
-            </div>
-            <div className="overflow-auto max-h-[min(22rem,42vh)]">
+            <div className="overflow-auto max-h-[min(32rem,58vh)]">
               <table className="w-full border-collapse text-sm">
-                <thead className="sticky top-0 z-[1] border-b border-gray-100 bg-gray-50">
+                <thead className="sticky top-0 z-[1] border-b border-slate-100 bg-slate-50/90 backdrop-blur-sm">
                   <tr>
                     <th scope="col" className="text-left">
                       <button
@@ -1157,13 +1022,13 @@ export function DocumentView(props: {
                       return (
                         <tr
                           key={i.id}
-                          className={`border-b border-[var(--border-subtle)] transition-colors hover:bg-[var(--background)]/60 ${
-                            index % 2 === 1 ? "bg-[var(--background)]/30" : ""
-                          } ${isNeedInfo ? "bg-amber-50/70" : ""}`}
+                          className={`border-b border-slate-100 transition-colors hover:bg-indigo-50/20 ${
+                            index % 2 === 1 ? "bg-slate-50/40" : ""
+                          } ${isNeedInfo ? "bg-amber-50/50" : ""}`}
                         >
-                          <td className="px-4 py-3 align-top">
+                          <td className="px-4 py-3.5 align-top">
                             <div className="max-w-[200px] md:max-w-none">
-                              <p className="leading-snug text-[var(--foreground)] line-clamp-2">
+                              <p className="leading-snug text-slate-800 line-clamp-2 font-medium">
                                 {desc || (
                                   <span className="italic text-[var(--foreground)]/50">
                                     No description
@@ -1195,42 +1060,32 @@ export function DocumentView(props: {
                           {hasDocumentHs && (
                             <td className="px-4 py-3">
                               {docHs !== "—" ? (
-                                <code className="inline-flex rounded border border-sky-200 bg-sky-50/80 px-2 py-1 font-mono text-xs text-sky-900">
-                                  {docHs}
-                                </code>
+                                <HsCodeBadge code={docHs} variant="document" />
                               ) : (
-                                <span className="text-[var(--foreground)]/50">
-                                  —
-                                </span>
+                                <span className="text-slate-400">—</span>
                               )}
                             </td>
                           )}
                           <td className="px-4 py-3">
                             {hsDisplay !== "—" ? (
-                              <code className="inline-flex rounded border border-[var(--border)] bg-[var(--background)]/80 px-2 py-1 font-mono text-xs text-[var(--foreground)]">
-                                {hsDisplay}
-                              </code>
+                              <HsCodeBadge code={hsDisplay} />
                             ) : (
-                              <span className="text-[var(--foreground)]/50">
-                                —
-                              </span>
+                              <span className="text-slate-400">—</span>
                             )}
                           </td>
                           <td className="px-4 py-3">
                             {catDisplay !== "—" ? (
                               <span
-                                className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium ${
+                                className={`inline-flex rounded-lg px-2.5 py-1 text-xs font-medium ${
                                   isExclude
-                                    ? "bg-[var(--border)]/80 text-[var(--foreground)]/70"
-                                    : "bg-[var(--accent-light)]/80 text-[var(--foreground)]"
+                                    ? "bg-slate-100 text-slate-600"
+                                    : "bg-indigo-50 text-indigo-800"
                                 }`}
                               >
                                 {catDisplay}
                               </span>
                             ) : (
-                              <span className="text-[var(--foreground)]/50">
-                                —
-                              </span>
+                              <span className="text-slate-400">—</span>
                             )}
                           </td>
                         </tr>
@@ -1241,6 +1096,7 @@ export function DocumentView(props: {
               </table>
             </div>
           </section>
+          )}
         </div>
       </div>
       <DocumentChat documentId={documentId} />

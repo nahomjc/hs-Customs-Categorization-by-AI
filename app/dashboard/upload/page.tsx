@@ -20,7 +20,7 @@ export default async function UploadPage() {
     <div className="max-w-xl mx-auto space-y-8">
       <PageHeader
         title="Upload packing list"
-        description="Upload a PDF, Word, or Excel packing list. Lists that already include HS codes are read and grouped automatically."
+        description="Upload a PDF, Word, or Excel packing list. When the HS tariff reference is imported, lines are matched against it first; otherwise the app uses document HS codes or AI classification as before."
       />
       <UploadForm autoOpenDocument={prefs.autoOpenDocument} />
     </div>
