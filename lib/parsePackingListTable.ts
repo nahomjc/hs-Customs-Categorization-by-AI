@@ -7,9 +7,11 @@ import {
 } from "./hsCodeUtils";
 import {
   cleanProductDescription,
+  extractPackingListQuantity,
   isNonItemLine,
   isValidProductDescription,
   normalizeLineQuantity,
+  rejectModelSuffixQuantity,
 } from "./packingListFilters";
 import { isPlausibleHsCode } from "./hsCodeUtils";
 
@@ -35,6 +37,32 @@ function isHeaderLine(line: string): boolean {
   if (HEADER_NOISE.test(t)) return true;
   if (/^description\s+of\s+goods/i.test(t)) return true;
   return false;
+}
+
+/** OCR often puts `PCS 1 15 0,15` on the line after the product description. */
+function attachQuantityTailLines(lines: string[]): string[] {
+  const out: string[] = [];
+  for (const line of lines) {
+    const t = line.trim();
+    if (
+      /^(?:PCS?|Pcs|SETS?|ROLLS?|SQM)\s+\d/i.test(t) &&
+      out.length > 0
+    ) {
+      out[out.length - 1] = `${out[out.length - 1]} ${t}`;
+      continue;
+    }
+    out.push(t);
+  }
+  return out;
+}
+
+function resolveParsedQuantity(
+  rawLine: string,
+  parsedQuantity: number | null,
+): number | null {
+  const packed = extractPackingListQuantity(rawLine);
+  const candidate = packed?.quantity ?? parsedQuantity;
+  return rejectModelSuffixQuantity(rawLine, normalizeLineQuantity(candidate));
 }
 
 /** OCR often splits one table row across several lines — merge until an HS code appears. */
@@ -214,10 +242,12 @@ export function parsePackingListFromText(extractedText: string): {
   const preprocessed = preprocessPackingListOcr(extractedText);
   const hsCodesInDocument = countHsCodesInText(preprocessed);
 
-  const lines = preprocessed
-    .split(/\r?\n/)
-    .map((l) => l.trim())
-    .filter((l) => l.length > 2);
+  const lines = attachQuantityTailLines(
+    preprocessed
+      .split(/\r?\n/)
+      .map((l) => l.trim())
+      .filter((l) => l.length > 2),
+  );
 
   const merged = mergeMultilineTableRows(lines);
   const expanded = expandLinesForTableParse(merged);
@@ -246,10 +276,11 @@ export function parsePackingListFromText(extractedText: string): {
   for (const p of plain) {
     if (isNonItemLine(p.description, p.rawLine)) continue;
     if (!isValidProductDescription(p.description)) continue;
-    const qty = normalizeLineQuantity(p.quantity);
+    const qty = resolveParsedQuantity(p.rawLine, p.quantity);
     aiRows.push({
       ...p,
       quantity: qty ?? 1,
+      unit: extractPackingListQuantity(p.rawLine)?.unit ?? p.unit,
       lineNumber: null,
       sourceHsCode: null,
       specification: null,

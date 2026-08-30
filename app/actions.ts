@@ -3,13 +3,11 @@
 import { db } from "@/db";
 import { documents } from "@/db/schema";
 import { eq } from "drizzle-orm";
-import { createAdminClient } from "@/lib/supabase/admin";
+import { downloadObject } from "@/lib/storage/r2";
 import { parseDocumentFromBuffer } from "@/lib/processDocument";
 import { classifyDocumentBatch } from "@/lib/classifyDocumentItems";
 import { getPreferencesForUploader } from "@/lib/settings/user-settings";
 import type { FileType } from "@/lib/extractText";
-
-const BUCKET = "packing-lists";
 
 /** Parse file into line items (fast). Client should call `classifyDocumentBatch` next. */
 export async function startProcessingDocument(documentId: string) {
@@ -34,16 +32,15 @@ export async function startProcessingDocument(documentId: string) {
       .where(eq(documents.id, documentId));
   }
 
-  const supabase = createAdminClient();
   const path = doc.originalFileUrl;
-  const { data, error } = await supabase.storage.from(BUCKET).download(path);
-  if (error || !data) {
-    return {
-      error: `Failed to download file: ${error?.message ?? "no data"}`,
-    };
+  let buffer: Buffer;
+  try {
+    buffer = await downloadObject(path);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return { error: `Failed to download file: ${message}` };
   }
 
-  const buffer = Buffer.from(await data.arrayBuffer());
   const fileType = doc.fileType as FileType;
 
   try {

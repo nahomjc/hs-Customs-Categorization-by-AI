@@ -1,10 +1,12 @@
-import type { User } from "@supabase/supabase-js";
+import { headers } from "next/headers";
 
 import { ensureUserProfile } from "@/lib/auth/ensure-profile";
 import { DEFAULT_TENANT_ID } from "@/lib/auth/constants";
+import { auth } from "@/lib/auth/better-auth";
 import { getAppOrigin } from "@/lib/auth/redirect-origin";
-import { sendInviteAuthEmail } from "@/lib/emails/send-invite-email";
-import { createAdminClient } from "@/lib/supabase/admin";
+import { setMustChangePassword } from "@/lib/auth/password-policy";
+import { inviteUserEmail } from "@/lib/emails/templates/invite-user";
+import { sendViaBrevo } from "@/lib/emails/send-via-brevo";
 
 export type InviteUserInput = {
   email: string;
@@ -16,133 +18,66 @@ export type InviteUserInput = {
 
 export type InviteUserResult = {
   userId: string;
-  /** User already existed in Supabase Auth (e.g. failed invite earlier). */
   resent: boolean;
 };
-
-async function findAuthUserByEmail(
-  admin: ReturnType<typeof createAdminClient>,
-  email: string
-): Promise<User | null> {
-  let page = 1;
-  const perPage = 200;
-
-  while (page <= 25) {
-    const { data, error } = await admin.auth.admin.listUsers({ page, perPage });
-    if (error) {
-      throw new Error(error.message);
-    }
-
-    const match = data.users.find(
-      (u) => u.email?.toLowerCase() === email.toLowerCase()
-    );
-    if (match) return match;
-
-    if (data.users.length < perPage) break;
-    page += 1;
-  }
-
-  return null;
-}
-
-function isAlreadyRegisteredMessage(message: string): boolean {
-  return /already|exists|registered/i.test(message);
-}
 
 export async function inviteDashboardUser(
   input: InviteUserInput
 ): Promise<InviteUserResult> {
-  const admin = createAdminClient();
   const tenantId = input.tenantId ?? DEFAULT_TENANT_ID;
-  const redirectTo = `${getAppOrigin()}/auth/callback?next=/dashboard`;
-  const metadata = {
-    full_name: input.fullName,
-    name: input.fullName,
-    phone: input.phone,
-    must_change_password: true,
-  };
-
-  let userId: string;
-  let tokenHash: string;
-  let emailActionType: string;
+  const requestHeaders = await headers();
   let resent = false;
+  let userId: string;
 
-  const signupLink = await admin.auth.admin.generateLink({
-    type: "signup",
-    email: input.email,
-    password: input.password,
-    options: {
-      redirectTo,
-      data: metadata,
-    },
-  });
-
-  if (
-    !signupLink.error &&
-    signupLink.data.properties?.hashed_token &&
-    signupLink.data.user?.id
-  ) {
-    userId = signupLink.data.user.id;
-    tokenHash = signupLink.data.properties.hashed_token;
-    emailActionType = "signup";
-  } else if (
-    signupLink.error &&
-    isAlreadyRegisteredMessage(signupLink.error.message)
-  ) {
-    resent = true;
-
-    const magicLink = await admin.auth.admin.generateLink({
-      type: "magiclink",
-      email: input.email,
-      options: {
-        redirectTo,
-        data: metadata,
+  try {
+    const created = await auth.api.createUser({
+      body: {
+        email: input.email,
+        password: input.password,
+        name: input.fullName,
+        role: "user",
       },
+      headers: requestHeaders,
     });
 
-    if (magicLink.error) {
-      throw new Error(magicLink.error.message);
+    if (!created?.user?.id) {
+      throw new Error("Could not create invitation for this email");
     }
 
-    tokenHash = magicLink.data.properties?.hashed_token ?? "";
-    if (!tokenHash) {
-      throw new Error("Could not generate sign-in link for this user");
+    userId = created.user.id;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (!/already|exists|registered/i.test(message)) {
+      throw error;
     }
 
-    userId =
-      magicLink.data.user?.id ??
-      (await findAuthUserByEmail(admin, input.email))?.id ??
-      "";
+    resent = true;
 
-    if (!userId) {
+    const listed = await auth.api.listUsers({
+      query: { searchValue: input.email, searchField: "email", limit: 1 },
+      headers: requestHeaders,
+    });
+
+    const existing = listed?.users?.find(
+      (user) => user.email?.toLowerCase() === input.email.toLowerCase()
+    );
+
+    if (!existing?.id) {
       throw new Error(
-        "This email is registered in authentication but could not be loaded. Remove the user in Supabase → Authentication → Users, or use a different email."
+        "This email is registered but could not be loaded. Try a different email or contact support."
       );
     }
 
-    const { error: updateError } = await admin.auth.admin.updateUserById(userId, {
-      password: input.password,
-      email_confirm: true,
-      user_metadata: metadata,
+    userId = existing.id;
+
+    await auth.api.setUserPassword({
+      body: {
+        userId,
+        newPassword: input.password,
+      },
+      headers: requestHeaders,
     });
-
-    if (updateError) {
-      throw new Error(updateError.message);
-    }
-
-    emailActionType = "magiclink";
-  } else {
-    throw new Error(
-      signupLink.error?.message ?? "Could not create invitation for this email"
-    );
   }
-
-  await sendInviteAuthEmail({
-    email: input.email,
-    tokenHash,
-    redirectTo,
-    emailActionType,
-  });
 
   await ensureUserProfile({
     id: userId,
@@ -150,6 +85,24 @@ export async function inviteDashboardUser(
     fullName: input.fullName,
     phone: input.phone,
     tenantId,
+  });
+
+  await setMustChangePassword(userId);
+
+  const loginUrl = `${getAppOrigin()}/login`;
+  const message = inviteUserEmail({
+    siteUrl: getAppOrigin(),
+    confirmationUrl: loginUrl,
+    email: input.email,
+  });
+
+  await sendViaBrevo({
+    to: input.email,
+    subject: message.subject,
+    html: message.html.replace(
+      loginUrl,
+      `${loginUrl}?email=${encodeURIComponent(input.email)}`
+    ),
   });
 
   return { userId, resent };

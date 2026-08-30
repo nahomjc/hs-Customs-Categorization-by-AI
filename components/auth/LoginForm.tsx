@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { PasswordInput } from "@/components/auth/PasswordInput";
-import { createClient } from "@/lib/supabase/client";
+import { authClient } from "@/lib/auth/auth-client";
 
 export function LoginForm() {
   const router = useRouter();
@@ -28,13 +28,16 @@ export function LoginForm() {
     const email = String(form.get("email") ?? "").trim();
     const password = String(form.get("password") ?? "");
 
-    const supabase = createClient();
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    const { error } = await authClient.signIn.email({
+      email,
+      password,
+      callbackURL: redirectTo,
+    });
 
     setLoading(false);
 
     if (error) {
-      toast.error(error.message);
+      toast.error(error.message ?? "Sign in failed");
       return;
     }
 

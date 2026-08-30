@@ -2,6 +2,7 @@ import Link from "next/link";
 import { UserDetailPanel } from "@/components/dashboard/UserDetailPanel";
 import { getDashboardUserDetail } from "@/lib/dashboard/users";
 import { getSessionUserProfile } from "@/lib/auth/require-admin";
+import { getUserAuditLogs } from "@/lib/import-cases/audit-queries";
 
 export const dynamic = "force-dynamic";
 
@@ -15,6 +16,9 @@ export default async function UserDetailPage({ params }: PageProps) {
     getDashboardUserDetail(id),
     getSessionUserProfile(),
   ]);
+
+  const activityLog =
+    user != null ? await getUserAuditLogs(user.id, user.tenantId) : [];
   const canManageRoles = session?.profile?.role === "admin";
 
   if (!user) {
@@ -60,6 +64,7 @@ export default async function UserDetailPage({ params }: PageProps) {
       </Link>
       <UserDetailPanel
         user={user}
+        activityLog={activityLog}
         canManageRoles={canManageRoles}
         viewerRole={session?.profile?.role ?? null}
       />

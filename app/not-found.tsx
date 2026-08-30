@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { Inter } from "next/font/google";
 import { BrandLogo } from "@/components/BrandLogo";
-import { createClient } from "@/lib/supabase/server";
+import { getAuthUser } from "@/lib/auth/session";
 
 const inter = Inter({ subsets: ["latin"], display: "swap" });
 
@@ -12,10 +12,7 @@ export const metadata: Metadata = {
 };
 
 export default async function NotFound() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getAuthUser();
 
   return (
     <div className={`landing-page min-h-screen flex flex-col ${inter.className}`}>

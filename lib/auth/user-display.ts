@@ -1,15 +1,21 @@
-import type { User } from "@supabase/supabase-js";
+import type { AuthUserLike } from "@/lib/auth/require-admin";
 import type { UserMenuUser } from "@/components/auth/UserMenu";
 
-export function toUserMenuUser(user: User): UserMenuUser {
+type ProfileDisplayFields = {
+  fullName?: string | null;
+  avatarUrl?: string | null;
+};
+
+export function toUserMenuUser(
+  user: AuthUserLike,
+  profile?: ProfileDisplayFields | null,
+): UserMenuUser {
+  const profileName = profile?.fullName?.trim();
+  const authName = user.name?.trim();
+
   return {
     email: user.email ?? "",
-    name:
-      (user.user_metadata?.full_name as string | undefined) ??
-      (user.user_metadata?.name as string | undefined),
-    avatarUrl:
-      (user.user_metadata?.avatar_url as string | undefined) ??
-      (user.user_metadata?.picture as string | undefined) ??
-      null,
+    name: profileName || authName || undefined,
+    avatarUrl: profile?.avatarUrl ?? user.image ?? null,
   };
 }

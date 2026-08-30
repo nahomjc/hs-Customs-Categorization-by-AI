@@ -5,15 +5,12 @@ import { canUseTenantDocumentScope } from "@/lib/settings/document-scope";
 import { getUserPreferences } from "@/lib/settings/user-settings";
 import { getDashboardUserDetail } from "@/lib/dashboard/users";
 import { DEFAULT_TENANT_ID } from "@/lib/auth/constants";
-import { createClient } from "@/lib/supabase/server";
+import { getAuthUser } from "@/lib/auth/session";
 
 export const dynamic = "force-dynamic";
 
 export default async function SettingsPage() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getAuthUser();
 
   if (!user?.id || !user.email) {
     return null;
@@ -22,10 +19,7 @@ export default async function SettingsPage() {
   const row = await getDashboardUserDetail(user.id);
   const profile = row ?? {
     email: user.email,
-    fullName:
-      (user.user_metadata?.full_name as string | undefined) ??
-      (user.user_metadata?.name as string | undefined) ??
-      null,
+    fullName: user.name ?? null,
     role: "user",
     meta: {},
     tenantId: DEFAULT_TENANT_ID,

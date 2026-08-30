@@ -6,7 +6,7 @@ import {
   mergePreferences,
   type UserPreferences,
 } from "@/lib/auth/settings-meta";
-import { createClient } from "@/lib/supabase/server";
+import { getAuthUser } from "@/lib/auth/session";
 import {
   getUserPreferences,
   setUserPreferences,
@@ -14,10 +14,7 @@ import {
 import { eq } from "drizzle-orm";
 
 export async function GET() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getAuthUser();
 
   if (!user?.id) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -38,10 +35,7 @@ export async function GET() {
 }
 
 export async function PATCH(request: Request) {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getAuthUser();
 
   if (!user?.id) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -103,13 +97,6 @@ export async function PATCH(request: Request) {
         updatedAt: new Date(),
       })
       .where(eq(users.id, user.id));
-
-    await supabase.auth.updateUser({
-      data: {
-        full_name: fullName ?? undefined,
-        name: fullName ?? undefined,
-      },
-    });
   } catch (err) {
     console.error("[settings PATCH]", err);
     return NextResponse.json(

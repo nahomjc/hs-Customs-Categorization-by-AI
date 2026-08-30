@@ -10,7 +10,7 @@ import { PricingSection } from "@/components/landing/PricingSection";
 import { SolutionsSection } from "@/components/landing/SolutionsSection";
 import { TelegramMonitoringSection } from "@/components/landing/TelegramMonitoringSection";
 import { toUserMenuUser } from "@/lib/auth/user-display";
-import { createClient } from "@/lib/supabase/server";
+import { getAuthUser } from "@/lib/auth/session";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -18,10 +18,7 @@ const inter = Inter({
 });
 
 export default async function HomePage() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getAuthUser();
 
   return (
     <div className={`landing-page w-full min-h-screen flex flex-col ${inter.className}`}>

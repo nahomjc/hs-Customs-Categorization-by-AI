@@ -240,12 +240,49 @@ body {
 	--dark-bg-elevated: #1f2937;
 	--dark-foreground: #f9fafb;
 	--dark-foreground-muted: #9ca3af;
+	--dashboard-fab-safe: 11rem;
+	--dashboard-fab-bottom: 5.5rem;
 	background-color: var(--background);
 	color: var(--foreground);
 }
 
 .dashboard-page *:focus-visible {
 	outline-color: #007bff;
+}
+
+.dashboard-container {
+	width: 100%;
+	max-width: calc(100% - 1.5rem);
+	margin-left: auto;
+	margin-right: auto;
+	padding-left: 1rem;
+	padding-right: 1rem;
+}
+
+@media (min-width: 640px) {
+	.dashboard-container {
+		max-width: calc(100% - 2.5rem);
+		padding-left: 1.25rem;
+		padding-right: 1.25rem;
+	}
+}
+
+@media (min-width: 1280px) {
+	.dashboard-container {
+		max-width: calc(100% - 4rem);
+		padding-left: 1.5rem;
+		padding-right: 1.5rem;
+	}
+}
+
+.dashboard-sticky-actions {
+	margin-right: 5rem;
+}
+
+@media (min-width: 640px) {
+	.dashboard-sticky-actions {
+		margin-right: var(--dashboard-fab-safe);
+	}
 }
 
 /* Intro splash — white + blue (matches landing-page) */

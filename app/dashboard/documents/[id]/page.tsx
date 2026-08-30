@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import { db } from "@/db";
 import { clampPreferencesForRole } from "@/lib/auth/settings-meta";
-import { createClient } from "@/lib/supabase/server";
+import { getAuthUser } from "@/lib/auth/session";
 import { getUserPreferences } from "@/lib/settings/user-settings";
 import {
   documents,
@@ -65,10 +65,7 @@ export default async function DocumentPage({
     .from(groupedItems)
     .where(eq(groupedItems.documentId, id));
 
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getAuthUser();
   let defaultExportFormat: "xlsx" | "csv" = "xlsx";
   if (user?.id) {
     const [profile] = await db

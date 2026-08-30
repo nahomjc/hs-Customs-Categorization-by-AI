@@ -1,22 +1,18 @@
 import type { NextRequest } from "next/server";
 import { eq } from "drizzle-orm";
+import { v4 as uuid } from "uuid";
+
 import { db } from "@/db";
 import { documents } from "@/db/schema";
 import { ensureUserProfile } from "@/lib/auth/ensure-profile";
 import { DEFAULT_TENANT_ID } from "@/lib/auth/constants";
-import { createAdminClient } from "@/lib/supabase/admin";
-import { createClient } from "@/lib/supabase/server";
-import { v4 as uuid } from "uuid";
+import { getAuthUser } from "@/lib/auth/session";
+import { uploadObject } from "@/lib/storage/r2";
 
 const INVALID_UPLOADER_IDS = new Set(["user", "test-user"]);
 
-const BUCKET = "packing-lists";
-
 export async function POST(req: NextRequest) {
-  const supabaseAuth = await createClient();
-  const {
-    data: { user },
-  } = await supabaseAuth.auth.getUser();
+  const user = await getAuthUser();
 
   if (!user?.id || INVALID_UPLOADER_IDS.has(user.id)) {
     return Response.json({ error: "Unauthorized" }, { status: 401 });
@@ -29,11 +25,8 @@ export async function POST(req: NextRequest) {
   await ensureUserProfile({
     id: user.id,
     email: user.email,
-    fullName:
-      (user.user_metadata?.full_name as string | undefined) ??
-      (user.user_metadata?.name as string | undefined) ??
-      null,
-    avatarUrl: (user.user_metadata?.avatar_url as string | undefined) ?? null,
+    fullName: user.name ?? null,
+    avatarUrl: user.image ?? null,
   });
 
   const form = await req.formData();
@@ -50,47 +43,11 @@ export async function POST(req: NextRequest) {
   const tenantId = DEFAULT_TENANT_ID;
   const path = `${tenantId}/${docId}/file.${ext}`;
 
-  let supabase: ReturnType<typeof createAdminClient>;
   try {
-    supabase = createAdminClient();
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e);
-    return Response.json(
-      {
-        error:
-          msg.includes("Compact JWS") || msg.includes("JWT")
-            ? "Invalid Supabase service role key. In Vercel, set SUPABASE_SERVICE_ROLE_KEY to the service_role secret from Project Settings → API (not the anon key)."
-            : msg,
-      },
-      { status: 500 }
-    );
-  }
-
-  let result = await supabase.storage.from(BUCKET).upload(path, buffer, {
-    contentType: file.type,
-    upsert: true,
-  });
-
-  // Create bucket if it doesn't exist (e.g. first deploy), then retry upload
-  if (result.error?.message?.includes("Bucket not found")) {
-    await supabase.storage.createBucket(BUCKET, { public: false });
-    result = await supabase.storage.from(BUCKET).upload(path, buffer, {
-      contentType: file.type,
-      upsert: true,
-    });
-  }
-
-  if (result.error) {
-    const msg = result.error.message;
-    return Response.json(
-      {
-        error:
-          msg.includes("Compact JWS") || msg.includes("JWT")
-            ? "Invalid Supabase key. In Vercel, set SUPABASE_SERVICE_ROLE_KEY to the service_role secret from Project Settings → API."
-            : msg,
-      },
-      { status: 500 }
-    );
+    await uploadObject(path, buffer, file.type || "application/octet-stream");
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return Response.json({ error: message }, { status: 500 });
   }
 
   const [inserted] = await db
@@ -101,7 +58,7 @@ export async function POST(req: NextRequest) {
       uploadedBy: user.id,
       originalFileUrl: path,
       originalFileName: file.name,
-      fileType: fileType as "pdf" | "docx" | "xlsx",
+      fileType: fileType as "pdf" | "docx" | "xlsx" | "csv",
       status: "uploaded",
     })
     .returning({ id: documents.id, uploadedBy: documents.uploadedBy });

@@ -22,12 +22,28 @@ export function generateCategorizedCsv(
   grouped: GroupedItem[],
   options?: { lineItems?: LineItemExportRow[] }
 ): Buffer {
-  const filtered = grouped.filter(
-    (row) => !isExcludedHsCode(row.hsCode) && !isNonItemCategory(row.category)
-  );
+  const filtered = grouped
+    .filter(
+      (row) =>
+        !isExcludedHsCode(row.hsCode) && !isNonItemCategory(row.category),
+    )
+    .sort((a, b) => a.hsCode.localeCompare(b.hsCode));
 
   const lineItems = options?.lineItems ?? [];
   const sections: string[] = [];
+
+  sections.push(
+    rowsToCsv(
+      ["HS Code", "Category", "Total Qty", "Unit", "Description"],
+      filtered.map((r) => [
+        r.hsCode,
+        r.category,
+        r.totalQuantity,
+        r.unit ?? "PCS",
+        r.finalDescription,
+      ]),
+    ),
+  );
 
   if (lineItems.length > 0) {
     sections.push(
@@ -53,23 +69,10 @@ export function generateCategorizedCsv(
           r.unit,
           r.specification,
           r.reviewFlag,
-        ])
-      )
+        ]),
+      ),
     );
   }
-
-  sections.push(
-    rowsToCsv(
-      ["HS Code", "Category", "Description", "Total Qty", "Unit"],
-      filtered.map((r) => [
-        r.hsCode,
-        r.category,
-        r.finalDescription,
-        r.totalQuantity,
-        r.unit ?? "CTNS",
-      ])
-    )
-  );
 
   return Buffer.from(sections.join("\r\n\r\n"), "utf-8");
 }

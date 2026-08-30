@@ -42,6 +42,21 @@ const METADATA_COMBO =
 const MAX_LINE_QTY = 5000;
 const MIN_PRODUCT_LETTERS = 2;
 
+const PACKING_UNIT_CAPTURE =
+  /(PCS?|PIECES?|SETS?|SET|UNITS?|BOX(?:ES)?|CARTONS?|CTNS?|ROLLS?|SQM|SQ\.?M\.?|SKETCHES?|Pcs)/i;
+
+/** YAMATA-style rows: `... China 8 PCS 8 93 0,84` — qty is the number before the unit. */
+const YAMATA_QTY_PATTERN = new RegExp(
+  String.raw`\b(?:China|RE)\s+(\d{1,4})\s+${PACKING_UNIT_CAPTURE.source}\b`,
+  "i",
+);
+
+/** Merged tail: `... PCS 1 15 0,15` when country column is missing from OCR. */
+const EMBEDDED_PCS_QTY_PATTERN = new RegExp(
+  String.raw`\b${PACKING_UNIT_CAPTURE.source}\s+(\d{1,4})(?:\s+\d+(?:[.,]\d+)?\s*){1,2}$`,
+  "i",
+);
+
 export function normalizeLineQuantity(
   quantity: number | null | undefined
 ): number | null {
@@ -49,6 +64,72 @@ export function normalizeLineQuantity(
   const n = Math.floor(Number(quantity));
   if (n < 1 || n > MAX_LINE_QTY) return null;
   return n;
+}
+
+/** Normalize unit strings from packing lists. */
+export function normalizePackingUnit(raw: string): string {
+  const u = raw.toUpperCase().replace(/\./g, "");
+  if (u === "PC" || u === "PIECE" || u === "PIECES") return "PCS";
+  if (u === "CTN" || u === "CARTON" || u === "CARTONS") return "CTNS";
+  if (u === "SET" || u === "SETS") return "SET";
+  if (u === "ROLL" || u === "ROLLS") return "ROLLS";
+  if (u === "SQM" || u === "SQ M") return "SQM";
+  if (u === "SKETCHE" || u === "SKETCHES") return "PCS";
+  return u;
+}
+
+/**
+ * Extract piece/carton quantity from common packing-list OCR patterns.
+ * Prefer this over a trailing number on the description (e.g. Handles-50).
+ */
+export function extractPackingListQuantity(
+  line: string,
+): { quantity: number; unit: string } | null {
+  const text = line.replace(/\s+/g, " ").trim();
+  if (!text) return null;
+
+  const yamata = text.match(YAMATA_QTY_PATTERN);
+  if (yamata) {
+    const quantity = normalizeLineQuantity(Number.parseInt(yamata[1], 10));
+    if (quantity) {
+      return { quantity, unit: normalizePackingUnit(yamata[2]) };
+    }
+  }
+
+  const embedded = text.match(EMBEDDED_PCS_QTY_PATTERN);
+  if (embedded) {
+    const quantity = normalizeLineQuantity(Number.parseInt(embedded[2], 10));
+    if (quantity) {
+      return { quantity, unit: normalizePackingUnit(embedded[1]) };
+    }
+  }
+
+  return null;
+}
+
+/** Remove packing qty/unit tokens so the remainder is the product description. */
+export function stripPackingListQuantityTokens(line: string): string {
+  return line
+    .replace(YAMATA_QTY_PATTERN, " ")
+    .replace(EMBEDDED_PCS_QTY_PATTERN, " ")
+    .replace(/\b(?:China|RE)\s*$/i, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/** Drop qty when it is a model suffix (e.g. Handles-50) rather than a packing count. */
+export function rejectModelSuffixQuantity(
+  line: string,
+  quantity: number | null,
+): number | null {
+  if (quantity == null) return null;
+  const modelSuffix = line.match(
+    /(?:handles?|pull|size|model|type|no\.?|#)\s*[-–]?\s*(\d{2,3})\b/i,
+  );
+  if (modelSuffix && Number.parseInt(modelSuffix[1], 10) === quantity) {
+    return null;
+  }
+  return quantity;
 }
 
 export function isNonItemLine(

@@ -7,6 +7,27 @@ export const STATUS_STYLES: Record<string, string> = {
   ai_processed: "bg-blue-100 text-blue-800",
   completed: "bg-emerald-100 text-emerald-800",
   failed: "bg-red-100 text-red-800",
+  draft: "bg-slate-100 text-slate-700",
+  documents_uploaded: "bg-sky-100 text-sky-800",
+  extraction_in_progress: "bg-amber-100 text-amber-800",
+  needs_information: "bg-orange-100 text-orange-800",
+  ready_for_classification: "bg-indigo-100 text-indigo-800",
+  classification_in_review: "bg-violet-100 text-violet-800",
+  ready_for_declaration: "bg-emerald-100 text-emerald-800",
+  cancelled: "bg-red-100 text-red-700",
+  processing: "bg-amber-100 text-amber-800",
+  extracted: "bg-blue-100 text-blue-800",
+  needs_review: "bg-orange-100 text-orange-800",
+  approved: "bg-emerald-100 text-emerald-800",
+  rejected: "bg-red-100 text-red-800",
+  pending: "bg-slate-100 text-slate-600",
+  reviewed: "bg-emerald-100 text-emerald-800",
+  error: "bg-red-100 text-red-800",
+  warning: "bg-amber-100 text-amber-800",
+  info: "bg-blue-100 text-blue-800",
+  open: "bg-orange-100 text-orange-800",
+  resolved: "bg-emerald-100 text-emerald-800",
+  ignored: "bg-slate-100 text-slate-500",
 };
 
 export function StatusBadge({
@@ -23,6 +44,28 @@ export function StatusBadge({
       className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${styles}`}
     >
       {label}
+    </span>
+  );
+}
+
+/** Single-line truncation with native browser tooltip on hover. */
+export function TruncatedText({
+  text,
+  className = "",
+  title,
+}: {
+  text: string;
+  className?: string;
+  /** Defaults to full `text` when truncated content may be clipped. */
+  title?: string;
+}) {
+  const tooltip = title ?? text;
+  return (
+    <span
+      title={tooltip}
+      className={`block truncate ${className}`}
+    >
+      {text}
     </span>
   );
 }
@@ -86,7 +129,7 @@ export function DashCard({
 }) {
   return (
     <div
-      className={`landing-float-card bg-white rounded-2xl overflow-hidden ${className}`}
+      className={`rounded-3xl border border-slate-200/70 bg-white overflow-hidden shadow-[0_4px_24px_-8px_rgba(15,23,42,0.08)] ${className}`}
     >
       {children}
     </div>
@@ -101,8 +144,8 @@ export function DashCardHeader({
   action?: ReactNode;
 }) {
   return (
-    <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between flex-wrap gap-3">
-      <h2 className="font-semibold text-gray-900">{title}</h2>
+    <div className="border-b border-slate-100 px-5 py-4 flex items-center justify-between flex-wrap gap-3">
+      <h2 className="font-bold text-slate-900">{title}</h2>
       {action}
     </div>
   );
@@ -129,7 +172,7 @@ export function DashButton({
     "inline-flex items-center justify-center gap-2 font-semibold text-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed";
   const variants = {
     primary:
-      "px-5 py-2.5 rounded-full bg-[#007bff] text-white hover:bg-[#0069d9] shadow-md shadow-blue-500/20",
+      "px-5 py-2.5 rounded-2xl bg-gradient-to-r from-indigo-600 via-violet-600 to-indigo-600 text-white hover:shadow-lg hover:shadow-indigo-500/25 shadow-md shadow-indigo-500/20",
     secondary:
       "px-5 py-2.5 rounded-full border border-gray-200 bg-white text-gray-900 hover:bg-gray-50",
     ghost:

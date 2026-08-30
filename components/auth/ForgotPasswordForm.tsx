@@ -4,8 +4,8 @@ import Link from "next/link";
 import { useState } from "react";
 import { toast } from "sonner";
 import { getAuthErrorMessage } from "@/lib/auth/auth-error-message";
+import { authClient } from "@/lib/auth/auth-client";
 import { getRedirectOrigin } from "@/lib/auth/redirect-origin";
-import { createClient } from "@/lib/supabase/client";
 
 export function ForgotPasswordForm() {
   const [loading, setLoading] = useState(false);
@@ -17,17 +17,18 @@ export function ForgotPasswordForm() {
 
     const form = new FormData(e.currentTarget);
     const email = String(form.get("email") ?? "").trim();
+
     const origin = getRedirectOrigin();
 
-    const supabase = createClient();
-    const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${origin}/auth/callback?next=/reset-password`,
+    const { error } = await authClient.requestPasswordReset({
+      email,
+      redirectTo: `${origin}/reset-password`,
     });
 
     setLoading(false);
 
     if (error) {
-      toast.error(getAuthErrorMessage(error));
+      toast.error(getAuthErrorMessage({ message: error.message, status: error.status }));
       return;
     }
 

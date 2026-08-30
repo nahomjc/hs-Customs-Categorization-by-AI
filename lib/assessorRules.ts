@@ -45,6 +45,24 @@ const FORCE_RULES: Array<{
     hsCode: "8516",
     category: "Electrical equipment",
   },
+  // Fan motor spec fragments (from OCR) — not computers 8471
+  {
+    match: (d) =>
+      /copper\s*coil\s*motor|coil\s*motor|motor\s*with\s*power\s*cord/i.test(
+        d,
+      ) && !/computer|laptop|notebook|tablet|server|printer/i.test(d),
+    hsCode: "8414",
+    category: "HVAC (AC/fans)",
+  },
+  // Fibreglass / glass-wool insulation
+  {
+    match: (d) =>
+      /fib(?:er|re)glass|glass\s*wool|heat\s*insulation|thermal\s*insulation/i.test(
+        d,
+      ),
+    hsCode: "7019",
+    category: "Glass fibres and insulation",
+  },
   // Cutlery / scissors
   {
     match: (d) => /\bscissors?\b/i.test(d),
@@ -71,6 +89,24 @@ const FORCE_RULES: Array<{
     match: (d) => /fountain\b/i.test(d),
     hsCode: "8413",
     category: "Pumps for liquids",
+  },
+  // Lighting — lamps, pendants, LED track, spotlights (never chapter 15 oils, etc.)
+  {
+    match: (d) =>
+      /led|lamp|lights?|pendant|track\s*light|spotlight|chandelier|magnetic\s*track|luminaire|lighting|pendent\s*light|wall\s*light/i.test(
+        d,
+      ),
+    hsCode: "9405",
+    category: "Lighting equipment",
+  },
+  // Artificial plants / decorative trees
+  {
+    match: (d) =>
+      /artificial\s+(plant|flower|tree)|taro\s+plant|ficus|artificial\s+ficus/i.test(
+        d,
+      ),
+    hsCode: "6702",
+    category: "Decor/artificial plants",
   },
 ];
 
@@ -110,6 +146,54 @@ const FALLBACK_9999_RULES: Array<{
     match: (d) => /fountain\b/i.test(d),
     hsCode: "8413",
     category: "Pumps for liquids",
+  },
+  {
+    match: (d) =>
+      /fib(?:er|re)glass|glass\s*wool|heat\s*insulation|thermal\s*insulation/i.test(
+        d,
+      ),
+    hsCode: "7019",
+    category: "Glass fibres and insulation",
+  },
+  {
+    match: (d) => /soybean|soya\s*bean|soy\s*oil|degummed/i.test(d),
+    hsCode: "1507.90",
+    category: "Soya-bean oil",
+  },
+  {
+    match: (d) => /palm\s*olein|palm\s*oil|RBD/i.test(d),
+    hsCode: "1511.90",
+    category: "Palm oil",
+  },
+  {
+    match: (d) => /\btea\b|green\s*tea/i.test(d),
+    hsCode: "0902.10",
+    category: "Green tea",
+  },
+  {
+    match: (d) => /\bsugar\b/i.test(d),
+    hsCode: "1701.99",
+    category: "Sugar",
+  },
+  {
+    match: (d) => /kidney\s*bean|red\s*bean/i.test(d),
+    hsCode: "0713.33",
+    category: "Dried kidney beans",
+  },
+  {
+    match: (d) => /tomato\s*paste/i.test(d),
+    hsCode: "2002.90",
+    category: "Tomato paste",
+  },
+  {
+    match: (d) => /luncheon\s*meat|chicken\s*meat/i.test(d),
+    hsCode: "1602.32",
+    category: "Prepared poultry",
+  },
+  {
+    match: (d) => /mandarin|orange.*syrup|citrus/i.test(d),
+    hsCode: "0805.21",
+    category: "Mandarins",
   },
 ];
 
@@ -175,6 +259,22 @@ export function applyAssessorRules(
       ...result,
       hsCode: "6913",
       category: "Decorative ceramics",
+      cleanDescription: result.cleanDescription || description,
+    };
+  }
+
+  // 5) Fan motor fragments misclassified as computers
+  if (
+    result.hsCode === "8471" &&
+    /copper\s*coil\s*motor|coil\s*motor|motor\s*with\s*power\s*cord/i.test(
+      combined,
+    ) &&
+    !/computer|laptop|notebook|tablet|server|printer/i.test(combined)
+  ) {
+    return {
+      ...result,
+      hsCode: "8414",
+      category: "HVAC (AC/fans)",
       cleanDescription: result.cleanDescription || description,
     };
   }

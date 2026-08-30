@@ -3,15 +3,13 @@ import { UserDetailPanel } from "@/components/dashboard/UserDetailPanel";
 import { PageHeader } from "@/components/dashboard/ui";
 import { getDashboardUserDetail } from "@/lib/dashboard/users";
 import { DEFAULT_TENANT_ID } from "@/lib/auth/constants";
-import { createClient } from "@/lib/supabase/server";
+import { getAuthUser } from "@/lib/auth/session";
+import { getUserAuditLogs } from "@/lib/import-cases/audit-queries";
 
 export const dynamic = "force-dynamic";
 
 export default async function AccountPage() {
-  const supabase = await createClient();
-  const {
-    data: { user: authUser },
-  } = await supabase.auth.getUser();
+  const authUser = await getAuthUser();
 
   if (!authUser?.id || !authUser.email) {
     return null;
@@ -22,32 +20,18 @@ export default async function AccountPage() {
       id: authUser.id,
       tenantId: DEFAULT_TENANT_ID,
       email: authUser.email,
-      fullName:
-        (authUser.user_metadata?.full_name as string | undefined) ??
-        (authUser.user_metadata?.name as string | undefined) ??
-        null,
-      avatarUrl: (authUser.user_metadata?.avatar_url as string | undefined) ?? null,
+      fullName: authUser.name ?? null,
+      avatarUrl: authUser.image ?? null,
       role: "user",
       status: "active",
       meta: {},
-      createdAt: authUser.created_at
-        ? new Date(authUser.created_at)
-        : new Date(0),
-      updatedAt: authUser.updated_at
-        ? new Date(authUser.updated_at)
-        : authUser.created_at
-          ? new Date(authUser.created_at)
-          : new Date(0),
+      createdAt: new Date(authUser.createdAt),
+      updatedAt: new Date(authUser.updatedAt),
       documentCount: 0,
       recentDocuments: [],
     };
 
-  const lastSignIn = authUser.last_sign_in_at
-    ? new Date(authUser.last_sign_in_at).toLocaleString(undefined, {
-        dateStyle: "medium",
-        timeStyle: "short",
-      })
-    : null;
+  const activityLog = await getUserAuditLogs(profile.id, profile.tenantId);
 
   return (
     <div className="space-y-8">
@@ -78,13 +62,7 @@ export default async function AccountPage() {
         description="Your profile, role, and recent document activity."
       />
 
-      {lastSignIn ? (
-        <p className="text-sm text-gray-500 -mt-4">
-          Last sign in: <span className="text-gray-700">{lastSignIn}</span>
-        </p>
-      ) : null}
-
-      <UserDetailPanel user={profile} variant="self" />
+      <UserDetailPanel user={profile} variant="self" activityLog={activityLog} />
     </div>
   );
 }

@@ -5,17 +5,75 @@ import { documents } from "@/db/schema";
 import { completeChat, type ChatMessage } from "@/lib/ai/openrouter-chat";
 import { DEFAULT_TENANT_ID } from "@/lib/auth/constants";
 import { documentsUploadedByUser } from "@/lib/dashboard/document-ownership";
-import { createClient } from "@/lib/supabase/server";
+import { getAuthUser } from "@/lib/auth/session";
+import { classifyProductDescription } from "@/lib/import-cases/classify-product-description";
 
 const MAX_HISTORY = 12;
 
 type ClientMessage = { role: "user" | "assistant"; content: string };
 
+function looksLikeHsClassificationQuestion(text: string): boolean {
+  const lower = text.toLowerCase();
+  const hasHsIntent =
+    /\bhs\s*code\b|\bharmonized\b|\btariff\b|\bclassif(y|ication)\b|\bwhat\s+code\b|\bwhich\s+code\b/.test(
+      lower,
+    );
+  const hasProductSignal =
+    /\b(oil|tea|sugar|bean|meat|lamp|chair|furniture|tomato|palm|soy|mandarin|import)\b/i.test(
+      text,
+    ) || text.length > 25;
+  return hasHsIntent && hasProductSignal;
+}
+
+function extractProductDescriptionFromQuestion(text: string): string {
+  const quoted =
+    text.match(/["“](.+?)["”]/)?.[1] ??
+    text.match(/for[:\s]+(.+?)(?:\?|$)/i)?.[1]?.trim();
+  if (quoted && quoted.length >= 5) return quoted.trim();
+
+  return text
+    .replace(
+      /^(what|which)\s+(is\s+)?(the\s+)?(hs\s*code|harmonized\s+code|tariff\s+code)\s+(for|of)\s+/i,
+      "",
+    )
+    .replace(/\?+$/, "")
+    .trim();
+}
+
+async function buildHsClassificationReply(description: string): Promise<string> {
+  const result = await classifyProductDescription(description, { forceAi: true });
+
+  if (!result.isImportItem || result.hsCode === "EXCLUDE") {
+    return `I could not classify "${description}" as an import product. Try a clearer product description (e.g. "Palm olein RBD oil bulk").`;
+  }
+
+  const sourceLabel =
+    result.source === "reference_match"
+      ? "tariff reference match"
+      : result.source === "ai_suggestion"
+        ? "AI + tariff rules"
+        : "rule fallback";
+
+  const confidence =
+    result.confidence != null
+      ? ` (confidence ${Math.round(result.confidence * 100)}%)`
+      : "";
+
+  let reply = `Suggested HS code for "${result.cleanDescription || description}": **${result.hsCode}**${confidence}\n\nCategory: ${result.category}\nSource: ${sourceLabel}`;
+
+  if (result.hsCode === "9999" || result.hsCode.startsWith("9999.")) {
+    reply +=
+      "\n\nThis needs human review — the system could not find a confident match. Upload your tariff book at HS Reference, or set the code manually on the Classification tab.";
+  } else {
+    reply +=
+      "\n\nAlways verify against your national tariff schedule before declaration. For import cases, use the Classification tab → Ask AI on the product row.";
+  }
+
+  return reply;
+}
+
 export async function POST(request: Request) {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getAuthUser();
 
   if (!user?.id) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -33,6 +91,22 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "message is required" }, { status: 400 });
   }
 
+  if (looksLikeHsClassificationQuestion(message)) {
+    try {
+      const description = extractProductDescriptionFromQuestion(message);
+      const content = await buildHsClassificationReply(description);
+      return NextResponse.json({ content });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Classification failed";
+      return NextResponse.json(
+        {
+          content: `I couldn't classify that product (${msg}). Make sure OPENROUTER_API_KEY is set, or use Classification → Ask AI on your import case.`,
+        },
+        { status: 200 },
+      );
+    }
+  }
+
   const history = Array.isArray(body.history)
     ? body.history
         .filter(
@@ -44,11 +118,7 @@ export async function POST(request: Request) {
         .slice(-MAX_HISTORY)
     : [];
 
-  const displayName =
-    (user.user_metadata?.full_name as string | undefined) ??
-    (user.user_metadata?.name as string | undefined) ??
-    user.email ??
-    "User";
+  const displayName = user.name ?? user.email ?? "User";
 
   let recentDocsSummary = "No documents uploaded yet.";
   try {
@@ -94,7 +164,7 @@ The signed-in user is ${displayName} (${user.email ?? "unknown email"}).
 Their recent uploads:
 ${recentDocsSummary}
 
-Be concise, practical, and accurate. If you don't know something specific about their data, say so and suggest where in the app to look (e.g. History, open a document, Upload). Do not invent document contents or HS codes. For document-specific line items, tell them to open that document and use "Ask AI" on the document page.`;
+Be concise, practical, and accurate. If you don't know something specific about their data, say so and suggest where in the app to look (e.g. History, open a document, Upload). For HS code questions about a product description, the system will classify automatically — otherwise suggest the Classification tab → Ask AI. Do not invent document contents.`;
 
   const messages: ChatMessage[] = [
     { role: "system", content: systemPrompt },

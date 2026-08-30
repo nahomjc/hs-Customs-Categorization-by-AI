@@ -2,7 +2,26 @@ import mammoth from "mammoth";
 import * as XLSX from "xlsx";
 import { extractPdfTextViaOpenRouter } from "./extractPdfOcr";
 
-export type FileType = "pdf" | "docx" | "xlsx";
+export type FileType = "pdf" | "docx" | "xlsx" | "csv";
+
+function spreadsheetBufferToText(buffer: Buffer): string {
+  const workbook = XLSX.read(buffer, { type: "buffer" });
+  const lines: string[] = [];
+  for (const sheetName of workbook.SheetNames) {
+    const sheet = workbook.Sheets[sheetName];
+    const data = XLSX.utils.sheet_to_json<string[]>(sheet, {
+      header: 1,
+      defval: "",
+    });
+    for (const row of data) {
+      const rowText = Array.isArray(row)
+        ? row.map((c) => String(c ?? "")).join("\t")
+        : String(row);
+      if (rowText.trim()) lines.push(rowText.trim());
+    }
+  }
+  return lines.join("\n");
+}
 
 export async function extractTextFromBuffer(
   buffer: Buffer,
@@ -13,23 +32,8 @@ export async function extractTextFromBuffer(
     return result.value;
   }
 
-  if (fileType === "xlsx") {
-    const workbook = XLSX.read(buffer, { type: "buffer" });
-    const lines: string[] = [];
-    for (const sheetName of workbook.SheetNames) {
-      const sheet = workbook.Sheets[sheetName];
-      const data = XLSX.utils.sheet_to_json<string[]>(sheet, {
-        header: 1,
-        defval: "",
-      });
-      for (const row of data) {
-        const rowText = Array.isArray(row)
-          ? row.map((c) => String(c ?? "")).join("\t")
-          : String(row);
-        if (rowText.trim()) lines.push(rowText.trim());
-      }
-    }
-    return lines.join("\n");
+  if (fileType === "xlsx" || fileType === "csv") {
+    return spreadsheetBufferToText(buffer);
   }
 
   if (fileType === "pdf") {

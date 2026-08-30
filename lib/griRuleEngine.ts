@@ -82,6 +82,69 @@ export function applyGriRuleEngine(features: HsFeatures): GriRuleResult {
     };
   }
 
+  if (/soybean|soya\s*bean|soy\s*oil/.test(text)) {
+    return {
+      suggestedHsCodes: ["1507", "1507.10", "1507.90"],
+      rationale: "GRI guidance: soybean oil is classified in heading 1507.",
+    };
+  }
+
+  if (/palm\s*olein|palm\s*oil|RBD\s*oil/.test(text)) {
+    return {
+      suggestedHsCodes: ["1511", "1511.10", "1511.90"],
+      rationale: "GRI guidance: palm oil and fractions are classified in heading 1511.",
+    };
+  }
+
+  if (/\b(cooking\s*)?oil\b|crude\s*oil|vegetable\s*oil|degummed/.test(text)) {
+    return {
+      suggestedHsCodes: ["1507", "1508", "1509", "1511", "1512"],
+      rationale: "GRI guidance: vegetable/animal oils are generally in chapter 15.",
+    };
+  }
+
+  if (/\btea\b|green\s*tea|black\s*tea/.test(text)) {
+    return {
+      suggestedHsCodes: ["0902", "0902.10", "0902.20"],
+      rationale: "GRI guidance: tea is classified in heading 0902.",
+    };
+  }
+
+  if (/\bsugar\b|sucrose/.test(text)) {
+    return {
+      suggestedHsCodes: ["1701", "1701.99"],
+      rationale: "GRI guidance: cane/beet sugar is classified in heading 1701.",
+    };
+  }
+
+  if (/kidney\s*bean|red\s*bean|dried\s*bean|pulse/.test(text)) {
+    return {
+      suggestedHsCodes: ["0713", "0713.33"],
+      rationale: "GRI guidance: dried leguminous vegetables are in heading 0713.",
+    };
+  }
+
+  if (/tomato\s*paste|tomato\s*puree/.test(text)) {
+    return {
+      suggestedHsCodes: ["2002", "2002.90"],
+      rationale: "GRI guidance: tomato paste is classified in heading 2002.",
+    };
+  }
+
+  if (/luncheon\s*meat|chicken\s*meat|poultry/.test(text)) {
+    return {
+      suggestedHsCodes: ["1602", "1602.32"],
+      rationale: "GRI guidance: prepared meat of poultry is in heading 1602.",
+    };
+  }
+
+  if (/mandarin|orange|citrus/.test(text)) {
+    return {
+      suggestedHsCodes: ["0805", "0805.21"],
+      rationale: "GRI guidance: citrus fruit is classified in heading 0805.",
+    };
+  }
+
   if (/sculpture|statuary|statue/.test(text)) {
     return {
       suggestedHsCodes: ["9703"],

@@ -14,10 +14,10 @@
 		"db:studio": "drizzle-kit studio"
 	},
 	"dependencies": {
+		"@aws-sdk/client-s3": "^3.1121.0",
 		"@radix-ui/react-dialog": "^1.1.15",
-		"@supabase/ssr": "^0.8.0",
-		"@supabase/supabase-js": "^2.95.2",
-		"drizzle-orm": "^0.45.1",
+		"better-auth": "^1.7.2",
+		"drizzle-orm": "^0.45.2",
 		"exceljs": "^4.4.0",
 		"framer-motion": "^12.40.0",
 		"mammoth": "^1.11.0",
@@ -31,7 +31,8 @@
 		"sonner": "^2.0.7",
 		"standardwebhooks": "^1.0.0",
 		"uuid": "^13.0.0",
-		"xlsx": "^0.18.5"
+		"xlsx": "^0.18.5",
+		"zod": "^4.5.4"
 	},
 	"devDependencies": {
 		"@tailwindcss/postcss": "^4",

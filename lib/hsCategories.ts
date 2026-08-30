@@ -32,6 +32,7 @@ export function categoryFromHs(hs: NormalizedHs, description?: string): string {
     "62": "Apparel (not knitted)",
     "63": "Textiles",
     "69": "Ceramic products",
+    "70": "Glass and glassware",
     "73": "Iron or steel articles",
     "76": "Aluminium articles",
     "82": "Tools and cutlery",

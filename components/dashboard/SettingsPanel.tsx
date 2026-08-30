@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { toast } from "sonner";
-import { signOut } from "@/app/auth/actions";
+import { authClient } from "@/lib/auth/auth-client";
 import {
   DEFAULT_PREFERENCES,
   type UserPreferences,
@@ -327,14 +327,17 @@ export function SettingsPanel({
           <p className="text-sm text-gray-500">
             Sign out of Impact Logistics on this device.
           </p>
-          <form action={signOut}>
-            <button
-              type="submit"
-              className="px-5 py-2.5 rounded-full border border-red-200 text-red-600 text-sm font-semibold hover:bg-red-50 transition-colors shrink-0"
-            >
-              Sign out
-            </button>
-          </form>
+          <button
+            type="button"
+            onClick={async () => {
+              await authClient.signOut();
+              router.push("/login");
+              router.refresh();
+            }}
+            className="px-5 py-2.5 rounded-full border border-red-200 text-red-600 text-sm font-semibold hover:bg-red-50 transition-colors shrink-0"
+          >
+            Sign out
+          </button>
         </div>
       </DashCard>
     </div>

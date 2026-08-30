@@ -1,28 +1,27 @@
+import { applyAssessorRules } from "./assessorRules";
 import { categoryFromHs } from "./hsCategories";
+import { type DocumentClassificationMeta } from "./documentClassificationMeta";
+import { chapterCompatibilityReasons } from "./hsProductChapter";
+import { findInCacheSync } from "./hsReferenceCache";
 import { cleanProductDescription } from "./packingListFilters";
 import { normalizeHsCode, type NormalizedHs } from "./hsCodeUtils";
 import type { ClassificationResult } from "./classifyItem";
 
-export type DocumentClassificationMeta = {
-  source: "document";
-  documentHs: string;
-  normalizedHs: string;
-  reviewRecommended: boolean;
-  reviewReasons: string[];
-};
-
-/** Description vs chapter sanity checks (flag only — document HS is kept). */
+/** Description vs chapter sanity checks (flag when document HS conflicts with product type). */
 function sanityCheck(
   description: string,
-  hs: NormalizedHs
+  hs: NormalizedHs,
 ): { ok: boolean; reasons: string[] } {
+  const reasons = chapterCompatibilityReasons(description, hs.chapter);
+
   const d = description.toLowerCase();
-  const reasons: string[] = [];
   const ch = hs.chapter;
 
   const expectChapter = (pattern: RegExp, expected: string, label: string) => {
     if (pattern.test(d) && ch !== expected) {
-      reasons.push(`${label}: description suggests chapter ${expected}, document has ${ch}`);
+      reasons.push(
+        `${label}: description suggests chapter ${expected}, document has ${ch}`,
+      );
     }
   };
 
@@ -44,6 +43,12 @@ function sanityCheck(
   if (/soy\s*milk|milk\s*maker/i.test(d) && hs.heading === "8471") {
     reasons.push("Soy milk maker should not use HS 8471 (computers)");
   }
+  if (
+    /copper\s*coil\s*motor|motor\s*with\s*power\s*cord/i.test(d) &&
+    hs.heading === "8471"
+  ) {
+    reasons.push("Fan motor fragment should not use HS 8471 (computers)");
+  }
 
   return { ok: reasons.length === 0, reasons };
 }
@@ -51,7 +56,7 @@ function sanityCheck(
 export function classifyFromDocumentHs(
   description: string,
   sourceHsRaw: string,
-  options?: { unit?: string }
+  options?: { unit?: string },
 ): ClassificationResult & { aiRawResponse: string } {
   const normalized = normalizeHsCode(sourceHsRaw);
   if (!normalized) {
@@ -63,40 +68,55 @@ export function classifyFromDocumentHs(
   const sanity = sanityCheck(desc, normalized);
 
   const hsCode = normalized.display;
-  const result: ClassificationResult = {
+  const ref = findInCacheSync(sourceHsRaw) ?? findInCacheSync(hsCode);
+
+  let cleanDescription = desc;
+  if (ref) {
+    const official = ref.description.replace(/^[-\s]+/, "").trim();
+    if (official && (desc.length < 12 || desc.toLowerCase() === "unspecified item")) {
+      cleanDescription = official;
+    }
+    if (ref.chapter) {
+      category = categoryFromHs(normalized, cleanDescription);
+    }
+  }
+
+  let result: ClassificationResult = {
     isImportItem: true,
     category,
     hsCode,
-    cleanDescription: desc,
+    cleanDescription,
     confidence: sanity.ok ? 0.98 : 0.82,
   };
+
+  const beforeHs = result.hsCode;
+  result = applyAssessorRules(desc, result);
+  const assessorOverride = result.hsCode !== beforeHs;
 
   const meta: DocumentClassificationMeta = {
     source: "document",
     documentHs: sourceHsRaw.trim(),
     normalizedHs: hsCode,
-    reviewRecommended: !sanity.ok,
+    reviewRecommended: !sanity.ok && !assessorOverride,
     reviewReasons: sanity.reasons,
+    tariffNo: ref?.tariffNo,
+    dutyRate: ref?.dutyRate ?? undefined,
+    stdUnit: ref?.stdUnit ?? options?.unit ?? undefined,
+    referenceDescription: ref?.description,
   };
+
+  if (assessorOverride) {
+    meta.reviewReasons = [
+      ...meta.reviewReasons,
+      `assessor override: ${beforeHs} → ${result.hsCode}`,
+    ];
+  }
 
   return {
     ...result,
-    hsCode,
-    category,
+    hsCode: result.hsCode,
+    category: result.category,
     confidence: meta.reviewRecommended ? 0.82 : 0.98,
     aiRawResponse: JSON.stringify(meta),
   };
-}
-
-export function parseDocumentClassificationMeta(
-  raw: string | null | undefined
-): DocumentClassificationMeta | null {
-  if (!raw?.trim()) return null;
-  try {
-    const p = JSON.parse(raw) as DocumentClassificationMeta;
-    if (p.source === "document") return p;
-  } catch {
-    return null;
-  }
-  return null;
 }

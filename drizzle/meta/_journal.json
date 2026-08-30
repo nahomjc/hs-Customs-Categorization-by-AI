@@ -8,6 +8,34 @@
       "when": 1770547524447,
       "tag": "0000_normal_union_jack",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1787981442802,
+      "tag": "0001_thick_omega_sentinel",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1788011624143,
+      "tag": "0002_pale_jean_grey",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1788100000000,
+      "tag": "0003_hs_reference_expand",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1788200000000,
+      "tag": "0004_import_case_workflow",
+      "breakpoints": true
     }
   ]
 }
