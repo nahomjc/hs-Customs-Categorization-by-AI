@@ -5,7 +5,8 @@ import { motion } from "framer-motion";
 import { BrandLogo } from "@/components/BrandLogo";
 import { LandingWrap } from "./LandingWrap";
 import { DashboardFlowAnimation } from "./DashboardFlowAnimation";
-import { FadeInView, easeOut, fadeUp } from "./motion";
+import { OrderStatusPanel } from "./OrderStatusPanel";
+import { FadeInView, MotionSection, easeOut, fadeUp } from "./motion";
 
 function TrafficLights() {
   return (
@@ -17,71 +18,125 @@ function TrafficLights() {
   );
 }
 
+const highlights = [
+  {
+    title: "Live order tracking",
+    description: "Clients see every stage — from upload to export — in real time.",
+    icon: "📍",
+  },
+  {
+    title: "Instant notifications",
+    description: "Push alerts when an order moves to parsing, classifying, or export ready.",
+    icon: "🔔",
+  },
+  {
+    title: "Multi-order dashboard",
+    description: "Track dozens of shipments at once with status badges and timelines.",
+    icon: "📋",
+  },
+];
+
 export function DashboardPreviewSection() {
   return (
-    <section
+    <MotionSection
       id="dashboard-preview"
-      className="landing-dashboard-preview-bg py-16 sm:py-24 border-t border-white/40"
+      className="landing-dashboard-preview-bg py-20 sm:py-28 border-t border-white/40"
     >
       <LandingWrap>
-        <FadeInView className="text-center max-w-2xl mx-auto mb-10 sm:mb-12">
-          <p className="text-sm font-medium text-[#007bff] mb-2">Dashboard</p>
-          <h2 className="text-3xl sm:text-4xl font-bold text-gray-900 tracking-tight">
-            Manage everything in one place
-          </h2>
-          <p className="mt-4 text-gray-600 leading-relaxed">
-            Upload a packing list, let AI classify every line by HS code, then
-            review the grouped list — all from one workspace.
-          </p>
-        </FadeInView>
+        <div className="max-w-2xl mx-auto text-center lg:text-left mb-12 sm:mb-14">
+          <FadeInView>
+            <p className="text-sm font-medium text-[#007bff] mb-2">Dashboard</p>
+            <h2 className="text-3xl sm:text-4xl font-bold text-gray-900 tracking-tight">
+              Manage everything in one place
+            </h2>
+            <p className="mt-4 text-gray-600 leading-relaxed max-w-xl mx-auto lg:mx-0">
+              Upload a packing list, let AI classify every line by HS code, then
+              review the grouped list — while clients stay informed on exactly
+              where their order is at every step.
+            </p>
+          </FadeInView>
 
+          <div className="mt-8 grid sm:grid-cols-3 gap-3 max-w-3xl mx-auto lg:mx-0">
+            {highlights.map((item, i) => (
+              <motion.div
+                key={item.title}
+                initial={{ opacity: 0, y: 12 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true }}
+                transition={{ delay: i * 0.08, duration: 0.45, ease: easeOut }}
+                className="rounded-xl border border-white/60 bg-white/50 backdrop-blur-sm px-4 py-3 text-left"
+              >
+                <span className="text-lg" aria-hidden>{item.icon}</span>
+                <p className="text-sm font-semibold text-gray-900 mt-2">{item.title}</p>
+                <p className="text-xs text-gray-500 mt-1 leading-relaxed">{item.description}</p>
+              </motion.div>
+            ))}
+          </div>
+        </div>
+
+        {/* Main dashboard + mobile order panel */}
         <motion.div
           initial={{ opacity: 0, y: 32 }}
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true, margin: "-60px" }}
           transition={{ duration: 0.65, ease: easeOut }}
-          className="landing-glass-window rounded-2xl overflow-hidden"
+          className="grid lg:grid-cols-[1.4fr_1fr] gap-5 lg:gap-6 items-stretch"
         >
-          <div className="landing-glass-titlebar flex items-center gap-4 px-4 py-3">
-            <TrafficLights />
-            <div className="flex-1 flex justify-center">
-              <span className="text-xs font-medium text-gray-700 truncate max-w-[240px] sm:max-w-md">
-                Impact Logistics — Dashboard
-              </span>
+          <div className="landing-glass-window rounded-2xl overflow-hidden min-h-[480px]">
+            <div className="landing-glass-titlebar flex items-center gap-4 px-4 py-3">
+              <TrafficLights />
+              <div className="flex-1 flex justify-center">
+                <span className="text-xs font-medium text-gray-700 truncate max-w-[240px] sm:max-w-md">
+                  Impact Logistics — Dashboard
+                </span>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                <span className="relative flex h-2 w-2" aria-hidden>
+                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[#007bff] opacity-40" />
+                  <span className="relative inline-flex h-2 w-2 rounded-full bg-[#007bff]" />
+                </span>
+                <span className="text-[10px] font-medium text-gray-500 hidden sm:inline">Live</span>
+              </div>
             </div>
-            <div className="w-[52px] shrink-0" aria-hidden />
+
+            <div className="relative min-h-[420px] sm:min-h-[460px]">
+              <div
+                className="absolute inset-0 bg-gradient-to-br from-[#007bff]/8 via-transparent to-sky-400/10 pointer-events-none"
+                aria-hidden
+              />
+
+              <div className="landing-glass-header relative flex items-center justify-between gap-4 px-4 sm:px-5 py-3">
+                <BrandLogo size="sm" className="min-w-0 max-w-[120px] sm:max-w-none" />
+                <nav className="hidden sm:flex items-center gap-1">
+                  {["Dashboard", "Upload", "History", "Orders"].map((label, i) => (
+                    <span
+                      key={label}
+                      className={`px-3 py-1 rounded-full text-xs font-medium backdrop-blur-sm ${
+                        i === 0
+                          ? "bg-[#007bff]/90 text-white shadow-sm shadow-blue-500/25"
+                          : i === 3
+                            ? "text-[#007bff] bg-blue-50/80 border border-blue-100/80"
+                            : "text-gray-600 bg-white/40 border border-white/50"
+                      }`}
+                    >
+                      {label}
+                    </span>
+                  ))}
+                </nav>
+                <span className="text-[10px] text-gray-500 hidden md:block truncate max-w-[120px]">
+                  broker@company.com
+                </span>
+              </div>
+
+              <div className="relative p-4 sm:p-6">
+                <DashboardFlowAnimation />
+              </div>
+            </div>
           </div>
 
-          <div className="relative min-h-[420px] sm:min-h-[480px]">
-            <div
-              className="absolute inset-0 bg-gradient-to-br from-[#007bff]/8 via-transparent to-sky-400/10 pointer-events-none"
-              aria-hidden
-            />
-
-            <div className="landing-glass-header relative flex items-center justify-between gap-4 px-4 sm:px-5 py-3">
-              <BrandLogo size="sm" className="min-w-0 max-w-[120px] sm:max-w-none" />
-              <nav className="hidden sm:flex items-center gap-1">
-                {["Dashboard", "Upload", "History"].map((label, i) => (
-                  <span
-                    key={label}
-                    className={`px-3 py-1 rounded-full text-xs font-medium backdrop-blur-sm ${
-                      i === 0
-                        ? "bg-[#007bff]/90 text-white shadow-sm shadow-blue-500/25"
-                        : "text-gray-600 bg-white/40 border border-white/50"
-                    }`}
-                  >
-                    {label}
-                  </span>
-                ))}
-              </nav>
-              <span className="text-[10px] text-gray-500 hidden md:block truncate max-w-[120px]">
-                broker@company.com
-              </span>
-            </div>
-
-            <div className="relative p-4 sm:p-6">
-              <DashboardFlowAnimation />
-            </div>
+          {/* Order panel — mobile + desktop beside dashboard */}
+          <div className="landing-float-card rounded-2xl border border-white/80 bg-white/75 backdrop-blur-xl p-5 shadow-xl lg:min-h-[480px]">
+            <OrderStatusPanel />
           </div>
         </motion.div>
 
@@ -90,16 +145,22 @@ export function DashboardPreviewSection() {
           initial="hidden"
           whileInView="visible"
           viewport={{ once: true }}
-          className="mt-8 text-center"
+          className="mt-10 flex flex-col sm:flex-row items-center justify-center gap-3"
         >
           <Link
             href="/dashboard"
-            className="inline-flex items-center justify-center px-6 py-3 rounded-full bg-[#007bff]/90 backdrop-blur-sm text-white text-sm font-semibold hover:bg-[#0069d9] transition-colors shadow-lg shadow-blue-500/25 border border-white/20"
+            className="inline-flex items-center justify-center px-8 py-3.5 rounded-full bg-[#007bff] text-white text-sm font-semibold hover:bg-[#0069d9] transition-colors shadow-lg shadow-blue-500/25"
           >
             Open your dashboard
           </Link>
+          <Link
+            href="#telegram-monitoring"
+            className="inline-flex items-center justify-center px-8 py-3.5 rounded-full border border-gray-200 bg-white/80 text-gray-700 text-sm font-semibold hover:bg-white transition-colors"
+          >
+            Get Telegram alerts
+          </Link>
         </motion.div>
       </LandingWrap>
-    </section>
+    </MotionSection>
   );
 }

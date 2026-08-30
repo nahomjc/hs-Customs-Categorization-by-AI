@@ -35,6 +35,7 @@ body {
 /* Landing page — ChronoTask-inspired soft UI */
 .landing-page {
 	--landing-bg: #f8f9fa;
+	--landing-nav-offset: 4.75rem;
 	--landing-surface: #ffffff;
 	--landing-text: #111827;
 	--landing-text-muted: #6b7280;
@@ -43,12 +44,24 @@ body {
 	--landing-blue-hover: #0069d9;
 	--landing-shadow: 0 4px 24px rgba(15, 23, 42, 0.06);
 	--landing-shadow-lg: 0 12px 40px rgba(15, 23, 42, 0.08);
+	background-color: var(--landing-bg);
 }
 
 .landing-dot-grid {
 	background-color: var(--landing-bg);
 	background-image: radial-gradient(circle, #d1d5db 1px, transparent 1px);
 	background-size: 22px 22px;
+}
+
+.landing-nav-pill {
+	max-width: 100%;
+	background: rgba(255, 255, 255, 0.72);
+	backdrop-filter: blur(20px);
+	-webkit-backdrop-filter: blur(20px);
+	border: 1px solid rgba(255, 255, 255, 0.85);
+	box-shadow:
+		0 1px 2px rgba(15, 23, 42, 0.04),
+		0 8px 32px rgba(15, 23, 42, 0.08);
 }
 
 .landing-float-card {
@@ -709,6 +722,66 @@ body {
 	.intro-mark__highlight,
 	.intro-loader__letter,
 	.intro-loader__brand-scan::after {
+		animation: none;
+	}
+}
+
+/* Hero — cinematic ambient + marquee */
+.hero-mesh-blob {
+	animation: hero-mesh-drift 14s ease-in-out infinite alternate;
+}
+
+.hero-mesh-blob--delay {
+	animation-delay: -5s;
+}
+
+.hero-scan-line {
+	animation: hero-scan-sweep 4s linear infinite;
+}
+
+.hero-marquee-track {
+	animation: hero-marquee 32s linear infinite;
+}
+
+@keyframes hero-mesh-drift {
+	from {
+		transform: translate(0, 0) scale(1);
+	}
+	to {
+		transform: translate(3%, -2%) scale(1.06);
+	}
+}
+
+@keyframes hero-scan-sweep {
+	0% {
+		top: -2%;
+		opacity: 0;
+	}
+	6% {
+		opacity: 0.85;
+	}
+	94% {
+		opacity: 0.85;
+	}
+	100% {
+		top: 102%;
+		opacity: 0;
+	}
+}
+
+@keyframes hero-marquee {
+	from {
+		transform: translateX(0);
+	}
+	to {
+		transform: translateX(-50%);
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.hero-mesh-blob,
+	.hero-scan-line,
+	.hero-marquee-track {
 		animation: none;
 	}
 }

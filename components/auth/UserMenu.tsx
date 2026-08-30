@@ -25,14 +25,16 @@ function getInitials(name?: string, email?: string) {
 
 type UserMenuProps = {
   user: UserMenuUser;
+  variant?: "default" | "landing-pill";
 };
 
-export function UserMenu({ user }: UserMenuProps) {
+export function UserMenu({ user, variant = "default" }: UserMenuProps) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
   const displayName = user.name || user.email;
   const initials = getInitials(user.name, user.email);
+  const isLandingPill = variant === "landing-pill";
 
   useEffect(() => {
     if (!open) return;
@@ -60,27 +62,58 @@ export function UserMenu({ user }: UserMenuProps) {
         aria-expanded={open}
         aria-haspopup="menu"
         aria-label="Account menu"
-        className="flex items-center gap-2.5 rounded-full border border-transparent py-1 pl-2 pr-1.5 transition-colors hover:border-slate-200 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/30"
+        className={
+          isLandingPill
+            ? "flex items-center gap-3 rounded-full py-1 pl-1 pr-2 transition-colors hover:bg-gray-100/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#007bff]/30"
+            : "flex items-center gap-2.5 rounded-full border border-transparent py-1 pl-2 pr-1.5 transition-colors hover:border-slate-200 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/30"
+        }
       >
-        <span className="hidden max-w-[10rem] truncate text-sm font-semibold text-slate-700 sm:block">
-          {displayName}
-        </span>
-        {user.avatarUrl ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={user.avatarUrl}
-            alt=""
-            className="h-9 w-9 rounded-full border border-slate-200 object-cover"
-          />
+        {isLandingPill ? (
+          <>
+            {user.avatarUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={user.avatarUrl}
+                alt=""
+                className="h-9 w-9 rounded-full border border-gray-200 object-cover"
+              />
+            ) : (
+              <span className="flex h-9 w-9 items-center justify-center rounded-full border border-gray-200 bg-gray-100 text-xs font-semibold text-gray-700">
+                {initials}
+              </span>
+            )}
+            <span className="hidden min-w-0 text-left sm:block">
+              <span className="block max-w-[11rem] truncate text-sm font-semibold text-gray-900">
+                {displayName}
+              </span>
+              <span className="block max-w-[11rem] truncate text-[11px] text-gray-500">
+                {user.email}
+              </span>
+            </span>
+          </>
         ) : (
-          <span className="flex h-9 w-9 items-center justify-center rounded-full border border-indigo-600/20 bg-gradient-to-br from-indigo-600 to-violet-600 text-sm font-semibold text-white">
-            {initials}
-          </span>
+          <>
+            <span className="hidden max-w-[10rem] truncate text-sm font-semibold text-slate-700 sm:block">
+              {displayName}
+            </span>
+            {user.avatarUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={user.avatarUrl}
+                alt=""
+                className="h-9 w-9 rounded-full border border-slate-200 object-cover"
+              />
+            ) : (
+              <span className="flex h-9 w-9 items-center justify-center rounded-full border border-indigo-600/20 bg-gradient-to-br from-indigo-600 to-violet-600 text-sm font-semibold text-white">
+                {initials}
+              </span>
+            )}
+          </>
         )}
         <svg
-          className={`hidden h-4 w-4 shrink-0 text-slate-400 transition-transform sm:block ${
-            open ? "rotate-180" : ""
-          }`}
+          className={`h-4 w-4 shrink-0 transition-transform ${
+            isLandingPill ? "text-gray-500" : "hidden text-slate-400 sm:block"
+          } ${open ? "rotate-180" : ""}`}
           fill="none"
           stroke="currentColor"
           viewBox="0 0 24 24"

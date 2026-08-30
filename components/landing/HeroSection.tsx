@@ -3,369 +3,174 @@
 import Link from "next/link";
 import { motion, useReducedMotion } from "framer-motion";
 import {
-  easeOut,
-  fadeUp,
-  floatAnimation,
-  slideFrom,
-  staggerContainer,
-} from "./motion";
+  AnimatedNumber,
+  HeroBackground,
+  HeroHeadlineWords,
+  HeroMarquee,
+} from "./HeroExtras";
+import { HeroProductVisual } from "./HeroProductVisual";
+import { fadeUp, staggerContainer } from "./motion";
 
-function FloatingUploadCard({ reduced }: { reduced: boolean }) {
-  return (
-    <motion.div
-      className="absolute left-4 lg:left-6 top-8 w-[200px] xl:w-[220px] hidden lg:block"
-      initial="hidden"
-      animate="visible"
-      variants={slideFrom("left", 48)}
-      transition={{ delay: 0.5, duration: 0.7, ease: easeOut }}
-    >
-      <motion.div
-        className="relative"
-        animate={floatAnimation(reduced)}
-        style={{ animationDelay: "0s" }}
-      >
-        <div className="landing-float-card absolute -right-4 top-6 w-14 h-14 rounded-2xl bg-white flex items-center justify-center rotate-6">
-          <svg className="w-7 h-7 text-[#007bff]" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-            <title>Upload verified</title>
-            <path
-              d="M9 12l2 2 4-4"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-            <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="2" />
-          </svg>
-        </div>
-        <div
-          className="landing-float-card rounded-2xl p-4 rotate-[-4deg] shadow-lg"
-          style={{ background: "#fef08a" }}
-        >
-          <div className="flex justify-end mb-1">
-            <span className="text-red-500 text-lg" aria-hidden>
-              📌
-            </span>
-          </div>
-          <p className="text-xs font-medium text-amber-900/90 leading-snug">
-            Upload packing lists — PDF, Word, or Excel — in one click.
-          </p>
-        </div>
-      </motion.div>
-    </motion.div>
-  );
-}
-
-function FloatingQueueCard({ reduced }: { reduced: boolean }) {
-  return (
-    <motion.div
-      className="absolute right-4 lg:right-6 top-4 w-[220px] xl:w-[240px] hidden lg:block"
-      initial="hidden"
-      animate="visible"
-      variants={slideFrom("right", 48)}
-      transition={{ delay: 0.6, duration: 0.7, ease: easeOut }}
-    >
-      <motion.div
-        className="landing-float-card bg-white rounded-2xl overflow-hidden"
-        animate={floatAnimation(reduced)}
-        transition={{ delay: 0.8 }}
-      >
-        <div className="bg-gray-50 px-4 py-2 border-b border-gray-100">
-          <p className="text-xs font-semibold text-gray-700">Classification queue</p>
-        </div>
-        <div className="p-4 space-y-3">
-          <div className="flex items-start justify-between gap-2">
-            <div>
-              <p className="text-xs font-medium text-gray-900">Shipment #2841</p>
-              <p className="text-[10px] text-gray-500 mt-0.5">847 items · Processing</p>
-            </div>
-            <motion.span
-              animate={reduced ? undefined : { rotate: [0, 8, -8, 0] }}
-              transition={{ duration: 2.5, repeat: Number.POSITIVE_INFINITY, ease: "easeInOut" }}
-              className="text-lg"
-              aria-hidden
-            >
-              ⏱
-            </motion.span>
-          </div>
-          <div className="h-1.5 rounded-full bg-gray-100 overflow-hidden">
-            <motion.div
-              className="h-full rounded-full bg-[#007bff]"
-              initial={{ width: 0 }}
-              animate={{ width: "66%" }}
-              transition={{ delay: 1, duration: 1.2, ease: easeOut }}
-            />
-          </div>
-        </div>
-      </motion.div>
-    </motion.div>
-  );
-}
-
-function FloatingTasksCard({ reduced }: { reduced: boolean }) {
-  return (
-    <motion.div
-      className="absolute left-4 lg:left-6 bottom-0 w-[240px] hidden lg:block"
-      initial="hidden"
-      animate="visible"
-      variants={slideFrom("left", 40)}
-      transition={{ delay: 0.7, duration: 0.7, ease: easeOut }}
-    >
-      <motion.div
-        className="landing-float-card bg-white rounded-2xl p-4"
-        animate={floatAnimation(reduced)}
-        transition={{ delay: 1.2 }}
-      >
-        <p className="text-xs font-semibold text-gray-800 mb-3">Today&apos;s jobs</p>
-        <ul className="space-y-3">
-          <li>
-            <div className="flex items-center justify-between text-[10px] text-gray-600 mb-1">
-              <span>PL-2024-089</span>
-              <span className="flex -space-x-1">
-                <span className="w-5 h-5 rounded-full bg-orange-200 border border-white" />
-                <span className="w-5 h-5 rounded-full bg-blue-200 border border-white" />
-              </span>
-            </div>
-            <div className="h-1.5 rounded-full bg-gray-100 overflow-hidden">
-              <motion.div
-                className="h-full rounded-full bg-orange-400"
-                initial={{ width: 0 }}
-                animate={{ width: "80%" }}
-                transition={{ delay: 1.1, duration: 1, ease: easeOut }}
-              />
-            </div>
-          </li>
-          <li>
-            <div className="flex items-center justify-between text-[10px] text-gray-600 mb-1">
-              <span>PL-2024-090</span>
-              <span className="w-5 h-5 rounded-full bg-blue-200 border border-white" />
-            </div>
-            <div className="h-1.5 rounded-full bg-gray-100 overflow-hidden">
-              <motion.div
-                className="h-full rounded-full bg-[#007bff]"
-                initial={{ width: 0 }}
-                animate={{ width: "50%" }}
-                transition={{ delay: 1.3, duration: 1, ease: easeOut }}
-              />
-            </div>
-          </li>
-        </ul>
-      </motion.div>
-    </motion.div>
-  );
-}
-
-function HeroMobileDecor({ reduced }: { reduced: boolean }) {
-  return (
-    <motion.div
-      className="lg:hidden mt-10 px-2"
-      initial="hidden"
-      animate="visible"
-      variants={staggerContainer}
-    >
-      <div className="grid grid-cols-2 gap-3 max-w-sm mx-auto">
-        <motion.div variants={fadeUp} className="col-span-2 flex justify-center">
-          <motion.div
-            className="relative w-full max-w-[200px]"
-            animate={floatAnimation(reduced)}
-          >
-            <div className="landing-float-card absolute -right-2 top-4 w-11 h-11 rounded-xl bg-white flex items-center justify-center rotate-6 z-10">
-              <svg className="w-6 h-6 text-[#007bff]" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                <title>Upload verified</title>
-                <path
-                  d="M9 12l2 2 4-4"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-                <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="2" />
-              </svg>
-            </div>
-            <div
-              className="landing-float-card rounded-2xl p-3 rotate-[-3deg] shadow-lg"
-              style={{ background: "#fef08a" }}
-            >
-              <div className="flex justify-end mb-0.5">
-                <span className="text-red-500 text-base" aria-hidden>
-                  📌
-                </span>
-              </div>
-              <p className="text-[10px] font-medium text-amber-900/90 leading-snug pr-6">
-                Upload packing lists — PDF, Word, or Excel — in one click.
-              </p>
-            </div>
-          </motion.div>
-        </motion.div>
-
-        <motion.div variants={fadeUp}>
-          <motion.div
-            className="landing-float-card bg-white rounded-2xl overflow-hidden h-full"
-            animate={floatAnimation(reduced)}
-            transition={{ delay: 0.4 }}
-          >
-            <div className="bg-gray-50 px-3 py-1.5 border-b border-gray-100">
-              <p className="text-[10px] font-semibold text-gray-700">Classification queue</p>
-            </div>
-            <div className="p-3 space-y-2">
-              <div>
-                <p className="text-[10px] font-medium text-gray-900">Shipment #2841</p>
-                <p className="text-[9px] text-gray-500">847 items · Processing</p>
-              </div>
-              <div className="h-1 rounded-full bg-gray-100 overflow-hidden">
-                <div className="h-full w-2/3 rounded-full bg-[#007bff]" />
-              </div>
-            </div>
-          </motion.div>
-        </motion.div>
-
-        <motion.div variants={fadeUp}>
-          <motion.div
-            className="landing-float-card bg-white rounded-2xl p-3 h-full"
-            animate={floatAnimation(reduced)}
-            transition={{ delay: 0.6 }}
-          >
-            <p className="text-[10px] font-semibold text-gray-800 mb-2">Today&apos;s jobs</p>
-            <ul className="space-y-2">
-              <li>
-                <div className="flex items-center justify-between text-[9px] text-gray-600 mb-0.5">
-                  <span>PL-2024-089</span>
-                  <span className="flex -space-x-1">
-                    <span className="w-4 h-4 rounded-full bg-orange-200 border border-white" />
-                    <span className="w-4 h-4 rounded-full bg-blue-200 border border-white" />
-                  </span>
-                </div>
-                <div className="h-1 rounded-full bg-gray-100 overflow-hidden">
-                  <div className="h-full w-4/5 rounded-full bg-orange-400" />
-                </div>
-              </li>
-              <li>
-                <div className="flex items-center justify-between text-[9px] text-gray-600 mb-0.5">
-                  <span>PL-2024-090</span>
-                  <span className="w-4 h-4 rounded-full bg-blue-200 border border-white" />
-                </div>
-                <div className="h-1 rounded-full bg-gray-100 overflow-hidden">
-                  <div className="h-full w-1/2 rounded-full bg-[#007bff]" />
-                </div>
-              </li>
-            </ul>
-          </motion.div>
-        </motion.div>
-
-        <motion.div variants={fadeUp} className="col-span-2">
-          <motion.div
-            className="landing-float-card bg-white rounded-2xl p-3"
-            animate={floatAnimation(reduced)}
-            transition={{ delay: 0.8 }}
-          >
-            <p className="text-[10px] font-semibold text-gray-800 mb-2">Export formats</p>
-            <div className="flex gap-2">
-              {[
-                { label: "Excel", bg: "bg-emerald-100", text: "text-emerald-700" },
-                { label: "PDF", bg: "bg-red-100", text: "text-red-600" },
-                { label: "CSV", bg: "bg-blue-100", text: "text-blue-600" },
-              ].map((fmt) => (
-                <div
-                  key={fmt.label}
-                  className={`flex-1 ${fmt.bg} rounded-lg py-2 flex items-center justify-center`}
-                >
-                  <span className={`text-[9px] font-bold ${fmt.text}`}>{fmt.label}</span>
-                </div>
-              ))}
-            </div>
-          </motion.div>
-        </motion.div>
-      </div>
-    </motion.div>
-  );
-}
-
-function FloatingFormatsCard({ reduced }: { reduced: boolean }) {
-  return (
-    <motion.div
-      className="absolute right-4 lg:right-6 bottom-4 w-[220px] hidden lg:block"
-      initial="hidden"
-      animate="visible"
-      variants={slideFrom("right", 40)}
-      transition={{ delay: 0.8, duration: 0.7, ease: easeOut }}
-    >
-      <motion.div
-        className="landing-float-card bg-white rounded-2xl p-4"
-        animate={floatAnimation(reduced)}
-        transition={{ delay: 1.6 }}
-      >
-        <p className="text-xs font-semibold text-gray-800 mb-3">Export formats</p>
-        <div className="flex gap-2">
-          {[
-            { label: "Excel", bg: "bg-emerald-100", text: "text-emerald-700" },
-            { label: "PDF", bg: "bg-red-100", text: "text-red-600" },
-            { label: "CSV", bg: "bg-blue-100", text: "text-blue-600" },
-          ].map((fmt, i) => (
-            <motion.div
-              key={fmt.label}
-              initial={{ opacity: 0, scale: 0.8 }}
-              animate={{ opacity: 1, scale: 1 }}
-              transition={{ delay: 1 + i * 0.1, duration: 0.4, ease: easeOut }}
-              whileHover={{ scale: 1.06, y: -2 }}
-              className={`flex-1 ${fmt.bg} rounded-xl py-3 flex items-center justify-center`}
-            >
-              <span className={`text-[10px] font-bold ${fmt.text}`}>{fmt.label}</span>
-            </motion.div>
-          ))}
-        </div>
-      </motion.div>
-    </motion.div>
-  );
-}
+const trustItems = [
+  { value: 10, suffix: "×", label: "faster grouping", icon: "⚡" },
+  { value: 847, suffix: "+", label: "lines per file", icon: "📄" },
+  { value: 3, suffix: "", label: "export formats", icon: "📊" },
+];
 
 export function HeroSection() {
   const reduced = useReducedMotion() ?? false;
 
   return (
-    <section className="landing-dot-grid relative w-full overflow-hidden pt-12 pb-16 sm:pt-16 sm:pb-24 lg:pb-32">
-      <div className="landing-wrap relative lg:min-h-[560px]">
-          <FloatingUploadCard reduced={reduced} />
-          <FloatingQueueCard reduced={reduced} />
-          <FloatingTasksCard reduced={reduced} />
-          <FloatingFormatsCard reduced={reduced} />
+    <section className="landing-dot-grid relative w-full overflow-hidden min-h-[92vh] flex flex-col -mt-[var(--landing-nav-offset)] pt-[var(--landing-nav-offset)]">
+      <HeroBackground />
 
-        <div className="relative z-10 flex lg:min-h-[560px] items-center justify-center py-4 lg:py-0">
+      <div className="landing-wrap relative flex-1 flex flex-col pt-6 pb-0 sm:pt-8 lg:pt-10">
+        <div className="flex-1 grid lg:grid-cols-2 gap-12 lg:gap-20 items-center">
+          {/* Copy */}
           <motion.div
-            className="text-center max-w-2xl mx-auto px-4 w-full"
+            className="relative z-10 text-center lg:text-left"
             variants={staggerContainer}
             initial="hidden"
             animate="visible"
           >
+            <motion.div variants={fadeUp} className="flex justify-center lg:justify-start">
+              <span className="inline-flex items-center gap-2 rounded-full border border-blue-100/80 bg-white/90 backdrop-blur-md px-4 py-1.5 text-xs font-semibold text-[#007bff] shadow-sm ring-1 ring-blue-50">
+                <motion.span
+                  className="relative flex h-2 w-2"
+                  aria-hidden
+                >
+                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[#007bff] opacity-40" />
+                  <span className="relative inline-flex h-2 w-2 rounded-full bg-[#007bff]" />
+                </motion.span>
+                AI-powered HS classification
+              </span>
+            </motion.div>
+
             <motion.h1
               variants={fadeUp}
-              className="text-4xl sm:text-5xl lg:text-[3.25rem] font-bold tracking-tight text-gray-900 leading-tight"
+              className="mt-7 text-[2.6rem] sm:text-5xl lg:text-[3.6rem] xl:text-[4rem] font-bold tracking-tight text-gray-900 leading-[1.06]"
             >
-              <span className="font-bold">Classify, group, and export</span>
+              <HeroHeadlineWords reduced={reduced} delay={0.15}>
+                Classify, group,
+              </HeroHeadlineWords>
               <br />
-              <span className="font-normal text-gray-500">all in one place</span>
+              <span className="bg-gradient-to-r from-[#007bff] via-blue-600 to-indigo-600 bg-clip-text text-transparent">
+                <HeroHeadlineWords reduced={reduced} delay={0.45}>
+                  and export
+                </HeroHeadlineWords>
+              </span>
+              <br />
+              <motion.span
+                className="font-semibold text-gray-400/90"
+                initial={reduced ? false : { opacity: 0, y: 16 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.75, duration: 0.55, ease: [0.22, 1, 0.36, 1] }}
+              >
+                all in one place
+              </motion.span>
             </motion.h1>
 
             <motion.p
               variants={fadeUp}
-              className="mt-5 text-base sm:text-lg text-gray-500 max-w-md mx-auto leading-relaxed"
+              className="mt-6 text-base sm:text-lg text-gray-500 max-w-lg mx-auto lg:mx-0 leading-relaxed"
             >
               Upload packing lists and get HS-code grouped files with AI-powered
-              classification for customs workflows.
+              classification built for customs brokers and trade teams.
             </motion.p>
 
-            <motion.div variants={fadeUp} className="mt-8">
-              <motion.div whileHover={{ scale: 1.04 }} whileTap={{ scale: 0.97 }}>
+            <motion.div
+              variants={fadeUp}
+              className="mt-9 flex flex-col sm:flex-row items-center lg:items-start justify-center lg:justify-start gap-3"
+            >
+              <motion.div whileHover={{ scale: 1.04, y: -2 }} whileTap={{ scale: 0.97 }}>
                 <Link
                   href="/demo?source=hero"
-                  className="inline-flex items-center justify-center px-8 py-3.5 rounded-full bg-[#007bff] text-white font-semibold text-sm hover:bg-[#0069d9] transition-colors shadow-lg shadow-blue-500/25"
+                  className="group inline-flex items-center justify-center gap-2 px-8 py-4 rounded-full bg-[#007bff] text-white font-semibold text-sm hover:bg-[#0069d9] transition-all shadow-xl shadow-blue-500/30 ring-1 ring-blue-400/20"
                 >
                   Get free demo
+                  <motion.span
+                    className="inline-block"
+                    animate={reduced ? undefined : { x: [0, 4, 0] }}
+                    transition={{ duration: 1.5, repeat: Number.POSITIVE_INFINITY }}
+                    aria-hidden
+                  >
+                    →
+                  </motion.span>
+                </Link>
+              </motion.div>
+              <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
+                <Link
+                  href="#how-it-works"
+                  className="inline-flex items-center justify-center gap-2 px-8 py-4 rounded-full border border-gray-200/80 bg-white/80 backdrop-blur-md text-gray-700 font-semibold text-sm hover:border-gray-300 hover:bg-white transition-colors shadow-sm"
+                >
+                  <svg className="h-4 w-4 text-[#007bff]" fill="currentColor" viewBox="0 0 24 24" aria-hidden>
+                    <title>Play</title>
+                    <path d="M8 5v14l11-7z" />
+                  </svg>
+                  See how it works
                 </Link>
               </motion.div>
             </motion.div>
 
-            <HeroMobileDecor reduced={reduced} />
+            <motion.div
+              variants={fadeUp}
+              className="mt-10 grid grid-cols-3 gap-3 max-w-md mx-auto lg:mx-0"
+            >
+              {trustItems.map((item, i) => (
+                <motion.div
+                  key={item.label}
+                  className="group relative rounded-2xl border border-gray-100/80 bg-white/80 backdrop-blur-md px-3 py-4 text-center lg:text-left shadow-sm overflow-hidden"
+                  whileHover={{ y: -3, borderColor: "rgba(0,123,255,0.2)" }}
+                  transition={{ duration: 0.2 }}
+                >
+                  <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-[#007bff]/0 to-[#007bff]/5 opacity-0 group-hover:opacity-100 transition-opacity" aria-hidden />
+                  <p className="text-lg mb-1" aria-hidden>{item.icon}</p>
+                  <p className="text-xl sm:text-2xl font-bold text-gray-900 tabular-nums leading-none">
+                    <AnimatedNumber value={item.value} suffix={item.suffix} />
+                  </p>
+                  <p className="text-[10px] sm:text-xs text-gray-400 mt-1.5 leading-tight">{item.label}</p>
+                  <motion.div
+                    className="mt-2 h-0.5 rounded-full bg-gray-100 overflow-hidden"
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    transition={{ delay: 0.8 + i * 0.1 }}
+                  >
+                    <motion.div
+                      className="h-full bg-gradient-to-r from-[#007bff] to-indigo-400"
+                      initial={{ width: 0 }}
+                      animate={{ width: "100%" }}
+                      transition={{ delay: 1 + i * 0.15, duration: 0.8, ease: [0.22, 1, 0.36, 1] }}
+                    />
+                  </motion.div>
+                </motion.div>
+              ))}
+            </motion.div>
+
+            <motion.p
+              variants={fadeUp}
+              className="mt-6 text-xs text-gray-400 flex items-center justify-center lg:justify-start gap-2"
+            >
+              <span className="flex -space-x-1" aria-hidden>
+                {["bg-blue-200", "bg-emerald-200", "bg-violet-200"].map((c) => (
+                  <span key={c} className={`h-5 w-5 rounded-full border-2 border-white ${c}`} />
+                ))}
+              </span>
+              Built for customs brokers & in-house trade teams
+            </motion.p>
+          </motion.div>
+
+          {/* Product visual */}
+          <motion.div
+            className="relative z-10 lg:pl-4"
+            initial={{ opacity: 0, y: 50, rotateX: 8 }}
+            animate={{ opacity: 1, y: 0, rotateX: 0 }}
+            transition={{ delay: 0.15, duration: 1, ease: [0.22, 1, 0.36, 1] }}
+          >
+            <HeroProductVisual reduced={reduced} />
           </motion.div>
         </div>
+
+        <HeroMarquee />
       </div>
     </section>
   );
