@@ -106,6 +106,51 @@ export function findInCacheSync(code: string): HsReferenceCacheRow | null {
   return lookupInCache(code, cache);
 }
 
+/**
+ * Exact HS lookup, then heading/prefix fallback (e.g. 9405 → 9405.10.00 row).
+ * Prefers rows that have a duty rate and more specific HS codes.
+ */
+export function findReferenceForHsCode(code: string): HsReferenceCacheRow | null {
+  if (!cache || cache.rows.length === 0) return null;
+
+  const exact = lookupInCache(code, cache);
+  if (exact?.dutyRate) return exact;
+
+  const n = normalizeHsCode(code);
+  const heading = n?.heading ?? code.replace(/\D/g, "").slice(0, 4);
+  if (heading.length < 4) return exact;
+
+  let bestWithDuty: HsReferenceCacheRow | null =
+    exact?.dutyRate ? exact : null;
+  let bestAny: HsReferenceCacheRow | null = exact;
+
+  for (const row of cache.rows) {
+    const rowHs = (row.normalizedHs ?? row.hsCode ?? "").replace(/\s/g, "");
+    const rowHeading =
+      row.heading ?? rowHs.replace(/\D/g, "").slice(0, 4);
+
+    const matches =
+      rowHeading === heading ||
+      rowHs.startsWith(heading) ||
+      rowHs.replace(/\D/g, "").startsWith(heading);
+
+    if (!matches) continue;
+
+    if (row.dutyRate) {
+      const rowLen = rowHs.length;
+      const bestLen = (
+        bestWithDuty?.normalizedHs ??
+        bestWithDuty?.hsCode ??
+        ""
+      ).length;
+      if (!bestWithDuty || rowLen >= bestLen) bestWithDuty = row;
+    }
+    if (!bestAny) bestAny = row;
+  }
+
+  return bestWithDuty ?? bestAny ?? exact;
+}
+
 export function formatReferenceCandidate(row: HsReferenceCacheRow): string {
   const code = row.normalizedHs ?? row.hsCode ?? row.tariffNo;
   const snippet = row.description.replace(/\s+/g, " ").slice(0, 80);

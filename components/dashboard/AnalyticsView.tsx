@@ -15,6 +15,11 @@ import {
   type AnalyticsData,
   formatRangeLabel,
 } from "@/lib/dashboard-analytics-utils";
+import {
+  IMPORT_CASE_STATUS_LABELS,
+  type ImportCaseStatus,
+} from "@/lib/import-cases/constants";
+import type { ImportCasesAnalyticsData } from "@/lib/import-cases-analytics";
 
 const STATUS_LABELS: Record<string, string> = {
   uploaded: "Uploaded",
@@ -59,22 +64,48 @@ function formatDocDate(d: Date | null): string {
   });
 }
 
+function formatImportCaseStatus(status: string | null): string {
+  const key = (status ?? "draft") as ImportCaseStatus;
+  return IMPORT_CASE_STATUS_LABELS[key] ?? status ?? "Draft";
+}
+
 type AnalyticsViewProps = {
   fromKey: string;
   toKey: string;
   data: AnalyticsData;
+  importCasesData: ImportCasesAnalyticsData;
 };
 
-export function AnalyticsView({ fromKey, toKey, data }: AnalyticsViewProps) {
+export function AnalyticsView({
+  fromKey,
+  toKey,
+  data,
+  importCasesData,
+}: AnalyticsViewProps) {
   const uploadSeries = buildDateRangeUploadSeries(
     data.uploadsByDay,
     new Date(`${fromKey}T00:00:00`),
     new Date(`${toKey}T00:00:00`),
   );
+  const importCaseSeries = buildDateRangeUploadSeries(
+    importCasesData.casesByDay,
+    new Date(`${fromKey}T00:00:00`),
+    new Date(`${toKey}T00:00:00`),
+  );
   const periodTotal = uploadSeries.reduce((s, d) => s + d.count, 0);
+  const importCasePeriodTotal = importCaseSeries.reduce(
+    (s, d) => s + d.count,
+    0,
+  );
   const completionRate =
     data.totalCount > 0
       ? Math.round((data.completedCount / data.totalCount) * 100)
+      : 0;
+  const importCaseCompletionRate =
+    importCasesData.totalCount > 0
+      ? Math.round(
+          (importCasesData.completedCount / importCasesData.totalCount) * 100,
+        )
       : 0;
   const rangeLabel = formatRangeLabel(fromKey, toKey);
 
@@ -106,13 +137,30 @@ export function AnalyticsView({ fromKey, toKey, data }: AnalyticsViewProps) {
             Analytics
           </h1>
           <p className="mt-1.5 text-sm text-slate-500">
-            {rangeLabel} — uploads, classification outcomes, and file breakdowns.
+            {rangeLabel} — import cases, uploads, classification outcomes, and
+            file breakdowns.
           </p>
 
-          <div className="mt-5 grid grid-cols-3 gap-3 sm:max-w-lg">
+          <div className="mt-5 grid grid-cols-2 gap-3 sm:max-w-2xl sm:grid-cols-4">
             <div className="rounded-2xl border border-slate-200/60 bg-white/80 px-4 py-3">
               <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                Period uploads
+                Import cases
+              </p>
+              <p className="mt-0.5 text-xl font-bold tabular-nums text-violet-700">
+                {importCasesData.totalCount}
+              </p>
+            </div>
+            <div className="rounded-2xl border border-slate-200/60 bg-white/80 px-4 py-3">
+              <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                Case completion
+              </p>
+              <p className="mt-0.5 text-xl font-bold tabular-nums text-emerald-700">
+                {importCaseCompletionRate}%
+              </p>
+            </div>
+            <div className="rounded-2xl border border-slate-200/60 bg-white/80 px-4 py-3">
+              <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                Doc uploads
               </p>
               <p className="mt-0.5 text-xl font-bold tabular-nums text-indigo-700">
                 {periodTotal}
@@ -120,18 +168,10 @@ export function AnalyticsView({ fromKey, toKey, data }: AnalyticsViewProps) {
             </div>
             <div className="rounded-2xl border border-slate-200/60 bg-white/80 px-4 py-3">
               <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                Completion
+                Doc completion
               </p>
               <p className="mt-0.5 text-xl font-bold tabular-nums text-emerald-700">
                 {completionRate}%
-              </p>
-            </div>
-            <div className="rounded-2xl border border-slate-200/60 bg-white/80 px-4 py-3">
-              <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                In range
-              </p>
-              <p className="mt-0.5 text-xl font-bold tabular-nums text-slate-900">
-                {data.totalCount}
               </p>
             </div>
           </div>
@@ -139,6 +179,202 @@ export function AnalyticsView({ fromKey, toKey, data }: AnalyticsViewProps) {
       </div>
 
       <AnalyticsDateFilter from={fromKey} to={toKey} />
+
+      <div>
+        <div className="mb-4 flex items-center justify-between gap-3">
+          <div>
+            <h2 className="text-lg font-bold text-slate-900">Import cases</h2>
+            <p className="text-sm text-slate-500">
+              Cases created in the selected date range
+            </p>
+          </div>
+          {importCasesData.totalCount > 0 ? (
+            <DashLink href="/dashboard/import-cases">View all →</DashLink>
+          ) : null}
+        </div>
+
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          <DashboardStatCard
+            label="Cases in range"
+            value={importCasesData.totalCount}
+            hint={`${importCasePeriodTotal} in chart`}
+            accent="violet"
+            icon={
+              <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
+                <title>Cases</title>
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+              </svg>
+            }
+          />
+          <DashboardStatCard
+            label="Completed"
+            value={importCasesData.completedCount}
+            hint={`${importCaseCompletionRate}% completion rate`}
+            accent="green"
+            icon={
+              <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
+                <title>Completed</title>
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+            }
+          />
+          <DashboardStatCard
+            label="In progress"
+            value={importCasesData.inProgressCount}
+            hint="Extraction or classification"
+            accent="blue"
+            icon={
+              <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
+                <title>In progress</title>
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+            }
+          />
+          <DashboardStatCard
+            label="Cancelled"
+            value={importCasesData.cancelledCount}
+            hint={importCasesData.cancelledCount > 0 ? "Review cases" : "None cancelled"}
+            accent={importCasesData.cancelledCount > 0 ? "red" : "default"}
+            icon={
+              <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
+                <title>Cancelled</title>
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            }
+          />
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-5">
+        <DashCard className="lg:col-span-3">
+          <DashCardHeader
+            title="Import case volume"
+            action={
+              <span className="rounded-full bg-violet-50 px-2.5 py-1 text-xs font-semibold text-violet-700">
+                {importCaseSeries.length > 14 ? "Weekly" : "Daily"}
+              </span>
+            }
+          />
+          <div className="overflow-x-auto px-5 py-5 sm:px-6 sm:pb-6">
+            <DashboardUploadsChart
+              data={importCaseSeries}
+              granularity={importCaseSeries.length > 14 ? "weekly" : "daily"}
+            />
+          </div>
+        </DashCard>
+
+        <DashCard className="lg:col-span-2">
+          <DashCardHeader title="Case status breakdown" />
+          <div className="px-5 py-5 sm:px-6 sm:pb-6">
+            <DashboardStatusChart
+              items={importCasesData.statusBreakdown}
+              variant="import-cases"
+            />
+          </div>
+        </DashCard>
+      </div>
+
+      <DashCard>
+        <DashCardHeader
+          title="Import cases in selected range"
+          action={
+            importCasesData.recentInRange.length > 0 ? (
+              <DashLink href="/dashboard/import-cases">View all →</DashLink>
+            ) : undefined
+          }
+        />
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-slate-100 bg-slate-50/80 text-left">
+                <th className="px-5 py-3 text-xs font-bold uppercase tracking-wider text-slate-500">
+                  Case #
+                </th>
+                <th className="px-5 py-3 text-xs font-bold uppercase tracking-wider text-slate-500">
+                  Importer
+                </th>
+                <th className="px-5 py-3 text-xs font-bold uppercase tracking-wider text-slate-500">
+                  Supplier
+                </th>
+                <th className="px-5 py-3 w-28 text-xs font-bold uppercase tracking-wider text-slate-500">
+                  Date
+                </th>
+                <th className="px-5 py-3 w-40 text-xs font-bold uppercase tracking-wider text-slate-500">
+                  Status
+                </th>
+                <th className="px-5 py-3 w-20 text-right text-xs font-bold uppercase tracking-wider text-slate-500">
+                  Action
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {importCasesData.recentInRange.length === 0 ? (
+                <tr>
+                  <td colSpan={6} className="p-0">
+                    <div className="flex flex-col items-center justify-center px-6 py-14 text-center">
+                      <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-100 text-slate-400">
+                        <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+                        </svg>
+                      </div>
+                      <p className="font-semibold text-slate-800">No import cases in this range</p>
+                      <p className="mt-1 text-sm text-slate-500">
+                        Try expanding the date filter or create a new import case.
+                      </p>
+                    </div>
+                  </td>
+                </tr>
+              ) : (
+                importCasesData.recentInRange.map((item) => (
+                  <tr
+                    key={item.id}
+                    className="border-t border-slate-50 transition-colors hover:bg-violet-50/20"
+                  >
+                    <td className="max-w-[160px] truncate px-5 py-3.5 font-semibold text-slate-900 sm:max-w-xs">
+                      {item.caseNumber}
+                    </td>
+                    <td className="px-5 py-3.5 text-slate-700">
+                      {item.importerName ?? "—"}
+                    </td>
+                    <td className="px-5 py-3.5 text-slate-700">
+                      {item.supplierName ?? "—"}
+                    </td>
+                    <td className="px-5 py-3.5 whitespace-nowrap text-slate-500">
+                      {formatDocDate(item.createdAt)}
+                    </td>
+                    <td className="px-5 py-3.5">
+                      <StatusBadge
+                        status={item.status}
+                        label={formatImportCaseStatus(item.status)}
+                      />
+                    </td>
+                    <td className="px-5 py-3.5 text-right">
+                      <Link
+                        href={`/dashboard/import-cases/${item.id}`}
+                        className="inline-flex items-center gap-1 rounded-xl bg-violet-50 px-3 py-1.5 text-sm font-semibold text-violet-700 transition-colors hover:bg-violet-100"
+                      >
+                        Open
+                        <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                        </svg>
+                      </Link>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      </DashCard>
+
+      <div className="pt-2">
+        <div className="mb-4">
+          <h2 className="text-lg font-bold text-slate-900">Packing list uploads</h2>
+          <p className="text-sm text-slate-500">
+            Standalone document classification in the selected range
+          </p>
+        </div>
+      </div>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <DashboardStatCard

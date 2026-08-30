@@ -1,0 +1,21 @@
+Packing List
+
+Packing List Number,PL-ET-2026-1008
+Related Invoice Number,INV-ET-2026-1008
+Packing List Date,2026-08-18
+Supplier Name,Guangzhou Sunfield Trading Co. Ltd.
+Shipment Reference,SHP-CN-ET-2026-1008
+
+Line,Description,SKU,Quantity,Unit,Cartons,Package Type,Pcs per Carton,Net Weight (kg),Gross Weight (kg),Package Marks,Country of Origin
+1,Green tea 3kg retail pouch 20 pouches per carton,GT-3KG,400,kg,20,carton,20,400.000,428.000,GT-3KG / MADE IN CHINA,CN
+2,Flavoured white sugar 25kg woven bag,SUG-VAN-25,200,kg,8,bag,1,200.000,204.800,SUG-VAN-25,CN
+3,Canned mandarin segments 850g 24 cans per carton,MAN-850,2400,pcs,100,carton,24,2040.000,2180.000,MAN-850 / FRAGILE,CN
+4,Hot break tomato paste 2.2kg tin 6 tins per carton,TOM-2200,600,pcs,100,carton,6,1320.000,1410.000,TOM-2200,CN
+5,Kidney beans dried 50kg PP bag,BEAN-KID,10000,kg,200,bag,1,10000.000,10120.000,BEAN-KID,CN
+6,Chicken luncheon meat 340g 24 cans per carton,CHK-340,4800,pcs,200,carton,24,1632.000,1756.000,CHK-340,CN
+7,Soybean crude oil flexi-bag 20 MT,OIL-SOY,20000,kg,1,flexibag,1,20000.000,20180.000,OIL-SOY / LIQUID,CN
+8,Palm olein RBD bulk flexi-tank 22 MT,OIL-PALM,22000,kg,1,flexitank,1,22000.000,22198.000,OIL-PALM / LIQUID,CN
+
+Total Cartons,,,,,530,,,56292.000,57477.800,,
+
+Notes,8 product lines aligned to INV-ET-2026-1008 for harmonization and HS classification testing against uploaded tariff book.

@@ -1,8 +1,10 @@
 import Link from "next/link";
+import { AuditLogTable } from "@/components/dashboard/AuditLogTable";
 import { DashCard, DashCardHeader, DashLink, StatusBadge } from "@/components/dashboard/ui";
 import { UserRoleSelect } from "@/components/dashboard/UserRoleSelect";
 import { USER_ROLE_LABELS, isUserRole } from "@/lib/auth/roles";
 import type { getDashboardUserDetail } from "@/lib/dashboard/users";
+import type { AuditLogView } from "@/lib/import-cases/audit-queries";
 
 type UserDetail = NonNullable<Awaited<ReturnType<typeof getDashboardUserDetail>>>;
 
@@ -42,6 +44,7 @@ function getPhoneFromMeta(meta: unknown): string | null {
 
 type UserDetailPanelProps = {
   user: UserDetail;
+  activityLog?: AuditLogView[];
   /** When viewing your own profile from My account */
   variant?: "self" | "admin";
   canManageRoles?: boolean;
@@ -51,6 +54,7 @@ type UserDetailPanelProps = {
 
 export function UserDetailPanel({
   user,
+  activityLog = [],
   variant = "admin",
   canManageRoles = false,
   viewerRole = null,
@@ -176,6 +180,22 @@ export function UserDetailPanel({
           </div>
         </DashCard>
       ) : null}
+
+      <AuditLogTable
+        title="Activity log"
+        entries={activityLog}
+        showCaseLink
+        description={
+          variant === "self"
+            ? "Your actions across import cases — uploads, reviews, classification, and exports."
+            : "Actions this user performed across import cases."
+        }
+        emptyMessage={
+          variant === "self"
+            ? "You have not performed any logged actions yet."
+            : "No logged activity for this user yet."
+        }
+      />
 
       <DashCard>
         <DashCardHeader

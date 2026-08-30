@@ -5,11 +5,20 @@ import { toast } from "sonner";
 import { HsCodeBadge } from "@/components/dashboard/document/HsCodeBadge";
 import { DashboardStatCard } from "@/components/dashboard/DashboardStatCard";
 import {
+  DashButton,
   DashCard,
   DashCardHeader,
   dashInputClass,
   dashSelectClass,
 } from "@/components/dashboard/ui";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { formatBytes } from "@/lib/formatBytes";
 import type { HsReferenceSortField } from "@/lib/hsReferenceTypes";
 
@@ -86,8 +95,10 @@ export function HsReferencePanel() {
   const [totalPages, setTotalPages] = useState(0);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
+  const [uploadModalOpen, setUploadModalOpen] = useState(false);
   const [file, setFile] = useState<File | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [uploadError, setUploadError] = useState<string | null>(null);
   const [dragActive, setDragActive] = useState(false);
 
   useEffect(() => {
@@ -156,18 +167,26 @@ export function HsReferencePanel() {
     if (!f) return;
     const name = f.name.toLowerCase();
     if (!name.endsWith(".xlsx") && !name.endsWith(".xls")) {
-      setError("Please upload an Excel file (.xlsx or .xls)");
+      setUploadError("Please upload an Excel file (.xlsx or .xls)");
       return;
     }
     setFile(f);
-    setError(null);
+    setUploadError(null);
+  };
+
+  const closeUploadModal = () => {
+    if (uploading) return;
+    setUploadModalOpen(false);
+    setFile(null);
+    setUploadError(null);
+    setDragActive(false);
   };
 
   const onUpload = async () => {
     if (!file) return;
 
     setUploading(true);
-    setError(null);
+    setUploadError(null);
     try {
       const form = new FormData();
       form.append("file", file);
@@ -181,10 +200,11 @@ export function HsReferencePanel() {
         `Upserted ${data.imported} rows (${data.inserted ?? data.imported} new, ${data.updated ?? 0} updated)`,
       );
       setFile(null);
+      setUploadModalOpen(false);
       await loadData();
     } catch (e) {
       const message = e instanceof Error ? e.message : "Upload failed";
-      setError(message);
+      setUploadError(message);
       toast.error(message);
     } finally {
       setUploading(false);
@@ -215,11 +235,16 @@ export function HsReferencePanel() {
                 Upload the Ethiopian combined tariff book. Classification uses these codes as the allowed reference list — rows merge by tariff number.
               </p>
             </div>
-            <div className="flex shrink-0 items-center gap-2 rounded-2xl border border-amber-200/80 bg-amber-50/80 px-4 py-3 text-sm text-amber-900">
-              <svg className="h-5 w-5 shrink-0 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-              <span>Partial books only cover imported chapters. Upload the full book for 94xx furniture codes.</span>
+            <div className="flex shrink-0 flex-col items-stretch gap-3 sm:items-end">
+              <DashButton type="button" onClick={() => setUploadModalOpen(true)}>
+                Import tariff book
+              </DashButton>
+              <div className="flex items-center gap-2 rounded-2xl border border-amber-200/80 bg-amber-50/80 px-4 py-3 text-sm text-amber-900">
+                <svg className="h-5 w-5 shrink-0 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <span>Partial books only cover imported chapters. Upload the full book for 94xx furniture codes.</span>
+              </div>
             </div>
           </div>
         </div>
@@ -272,80 +297,89 @@ export function HsReferencePanel() {
         />
       </div>
 
-      {/* Upload */}
-      <DashCard>
-        <DashCardHeader title="Upload tariff book" />
-        <div className="space-y-4 px-5 py-5 sm:px-6 sm:pb-6">
-          <p className="text-sm text-slate-600">
-            Expected columns: Heading, H.S. Code, Tariff No., Description, Std. Unit, Duty Rate.
-            Existing tariff numbers are updated; new rows are added without deleting other chapters.
-          </p>
+      <Dialog
+        open={uploadModalOpen}
+        onOpenChange={(open) => {
+          if (open) {
+            setUploadModalOpen(true);
+          } else {
+            closeUploadModal();
+          }
+        }}
+      >
+        <DialogContent className="max-w-lg gap-0 overflow-hidden p-0 sm:max-w-xl">
+          <DialogHeader className="border-b border-slate-100 px-6 py-5 text-left">
+            <DialogTitle>Upload tariff book</DialogTitle>
+            <DialogDescription>
+              Expected columns: Heading, H.S. Code, Tariff No., Description, Std.
+              Unit, Duty Rate. Existing tariff numbers are updated; new rows are
+              added without deleting other chapters.
+            </DialogDescription>
+          </DialogHeader>
 
-          <div
-            onDragOver={(e) => {
-              e.preventDefault();
-              setDragActive(true);
-            }}
-            onDragLeave={() => setDragActive(false)}
-            onDrop={(e) => {
-              e.preventDefault();
-              setDragActive(false);
-              acceptFile(e.dataTransfer.files[0]);
-            }}
-            className={`rounded-2xl border-2 border-dashed p-6 text-center transition-colors ${
-              dragActive
-                ? "border-indigo-400 bg-indigo-50/50"
-                : "border-slate-200 bg-slate-50/50 hover:border-slate-300"
-            }`}
-          >
-            <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-600 text-white shadow-lg shadow-emerald-500/20">
-              <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
-              </svg>
-            </div>
-            <p className="font-semibold text-slate-900">
-              {file ? file.name : "Drag & drop Excel tariff book"}
-            </p>
-            <p className="mt-1 text-xs text-slate-500">
-              {file ? `${(file.size / 1024).toFixed(1)} KB` : ".xlsx or .xls"}
-            </p>
-            <label className="mt-4 inline-flex cursor-pointer items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-50">
-              Browse file
-              <input
-                type="file"
-                accept=".xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                className="hidden"
-                onChange={(e) => acceptFile(e.target.files?.[0])}
-              />
-            </label>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-3">
-            <button
-              type="button"
-              onClick={() => void onUpload()}
-              disabled={!file || uploading}
-              className="inline-flex items-center gap-2 rounded-2xl bg-gradient-to-r from-indigo-600 to-violet-600 px-5 py-2.5 text-sm font-semibold text-white shadow-md shadow-indigo-500/20 transition-all hover:shadow-lg hover:shadow-indigo-500/25 disabled:opacity-50"
+          <div className="space-y-4 px-6 py-5">
+            <div
+              onDragOver={(e) => {
+                e.preventDefault();
+                setDragActive(true);
+              }}
+              onDragLeave={() => setDragActive(false)}
+              onDrop={(e) => {
+                e.preventDefault();
+                setDragActive(false);
+                acceptFile(e.dataTransfer.files[0]);
+              }}
+              className={`rounded-2xl border-2 border-dashed p-6 text-center transition-colors ${
+                dragActive
+                  ? "border-indigo-400 bg-indigo-50/50"
+                  : "border-slate-200 bg-slate-50/50 hover:border-slate-300"
+              }`}
             >
-              {uploading ? "Importing…" : "Import to database"}
-            </button>
-            {file && !uploading && (
-              <button
-                type="button"
-                onClick={() => setFile(null)}
-                className="text-sm font-medium text-slate-500 hover:text-slate-800"
-              >
-                Remove file
-              </button>
-            )}
+              <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-600 text-white shadow-lg shadow-emerald-500/20">
+                <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
+                  <title>Upload</title>
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+                </svg>
+              </div>
+              <p className="font-semibold text-slate-900">
+                {file ? file.name : "Drag & drop Excel tariff book"}
+              </p>
+              <p className="mt-1 text-xs text-slate-500">
+                {file ? `${(file.size / 1024).toFixed(1)} KB` : ".xlsx or .xls"}
+              </p>
+              <label className="mt-4 inline-flex cursor-pointer items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-50">
+                Browse file
+                <input
+                  type="file"
+                  accept=".xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                  className="hidden"
+                  onChange={(e) => acceptFile(e.target.files?.[0])}
+                />
+              </label>
+            </div>
+
+            {uploadError ? (
+              <p className="rounded-xl border border-red-100 bg-red-50 px-3 py-2 text-sm text-red-700">
+                {uploadError}
+              </p>
+            ) : null}
           </div>
-          {error && (
-            <p className="rounded-xl border border-red-100 bg-red-50 px-3 py-2 text-sm text-red-700">
-              {error}
-            </p>
-          )}
-        </div>
-      </DashCard>
+
+          <DialogFooter className="border-t border-slate-100 bg-slate-50/60 px-6 py-4">
+            {file && !uploading ? (
+              <DashButton type="button" variant="secondary" onClick={() => setFile(null)}>
+                Remove file
+              </DashButton>
+            ) : null}
+            <DashButton type="button" variant="secondary" onClick={closeUploadModal} disabled={uploading}>
+              Cancel
+            </DashButton>
+            <DashButton type="button" onClick={() => void onUpload()} disabled={!file || uploading}>
+              {uploading ? "Importing…" : "Import to database"}
+            </DashButton>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Browse table */}
       <DashCard>
@@ -358,6 +392,11 @@ export function HsReferencePanel() {
           }
         />
         <div className="space-y-4 px-5 py-4 sm:px-6">
+          {error ? (
+            <p className="rounded-xl border border-red-100 bg-red-50 px-3 py-2 text-sm text-red-700">
+              {error}
+            </p>
+          ) : null}
           <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
             <div className="relative flex-1">
               <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">
@@ -426,6 +465,9 @@ export function HsReferencePanel() {
             </div>
             <p className="font-semibold text-slate-800">No reference rows yet</p>
             <p className="mt-1 text-sm text-slate-500">Upload a tariff book to populate the reference table.</p>
+            <DashButton type="button" className="mt-4" onClick={() => setUploadModalOpen(true)}>
+              Import tariff book
+            </DashButton>
           </div>
         ) : !loading && total === 0 ? (
           <div className="px-6 py-10 text-center text-sm text-slate-500">

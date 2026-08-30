@@ -28,7 +28,7 @@ export function detectProductSignals(description: string): ProductSignals {
       /\bfan\b|extract\s*fan|air\s*supply\s*fan|bathroom\s*extract/i.test(d) &&
       !/ceiling\s*fan\s*motor/i.test(d),
     ceramic: /ceramic|pottery|vase\b/i.test(d),
-    food: /sausage|sauce|vinegar|soup|snack|noodle|pasta|rice\b|cereal|sugar|meat/i.test(
+    food: /sausage|sauce|vinegar|soup|snack|noodle|pasta|rice\b|cereal|sugar|meat|tea\b|oil\b|bean|tomato|mandarin|orange|citrus|poultry|palm|soy/i.test(
       d,
     ),
     textile: /towel|textile|briefs|underwear|bed\s*linen/i.test(d),
@@ -48,7 +48,7 @@ export function expectedChapters(description: string): string[] | null {
   if (s.wallpaper) return ["48"];
   if (s.fan) return ["84", "85"];
   if (s.ceramic) return ["69"];
-  if (s.food) return ["02", "08", "09", "16", "17", "19", "20", "21", "22"];
+  if (s.food) return ["02", "07", "08", "09", "11", "12", "15", "16", "17", "19", "20", "21", "22"];
   if (s.textile) return ["63", "61", "62"];
   if (s.pump) return ["84"];
   if (s.insulation) return ["70"];

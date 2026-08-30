@@ -1,4 +1,6 @@
-const STATUS_CONFIG: Record<
+import { IMPORT_CASE_STATUS_LABELS } from "@/lib/import-cases/constants";
+
+const DOCUMENT_STATUS_CONFIG: Record<
   string,
   { label: string; color: string; bar: string }
 > = {
@@ -18,7 +20,50 @@ const STATUS_CONFIG: Record<
   grouped: { label: "Grouped", color: "#8b5cf6", bar: "bg-violet-500" },
 };
 
-const ORDER = [
+const IMPORT_CASE_STATUS_CONFIG: Record<
+  string,
+  { label: string; color: string; bar: string }
+> = {
+  completed: {
+    label: "Completed",
+    color: "#10b981",
+    bar: "bg-emerald-500",
+  },
+  ready_for_declaration: {
+    label: "Ready for declaration",
+    color: "#14b8a6",
+    bar: "bg-teal-500",
+  },
+  classification_in_review: {
+    label: "Classification in review",
+    color: "#8b5cf6",
+    bar: "bg-violet-500",
+  },
+  ready_for_classification: {
+    label: "Ready for classification",
+    color: "#6366f1",
+    bar: "bg-indigo-500",
+  },
+  needs_information: {
+    label: "Needs information",
+    color: "#f97316",
+    bar: "bg-orange-500",
+  },
+  extraction_in_progress: {
+    label: "Extraction in progress",
+    color: "#f59e0b",
+    bar: "bg-amber-500",
+  },
+  documents_uploaded: {
+    label: "Documents uploaded",
+    color: "#0ea5e9",
+    bar: "bg-sky-500",
+  },
+  draft: { label: "Draft", color: "#94a3b8", bar: "bg-slate-400" },
+  cancelled: { label: "Cancelled", color: "#ef4444", bar: "bg-red-500" },
+};
+
+const DOCUMENT_ORDER = [
   "completed",
   "ai_processed",
   "parsed",
@@ -27,14 +72,46 @@ const ORDER = [
   "failed",
 ];
 
+const IMPORT_CASE_ORDER = [
+  "completed",
+  "ready_for_declaration",
+  "classification_in_review",
+  "ready_for_classification",
+  "needs_information",
+  "extraction_in_progress",
+  "documents_uploaded",
+  "draft",
+  "cancelled",
+];
+
 export type StatusCount = { status: string; count: number };
 
-export function DashboardStatusChart({ items }: { items: StatusCount[] }) {
+type DashboardStatusChartProps = {
+  items: StatusCount[];
+  variant?: "documents" | "import-cases";
+  emptyMessage?: string;
+};
+
+export function DashboardStatusChart({
+  items,
+  variant = "documents",
+  emptyMessage,
+}: DashboardStatusChartProps) {
+  const statusConfig =
+    variant === "import-cases"
+      ? IMPORT_CASE_STATUS_CONFIG
+      : DOCUMENT_STATUS_CONFIG;
+  const order =
+    variant === "import-cases" ? IMPORT_CASE_ORDER : DOCUMENT_ORDER;
+  const defaultEmpty =
+    variant === "import-cases"
+      ? "No import cases in this range yet."
+      : "No documents in this range yet.";
   const total = items.reduce((s, i) => s + i.count, 0);
   const sorted = [...items].sort(
     (a, b) =>
-      (ORDER.indexOf(a.status) === -1 ? 99 : ORDER.indexOf(a.status)) -
-      (ORDER.indexOf(b.status) === -1 ? 99 : ORDER.indexOf(b.status)),
+      (order.indexOf(a.status) === -1 ? 99 : order.indexOf(a.status)) -
+      (order.indexOf(b.status) === -1 ? 99 : order.indexOf(b.status)),
   );
 
   if (total === 0) {
@@ -47,7 +124,7 @@ export function DashboardStatusChart({ items }: { items: StatusCount[] }) {
           </svg>
         </div>
         <p className="text-sm text-slate-500">
-          No documents in this range yet.
+          {emptyMessage ?? defaultEmpty}
         </p>
       </div>
     );
@@ -57,8 +134,13 @@ export function DashboardStatusChart({ items }: { items: StatusCount[] }) {
   const segments = sorted
     .filter((i) => i.count > 0)
     .map((item) => {
-      const cfg = STATUS_CONFIG[item.status] ?? {
-        label: item.status,
+      const cfg = statusConfig[item.status] ?? {
+        label:
+          variant === "import-cases"
+            ? (IMPORT_CASE_STATUS_LABELS[
+                item.status as keyof typeof IMPORT_CASE_STATUS_LABELS
+              ] ?? item.status)
+            : item.status,
         color: "#94a3b8",
         bar: "bg-slate-400",
       };

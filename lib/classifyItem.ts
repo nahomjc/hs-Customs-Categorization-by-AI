@@ -19,9 +19,18 @@ export interface ClassificationResult {
   confidence?: number;
 }
 
+export type ClassifyItemMode = "furniture" | "tariff";
+
+export interface ClassifyItemOptions {
+  country?: string;
+  unit?: string;
+  /** Import-case / tariff mode: food, oils, general goods — not furniture-only. */
+  mode?: ClassifyItemMode;
+}
+
 const ALLOWED_HS_LIST = [...ALLOWED_HS_CODES].join(", ");
 
-function buildSystemPrompt(allowedList: string): string {
+function buildFurnitureSystemPrompt(allowedList: string): string {
   return `You are a customs assessor. You NEVER invent HS codes. You choose ONLY from the allowed list.
 
 Step 1 — Is this a physical import item?
@@ -50,32 +59,86 @@ Return ONLY valid JSON, no markdown:
 {"isImportItem":true|false,"category":"Category Name","hsCode":"XXXX" or "EXCLUDE","cleanDescription":"Short product description"}`;
 }
 
+function buildTariffSystemPrompt(
+  allowedList: string,
+  hasReferenceCandidates: boolean,
+): string {
+  const step4 = hasReferenceCandidates
+    ? `Step 4 — Pick the BEST matching HS code from the tariff reference candidates below.
+- Match on product type, material, processing (e.g. crude vs refined oil), and intended use.
+- Prefer the most specific subheading when multiple candidates fit.
+- Only use 9999 when no candidate is a reasonable match.
+
+Tariff reference candidates (choose one HS code from this list):
+${allowedList}`
+    : `Step 4 — Assign the correct WCO Harmonized System code (format #### or ####.##).
+Examples: soybean oil → 1507.90, palm olein → 1511.90, green tea → 0902.10, sugar → 1701.99, tomato paste → 2002.90, kidney beans → 0713.33, chicken luncheon meat → 1602.32.
+Use 9999 only when truly unknown. Use EXCLUDE for non-items.
+
+${allowedList}`;
+
+  return `You are a customs HS classifier for import shipments (WCO Harmonized System / Ethiopian tariff).
+
+Step 1 — Is this a physical import product (food, oil, machinery, textile, chemical, etc.)?
+- Headers, addresses, invoice titles, units only → answer NO (EXCLUDE).
+- Tangible goods → answer YES.
+
+Step 2 — Write one short clean product description.
+
+Step 3 — Assign a product category (e.g. Vegetable oils, Tea, Sugar, Prepared meat, Pulses, Furniture, Other).
+
+${step4}
+
+Never use 0000.00 or 9999.99.
+
+Return ONLY valid JSON, no markdown:
+{"isImportItem":true|false,"category":"Category Name","hsCode":"####.## or EXCLUDE or 9999","cleanDescription":"Short product description"}`;
+}
+
 async function buildAllowedListForItem(
   description: string,
   features: HsFeatures & { isImportItem?: boolean },
-): Promise<string> {
+  mode: ClassifyItemMode,
+): Promise<{ list: string; hasReferenceCandidates: boolean }> {
   await loadHsReferenceCache();
-
-  if (!isReferencePopulated()) {
-    return ALLOWED_HS_LIST;
-  }
 
   const keywords = Array.isArray(features.keywords) ? features.keywords : [];
   const searchQuery = [description, features.itemType, features.material, features.use]
     .filter(Boolean)
     .join(" ");
-  const candidates = await searchDescriptions(
-    `${searchQuery} ${keywords.join(" ")}`,
-    40,
-  );
 
-  if (candidates.length === 0) {
-    return `${ALLOWED_HS_LIST}, 9999`;
+  if (isReferencePopulated()) {
+    const candidates = await searchDescriptions(
+      `${searchQuery} ${keywords.join(" ")}`,
+      mode === "tariff" ? 30 : 40,
+    );
+
+    if (candidates.length > 0) {
+      const fromReference = candidates.map((row) =>
+        formatReferenceCandidate(row),
+      );
+      return {
+        list: [...fromReference, "9999", "EXCLUDE"].join("\n"),
+        hasReferenceCandidates: true,
+      };
+    }
   }
 
-  const fromReference = candidates.map((row) => formatReferenceCandidate(row));
-  const fallback = [...ALLOWED_HS_CODES].slice(0, 10);
-  return [...fromReference, ...fallback, "9999", "EXCLUDE"].join("\n");
+  if (mode === "tariff") {
+    return {
+      list: "Assign any valid WCO HS code (#### or ####.##). Use 9999 if unknown. EXCLUDE for non-items.",
+      hasReferenceCandidates: false,
+    };
+  }
+
+  if (!isReferencePopulated()) {
+    return { list: ALLOWED_HS_LIST, hasReferenceCandidates: false };
+  }
+
+  return {
+    list: `${ALLOWED_HS_LIST}, 9999`,
+    hasReferenceCandidates: false,
+  };
 }
 
 const FEATURE_EXTRACTOR_PROMPT = `You are a feature extractor for HS classification.
@@ -135,8 +198,9 @@ async function callOpenRouter(
 
 export async function classifyItem(
   description: string,
-  options?: { country?: string; unit?: string },
+  options?: ClassifyItemOptions,
 ): Promise<ClassificationResult & { aiRawResponse?: string }> {
+  const mode = options?.mode ?? "furniture";
   console.log(
     "[HS classifyItem] calling API for:",
     `${description.slice(0, 60)}${description.length > 60 ? "..." : ""}`,
@@ -185,8 +249,12 @@ export async function classifyItem(
   }
   reasoningUserContent += `\nExtracted features JSON: ${JSON.stringify(features)}\nGRI rule-engine candidate HS: ${gri.suggestedHsCodes.join(", ")}\nGRI rationale: ${gri.rationale}`;
 
-  const allowedList = await buildAllowedListForItem(description, features);
-  const systemPrompt = buildSystemPrompt(allowedList);
+  const { list: allowedList, hasReferenceCandidates } =
+    await buildAllowedListForItem(description, features, mode);
+  const systemPrompt =
+    mode === "tariff"
+      ? buildTariffSystemPrompt(allowedList, hasReferenceCandidates)
+      : buildFurnitureSystemPrompt(allowedList);
 
   const content = await callOpenRouter([
     { role: "system", content: systemPrompt },

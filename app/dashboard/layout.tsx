@@ -56,7 +56,7 @@ export default async function DashboardLayout({
       className={`dashboard-page landing-page min-h-screen flex flex-col ${inter.className}`}
     >
       <header className="sticky top-0 z-50 bg-white/80 backdrop-blur-md border-b border-gray-100">
-        <div className="landing-container h-14 flex items-center justify-between gap-4">
+        <div className="dashboard-container h-14 flex items-center justify-between gap-4">
           <BrandLogo href="/" size="md" className="shrink-0" />
           {user ? (
             <DashboardNav
@@ -65,9 +65,11 @@ export default async function DashboardLayout({
           ) : null}
         </div>
       </header>
-      <div className="landing-container flex-1 py-6 sm:py-8 max-w-[1400px] flex flex-col lg:flex-row gap-4 lg:gap-8 items-start">
+      <div className="dashboard-container flex-1 py-6 sm:py-8 flex flex-col lg:flex-row gap-4 lg:gap-6 items-start">
         <DashboardSidebarShell />
-        <main className="flex-1 min-w-0 w-full">{children}</main>
+        <main className="flex-1 min-w-0 w-full pb-[var(--dashboard-fab-bottom)]">
+          {children}
+        </main>
       </div>
       <DashboardAssistantChat />
     </div>

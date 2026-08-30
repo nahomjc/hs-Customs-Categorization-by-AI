@@ -4,6 +4,7 @@ import { PageHeader } from "@/components/dashboard/ui";
 import { getDashboardUserDetail } from "@/lib/dashboard/users";
 import { DEFAULT_TENANT_ID } from "@/lib/auth/constants";
 import { getAuthUser } from "@/lib/auth/session";
+import { getUserAuditLogs } from "@/lib/import-cases/audit-queries";
 
 export const dynamic = "force-dynamic";
 
@@ -29,6 +30,8 @@ export default async function AccountPage() {
       documentCount: 0,
       recentDocuments: [],
     };
+
+  const activityLog = await getUserAuditLogs(profile.id, profile.tenantId);
 
   return (
     <div className="space-y-8">
@@ -59,7 +62,7 @@ export default async function AccountPage() {
         description="Your profile, role, and recent document activity."
       />
 
-      <UserDetailPanel user={profile} variant="self" />
+      <UserDetailPanel user={profile} variant="self" activityLog={activityLog} />
     </div>
   );
 }

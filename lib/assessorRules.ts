@@ -155,6 +155,46 @@ const FALLBACK_9999_RULES: Array<{
     hsCode: "7019",
     category: "Glass fibres and insulation",
   },
+  {
+    match: (d) => /soybean|soya\s*bean|soy\s*oil|degummed/i.test(d),
+    hsCode: "1507.90",
+    category: "Soya-bean oil",
+  },
+  {
+    match: (d) => /palm\s*olein|palm\s*oil|RBD/i.test(d),
+    hsCode: "1511.90",
+    category: "Palm oil",
+  },
+  {
+    match: (d) => /\btea\b|green\s*tea/i.test(d),
+    hsCode: "0902.10",
+    category: "Green tea",
+  },
+  {
+    match: (d) => /\bsugar\b/i.test(d),
+    hsCode: "1701.99",
+    category: "Sugar",
+  },
+  {
+    match: (d) => /kidney\s*bean|red\s*bean/i.test(d),
+    hsCode: "0713.33",
+    category: "Dried kidney beans",
+  },
+  {
+    match: (d) => /tomato\s*paste/i.test(d),
+    hsCode: "2002.90",
+    category: "Tomato paste",
+  },
+  {
+    match: (d) => /luncheon\s*meat|chicken\s*meat/i.test(d),
+    hsCode: "1602.32",
+    category: "Prepared poultry",
+  },
+  {
+    match: (d) => /mandarin|orange.*syrup|citrus/i.test(d),
+    hsCode: "0805.21",
+    category: "Mandarins",
+  },
 ];
 
 /**
