@@ -79,12 +79,9 @@ export function HeroMarquee() {
   ];
 
   return (
-    <div className="relative mt-14 sm:mt-16 border-t border-gray-200/60 bg-white/50 backdrop-blur-sm overflow-hidden">
-      <div className="absolute left-0 top-0 bottom-0 w-16 sm:w-24 bg-gradient-to-r from-white to-transparent z-10" aria-hidden />
-      <div className="absolute right-0 top-0 bottom-0 w-16 sm:w-24 bg-gradient-to-l from-white to-transparent z-10" aria-hidden />
-
+    <div className="relative mt-14 sm:mt-16 w-full border-t border-gray-200/60 bg-white/50 backdrop-blur-sm overflow-hidden">
       <div className="flex py-4">
-        <div className="hero-marquee-track flex shrink-0 items-center gap-3 pr-3">
+        <div className="hero-marquee-track flex shrink-0 items-center gap-3">
           {items.map((item) => (
             <span
               key={item.id}

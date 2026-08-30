@@ -3,19 +3,12 @@
 import Link from "next/link";
 import { motion, useReducedMotion } from "framer-motion";
 import {
-  AnimatedNumber,
   HeroBackground,
   HeroHeadlineWords,
   HeroMarquee,
 } from "./HeroExtras";
 import { HeroProductVisual } from "./HeroProductVisual";
 import { fadeUp, staggerContainer } from "./motion";
-
-const trustItems = [
-  { value: 10, suffix: "×", label: "faster grouping", icon: "⚡" },
-  { value: 847, suffix: "+", label: "lines per file", icon: "📄" },
-  { value: 3, suffix: "", label: "export formats", icon: "📊" },
-];
 
 export function HeroSection() {
   const reduced = useReducedMotion() ?? false;
@@ -112,43 +105,9 @@ export function HeroSection() {
               </motion.div>
             </motion.div>
 
-            <motion.div
-              variants={fadeUp}
-              className="mt-10 grid grid-cols-3 gap-3 max-w-md mx-auto lg:mx-0"
-            >
-              {trustItems.map((item, i) => (
-                <motion.div
-                  key={item.label}
-                  className="group relative rounded-2xl border border-gray-100/80 bg-white/80 backdrop-blur-md px-3 py-4 text-center lg:text-left shadow-sm overflow-hidden"
-                  whileHover={{ y: -3, borderColor: "rgba(0,123,255,0.2)" }}
-                  transition={{ duration: 0.2 }}
-                >
-                  <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-[#007bff]/0 to-[#007bff]/5 opacity-0 group-hover:opacity-100 transition-opacity" aria-hidden />
-                  <p className="text-lg mb-1" aria-hidden>{item.icon}</p>
-                  <p className="text-xl sm:text-2xl font-bold text-gray-900 tabular-nums leading-none">
-                    <AnimatedNumber value={item.value} suffix={item.suffix} />
-                  </p>
-                  <p className="text-[10px] sm:text-xs text-gray-400 mt-1.5 leading-tight">{item.label}</p>
-                  <motion.div
-                    className="mt-2 h-0.5 rounded-full bg-gray-100 overflow-hidden"
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    transition={{ delay: 0.8 + i * 0.1 }}
-                  >
-                    <motion.div
-                      className="h-full bg-gradient-to-r from-[#007bff] to-indigo-400"
-                      initial={{ width: 0 }}
-                      animate={{ width: "100%" }}
-                      transition={{ delay: 1 + i * 0.15, duration: 0.8, ease: [0.22, 1, 0.36, 1] }}
-                    />
-                  </motion.div>
-                </motion.div>
-              ))}
-            </motion.div>
-
             <motion.p
               variants={fadeUp}
-              className="mt-6 text-xs text-gray-400 flex items-center justify-center lg:justify-start gap-2"
+              className="mt-8 text-xs text-gray-400 flex items-center justify-center lg:justify-start gap-2"
             >
               <span className="flex -space-x-1" aria-hidden>
                 {["bg-blue-200", "bg-emerald-200", "bg-violet-200"].map((c) => (
@@ -169,9 +128,9 @@ export function HeroSection() {
             <HeroProductVisual reduced={reduced} />
           </motion.div>
         </div>
-
-        <HeroMarquee />
       </div>
+
+      <HeroMarquee />
     </section>
   );
 }

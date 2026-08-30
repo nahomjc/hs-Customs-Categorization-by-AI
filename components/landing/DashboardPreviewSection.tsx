@@ -22,17 +22,33 @@ const highlights = [
   {
     title: "Live order tracking",
     description: "Clients see every stage — from upload to export — in real time.",
-    icon: "📍",
+    icon: (
+      <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75} aria-hidden>
+        <title>Live order tracking</title>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M12 21s-6-5.2-6-10a6 6 0 1112 0c0 4.8-6 10-6 10z" />
+        <circle cx="12" cy="11" r="2.5" />
+      </svg>
+    ),
   },
   {
     title: "Instant notifications",
     description: "Push alerts when an order moves to parsing, classifying, or export ready.",
-    icon: "🔔",
+    icon: (
+      <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75} aria-hidden>
+        <title>Instant notifications</title>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+      </svg>
+    ),
   },
   {
     title: "Multi-order dashboard",
     description: "Track dozens of shipments at once with status badges and timelines.",
-    icon: "📋",
+    icon: (
+      <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75} aria-hidden>
+        <title>Multi-order dashboard</title>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
+      </svg>
+    ),
   },
 ];
 
@@ -66,7 +82,9 @@ export function DashboardPreviewSection() {
                 transition={{ delay: i * 0.08, duration: 0.45, ease: easeOut }}
                 className="rounded-xl border border-white/60 bg-white/50 backdrop-blur-sm px-4 py-3 text-left"
               >
-                <span className="text-lg" aria-hidden>{item.icon}</span>
+                <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-[#007bff]/10 text-[#007bff]">
+                  {item.icon}
+                </div>
                 <p className="text-sm font-semibold text-gray-900 mt-2">{item.title}</p>
                 <p className="text-xs text-gray-500 mt-1 leading-relaxed">{item.description}</p>
               </motion.div>
