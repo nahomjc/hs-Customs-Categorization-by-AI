@@ -21,6 +21,10 @@ export default async function UploadPage() {
       <PageHeader
         title="Upload packing list"
         description="Upload a PDF, Word, or Excel packing list. When the HS tariff reference is imported, lines are matched against it first; otherwise the app uses document HS codes or AI classification as before."
+        breadcrumbs={[
+          { label: "Dashboard", href: "/dashboard" },
+          { label: "Upload" },
+        ]}
       />
       <UploadForm autoOpenDocument={prefs.autoOpenDocument} />
     </div>

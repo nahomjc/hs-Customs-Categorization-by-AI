@@ -9,6 +9,11 @@ import {
   DashButton,
   DashCard,
   DashCardHeader,
+  DashTable,
+  DashTableHead,
+  DashTableHeaderRow,
+  DashTbody,
+  DashTh,
   StatusBadge,
   TruncatedText,
   dashInputClass,
@@ -297,7 +302,7 @@ export function ClassificationTab({
             </p>
           </div>
         ) : (
-          <table className="w-full table-fixed text-xs">
+          <DashTable tableClassName="table-fixed text-xs">
             <colgroup>
               <col className="w-8" />
               <col className="w-[22%]" />
@@ -305,16 +310,18 @@ export function ClassificationTab({
               <col className="w-[16%]" />
               <col className="w-[160px]" />
             </colgroup>
-            <thead>
-              <tr className="border-b border-slate-100 bg-slate-50/50 text-left uppercase tracking-wide text-slate-500">
-                <th className="px-3 py-2">#</th>
-                <th className="px-3 py-2">Product</th>
-                <th className="px-3 py-2">HS / Tariff</th>
-                <th className="px-3 py-2">Source</th>
-                <th className="px-3 py-2 text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
+            <DashTableHead>
+              <DashTableHeaderRow>
+                <DashTh density="compact">#</DashTh>
+                <DashTh density="compact">Product</DashTh>
+                <DashTh density="compact">HS / Tariff</DashTh>
+                <DashTh density="compact">Source</DashTh>
+                <DashTh density="compact" align="right">
+                  Actions
+                </DashTh>
+              </DashTableHeaderRow>
+            </DashTableHead>
+            <DashTbody>
               {tableRows.map(
                 ({ product, candidates, classification, tariffSnapshot }) => (
                   <ClassificationTableRow
@@ -338,8 +345,8 @@ export function ClassificationTab({
                   />
                 ),
               )}
-            </tbody>
-          </table>
+            </DashTbody>
+          </DashTable>
         )}
       </DashCard>
     </div>

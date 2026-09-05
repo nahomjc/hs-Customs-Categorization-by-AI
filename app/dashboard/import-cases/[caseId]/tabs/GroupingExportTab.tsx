@@ -8,6 +8,11 @@ import {
   DashButton,
   DashCard,
   DashCardHeader,
+  DashTable,
+  DashTableHead,
+  DashTableHeaderRow,
+  DashTbody,
+  DashTh,
   StatusBadge,
   TruncatedText,
 } from "@/components/dashboard/ui";
@@ -173,47 +178,45 @@ export function GroupingExportTab({
         </div>
       ) : (
         <>
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-160 text-sm">
-              <thead>
-                <tr className="border-b border-slate-100 bg-slate-50/80 text-left text-[11px] font-semibold uppercase tracking-wide text-slate-500">
-                  <th className="px-5 py-3">Group</th>
-                  <th className="px-3 py-3">HS code</th>
-                  <th className="px-3 py-3">Origin</th>
-                  <th className="px-3 py-3">Unit</th>
-                  <th className="px-3 py-3">Duty</th>
-                  <th className="px-3 py-3 text-right">Qty</th>
-                  <th className="px-3 py-3 text-right">Products</th>
-                  <th className="px-3 py-3">Status</th>
-                  <th className="px-5 py-3 text-right">Details</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {groupings.map(({ grouping: g, products, totalQuantity: qty }) => {
-                  const expanded = expandedGroupId === g.id;
-                  const dutyRate =
-                    formatDutyRateFromSnapshot(products[0]?.tariffSnapshot) ??
-                    null;
+          <DashTable tableClassName="min-w-160">
+            <DashTableHead>
+              <DashTableHeaderRow>
+                <DashTh>Group</DashTh>
+                <DashTh>HS code</DashTh>
+                <DashTh>Origin</DashTh>
+                <DashTh>Unit</DashTh>
+                <DashTh>Duty</DashTh>
+                <DashTh align="right">Qty</DashTh>
+                <DashTh align="right">Products</DashTh>
+                <DashTh>Status</DashTh>
+                <DashTh align="right">Details</DashTh>
+              </DashTableHeaderRow>
+            </DashTableHead>
+            <DashTbody>
+              {groupings.map(({ grouping: g, products, totalQuantity: qty }) => {
+                const expanded = expandedGroupId === g.id;
+                const dutyRate =
+                  formatDutyRateFromSnapshot(products[0]?.tariffSnapshot) ??
+                  null;
 
-                  return (
-                    <GroupingTableRow
-                      key={g.id}
-                      group={g}
-                      products={products}
-                      totalQuantity={qty}
-                      dutyRate={dutyRate}
-                      expanded={expanded}
-                      onToggle={() =>
-                        setExpandedGroupId((current) =>
-                          current === g.id ? null : g.id,
-                        )
-                      }
-                    />
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+                return (
+                  <GroupingTableRow
+                    key={g.id}
+                    group={g}
+                    products={products}
+                    totalQuantity={qty}
+                    dutyRate={dutyRate}
+                    expanded={expanded}
+                    onToggle={() =>
+                      setExpandedGroupId((current) =>
+                        current === g.id ? null : g.id,
+                      )
+                    }
+                  />
+                );
+              })}
+            </DashTbody>
+          </DashTable>
 
           <section className="border-t border-slate-100 bg-slate-50/50 px-5 py-4">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">

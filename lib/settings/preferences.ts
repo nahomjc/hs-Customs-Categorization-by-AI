@@ -28,6 +28,12 @@ export type UserPreferences = {
   historyPageSize: HistoryPageSize;
   /** Default analytics date range when URL has no `from`/`to`. */
   defaultAnalyticsRange: AnalyticsRangePreset;
+  /** In-app dashboard notifications for shipment tracking. */
+  notifyDashboard: boolean;
+  /** Telegram notifications for shipment tracking. */
+  notifyTelegram: boolean;
+  /** SMS notifications for shipment tracking. */
+  notifySms: boolean;
 };
 
 export const DEFAULT_PREFERENCES: UserPreferences = {
@@ -40,6 +46,9 @@ export const DEFAULT_PREFERENCES: UserPreferences = {
   showInactiveUsers: false,
   historyPageSize: 50,
   defaultAnalyticsRange: "30d",
+  notifyDashboard: true,
+  notifyTelegram: true,
+  notifySms: true,
 };
 
 export const DEFAULT_PREFERENCES_JSON = DEFAULT_PREFERENCES as Record<
@@ -123,6 +132,15 @@ export function parsePreferences(raw: unknown): UserPreferences {
     ),
     historyPageSize,
     defaultAnalyticsRange,
+    notifyDashboard: pickBoolean(
+      prefs.notifyDashboard,
+      DEFAULT_PREFERENCES.notifyDashboard
+    ),
+    notifyTelegram: pickBoolean(
+      prefs.notifyTelegram,
+      DEFAULT_PREFERENCES.notifyTelegram
+    ),
+    notifySms: pickBoolean(prefs.notifySms, DEFAULT_PREFERENCES.notifySms),
   };
 }
 

@@ -5,6 +5,15 @@ import {
   DashButton,
   DashCard,
   DashLink,
+  DashTable,
+  DashTableEmpty,
+  DashTableHead,
+  DashTableHeaderRow,
+  DashTableToolbar,
+  DashTbody,
+  DashTd,
+  DashTh,
+  DashTr,
   StatusBadge,
   dashInputClass,
   dashSelectClass,
@@ -71,8 +80,8 @@ export function ImportCasesTable({
 
   return (
     <DashCard>
-      <div className="border-b border-slate-100 px-5 py-4 space-y-3">
-        <div className="flex flex-col sm:flex-row gap-3">
+      <DashTableToolbar>
+        <div className="flex flex-col gap-3 sm:flex-row">
           <input
             type="search"
             placeholder="Search case number, importer, supplier..."
@@ -98,75 +107,64 @@ export function ImportCasesTable({
             {loading ? "Loading..." : "Filter"}
           </DashButton>
         </div>
-        <p className="text-xs text-slate-500">{total} import case(s)</p>
-      </div>
+        <p className="text-xs text-gray-500">{total} import case(s)</p>
+      </DashTableToolbar>
 
-      <div className="overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b border-slate-100 bg-slate-50/50 text-left text-xs uppercase tracking-wide text-slate-500">
-              <th className="px-5 py-3 font-semibold">Case #</th>
-              <th className="px-5 py-3 font-semibold">Importer</th>
-              <th className="px-5 py-3 font-semibold">Supplier</th>
-              <th className="px-5 py-3 font-semibold">Status</th>
-              <th className="px-5 py-3 font-semibold">Agent</th>
-              <th className="px-5 py-3 font-semibold">Checks</th>
-              <th className="px-5 py-3 font-semibold">Updated</th>
-            </tr>
-          </thead>
-          <tbody>
-            {filtered.length === 0 ? (
-              <tr>
-                <td colSpan={7} className="px-5 py-10 text-center text-slate-500">
-                  No import cases found. Create your first case to get started.
-                </td>
-              </tr>
-            ) : (
-              filtered.map((item) => (
-                <tr
-                  key={item.id}
-                  className="border-b border-slate-50 hover:bg-slate-50/50"
-                >
-                  <td className="px-5 py-3">
-                    <DashLink href={`/dashboard/import-cases/${item.id}`}>
-                      {item.caseNumber}
-                    </DashLink>
-                  </td>
-                  <td className="px-5 py-3 text-slate-700">
-                    {item.importerName ?? "—"}
-                  </td>
-                  <td className="px-5 py-3 text-slate-700">
-                    {item.supplierName ?? "—"}
-                  </td>
-                  <td className="px-5 py-3">
-                    <StatusBadge
-                      label={
-                        IMPORT_CASE_STATUS_LABELS[
-                          (item.status as ImportCaseStatus) ?? "draft"
-                        ] ?? item.status ?? "Draft"
-                      }
-                      status={item.status ?? "draft"}
-                    />
-                  </td>
-                  <td className="px-5 py-3 text-slate-600">
-                    {item.assignedAgentName ??
-                      item.assignedAgentEmail ??
-                      "—"}
-                  </td>
-                  <td className="px-5 py-3 text-slate-600">
-                    {item.openCheckCount}
-                  </td>
-                  <td className="px-5 py-3 text-slate-500 text-xs">
-                    {item.updatedAt
-                      ? new Date(item.updatedAt).toLocaleString()
-                      : "—"}
-                  </td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-      </div>
+      <DashTable>
+        <DashTableHead>
+          <DashTableHeaderRow>
+            <DashTh>Case #</DashTh>
+            <DashTh>Importer</DashTh>
+            <DashTh>Supplier</DashTh>
+            <DashTh>Status</DashTh>
+            <DashTh>Agent</DashTh>
+            <DashTh>Checks</DashTh>
+            <DashTh>Updated</DashTh>
+          </DashTableHeaderRow>
+        </DashTableHead>
+        <DashTbody>
+          {filtered.length === 0 ? (
+            <DashTableEmpty colSpan={7}>
+              No import cases found. Create your first case to get started.
+            </DashTableEmpty>
+          ) : (
+            filtered.map((item) => (
+              <DashTr key={item.id}>
+                <DashTd className="text-gray-900">
+                  <DashLink href={`/dashboard/import-cases/${item.id}`}>
+                    {item.caseNumber}
+                  </DashLink>
+                </DashTd>
+                <DashTd>{item.importerName ?? "—"}</DashTd>
+                <DashTd>{item.supplierName ?? "—"}</DashTd>
+                <DashTd>
+                  <StatusBadge
+                    label={
+                      IMPORT_CASE_STATUS_LABELS[
+                        (item.status as ImportCaseStatus) ?? "draft"
+                      ] ??
+                      item.status ??
+                      "Draft"
+                    }
+                    status={item.status ?? "draft"}
+                  />
+                </DashTd>
+                <DashTd muted>
+                  {item.assignedAgentName ??
+                    item.assignedAgentEmail ??
+                    "—"}
+                </DashTd>
+                <DashTd muted>{item.openCheckCount}</DashTd>
+                <DashTd muted className="text-xs">
+                  {item.updatedAt
+                    ? new Date(item.updatedAt).toLocaleString()
+                    : "—"}
+                </DashTd>
+              </DashTr>
+            ))
+          )}
+        </DashTbody>
+      </DashTable>
     </DashCard>
   );
 }

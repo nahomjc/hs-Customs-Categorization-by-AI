@@ -24,6 +24,9 @@ export function InviteUserForm() {
       fullName: String(form.get("fullName") ?? "").trim(),
       phone: String(form.get("phone") ?? "").trim(),
       password: String(form.get("password") ?? ""),
+      role: String(form.get("role") ?? "user"),
+      emailVerified: form.get("emailVerified") === "on",
+      phoneVerified: form.get("phoneVerified") === "on",
     };
 
     try {
@@ -62,14 +65,10 @@ export function InviteUserForm() {
       <PageHeader
         title="Invite user"
         description="Create an account and send an invitation email with login details."
-        action={
-          <Link
-            href="/dashboard/users"
-            className="inline-flex items-center text-sm font-medium text-gray-600 hover:text-gray-900"
-          >
-            ← Back to user list
-          </Link>
-        }
+        breadcrumbs={[
+          { label: "Users", href: "/dashboard/users" },
+          { label: "Invite" },
+        ]}
       />
 
       <DashCard>
@@ -114,8 +113,60 @@ export function InviteUserForm() {
               required
               autoComplete="tel"
               className={fieldClass}
-              placeholder="+1 555 000 0000"
+              placeholder="251911234567"
             />
+            <p className="mt-1.5 text-xs text-gray-500">
+              Ethiopian mobile in 251… format (used for SMS tracking alerts).
+            </p>
+          </div>
+          <div>
+            <label htmlFor="invite-role" className="block text-sm font-medium text-gray-700 mb-1.5">
+              Role
+            </label>
+            <select
+              id="invite-role"
+              name="role"
+              defaultValue="user"
+              className={fieldClass}
+            >
+              <option value="user">User</option>
+              <option value="assessor">Assessor</option>
+              <option value="client">Client</option>
+              <option value="admin">Admin</option>
+            </select>
+            <p className="mt-1.5 text-xs text-gray-500">
+              Clients see shipment tracking only. Staff can manage import cases.
+            </p>
+          </div>
+          <div className="rounded-xl border border-gray-100 bg-gray-50/80 px-4 py-3 space-y-3">
+            <p className="text-sm font-medium text-gray-900">Verification</p>
+            <label className="flex items-start gap-2.5 text-sm text-gray-700">
+              <input
+                type="checkbox"
+                name="emailVerified"
+                defaultChecked
+                className="mt-0.5 rounded border-gray-300 text-[#007bff] focus:ring-[#007bff]"
+              />
+              <span>
+                <span className="font-medium">Email verified</span>
+                <span className="block text-xs text-gray-500 mt-0.5">
+                  Skip email confirmation so they can sign in immediately.
+                </span>
+              </span>
+            </label>
+            <label className="flex items-start gap-2.5 text-sm text-gray-700">
+              <input
+                type="checkbox"
+                name="phoneVerified"
+                className="mt-0.5 rounded border-gray-300 text-[#007bff] focus:ring-[#007bff]"
+              />
+              <span>
+                <span className="font-medium">Phone verified</span>
+                <span className="block text-xs text-gray-500 mt-0.5">
+                  Mark phone as verified for SMS notifications.
+                </span>
+              </span>
+            </label>
           </div>
           <div>
             <label htmlFor="invite-password" className="block text-sm font-medium text-gray-700 mb-1.5">
@@ -132,6 +183,7 @@ export function InviteUserForm() {
             />
             <p className="mt-1.5 text-xs text-gray-500">
               Temporary password for first sign-in. They must choose a new password after accepting the invite.
+              We try SMS first; if SMS fails the invite is sent by email instead.
             </p>
           </div>
           <div className="flex flex-col sm:flex-row gap-3 pt-2">

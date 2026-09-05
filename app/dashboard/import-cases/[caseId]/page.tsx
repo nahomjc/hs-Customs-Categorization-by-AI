@@ -1,6 +1,11 @@
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { Suspense } from "react";
+import { eq } from "drizzle-orm";
 import { ImportCaseHero } from "@/components/dashboard/import-case/ImportCaseHero";
+import { db } from "@/db";
+import { users } from "@/db/schema";
+import { getSessionUserProfile } from "@/lib/auth/require-admin";
+import { isClientRole, isStaffRole } from "@/lib/auth/roles";
 import { getCaseAuditLogs } from "@/lib/import-cases/audit-queries";
 import { getCaseClassifications } from "@/lib/import-cases/classification-queries";
 import { getCaseGroupings } from "@/lib/import-cases/grouping-queries";
@@ -27,6 +32,15 @@ type PageProps = {
 export default async function ImportCaseDetailPage({ params }: PageProps) {
   const { caseId } = await params;
   const tenantId = getTenantId();
+  const session = await getSessionUserProfile();
+  const role = session?.profile?.role ?? "user";
+
+  if (isClientRole(role)) {
+    redirect(`/dashboard/my-shipments/${caseId}`);
+  }
+  if (!isStaffRole(role)) {
+    notFound();
+  }
 
   let importCase: Awaited<ReturnType<typeof getImportCaseById>> | undefined;
   let documents: Awaited<ReturnType<typeof getCaseDocuments>> = [];
@@ -39,6 +53,12 @@ export default async function ImportCaseDetailPage({ params }: PageProps) {
   let referencePopulated = false;
   let agents: Awaited<ReturnType<typeof listTenantUsers>> = [];
   let auditLogs: Awaited<ReturnType<typeof getCaseAuditLogs>> = [];
+  let client: {
+    id: string;
+    fullName: string | null;
+    email: string;
+    phone: string | null;
+  } | null = null;
 
   try {
     const caseRow = await getImportCaseById(caseId, tenantId);
@@ -67,6 +87,20 @@ export default async function ImportCaseDetailPage({ params }: PageProps) {
       listTenantUsers(tenantId),
       getCaseAuditLogs(caseId, tenantId),
     ]);
+
+    if (caseRow.clientUserId) {
+      const [clientRow] = await db
+        .select({
+          id: users.id,
+          fullName: users.fullName,
+          email: users.email,
+          phone: users.phone,
+        })
+        .from(users)
+        .where(eq(users.id, caseRow.clientUserId))
+        .limit(1);
+      client = clientRow ?? null;
+    }
   } catch {
     notFound();
   }
@@ -121,6 +155,7 @@ export default async function ImportCaseDetailPage({ params }: PageProps) {
             fullName: agent.fullName,
             email: agent.email,
           }))}
+          client={client}
           auditLogs={auditLogs}
         />
       </Suspense>

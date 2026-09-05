@@ -8,6 +8,14 @@ import {
   DashButton,
   DashCard,
   DashCardHeader,
+  DashTable,
+  DashTableEmpty,
+  DashTableHead,
+  DashTableHeaderRow,
+  DashTbody,
+  DashTd,
+  DashTh,
+  DashTr,
   StatusBadge,
   dashInputClass,
   dashSelectClass,
@@ -213,56 +221,52 @@ export function PackingListLinesTab({
       </DashCard>
 
       <DashCard>
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-slate-100 bg-slate-50/50 text-left text-xs uppercase tracking-wide text-slate-500">
-                <th className="px-5 py-3">#</th>
-                <th className="px-5 py-3">Description</th>
-                <th className="px-5 py-3">Qty</th>
-                <th className="px-5 py-3">Packages</th>
-                <th className="px-5 py-3">Net wt</th>
-                <th className="px-5 py-3">Gross wt</th>
-                <th className="px-5 py-3">Source</th>
-                <th className="px-5 py-3">Reviewed</th>
-              </tr>
-            </thead>
-            <tbody>
-              {lines.length === 0 ? (
-                <tr>
-                  <td colSpan={8} className="px-5 py-8 text-center text-slate-500">
-                    No packing list lines yet.
-                  </td>
-                </tr>
-              ) : (
-                lines.map(({ line, documentName }) => (
-                  <tr key={line.id} className="border-b border-slate-50">
-                    <td className="px-5 py-3">{line.lineNumber}</td>
-                    <td className="px-5 py-3">{line.supplierDescription}</td>
-                    <td className="px-5 py-3">
-                      {line.quantity} {line.unitOfMeasure}
-                    </td>
-                    <td className="px-5 py-3">
-                      {line.numberOfPackages ?? "—"}
-                      {line.packageType ? ` (${line.packageType})` : ""}
-                    </td>
-                    <td className="px-5 py-3">{line.netWeightKg ?? "—"}</td>
-                    <td className="px-5 py-3">{line.grossWeightKg ?? "—"}</td>
-                    <td className="px-5 py-3 text-xs text-slate-500">
-                      {documentName ?? "—"}
-                    </td>
-                    <td className="px-5 py-3">
-                      <StatusBadge
-                        label={line.isReviewed ? "Reviewed" : "Pending"}
-                        status={line.isReviewed ? "completed" : "uploaded"}
-                      />
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
+        <DashTable>
+          <DashTableHead>
+            <DashTableHeaderRow>
+              <DashTh>#</DashTh>
+              <DashTh>Description</DashTh>
+              <DashTh>Qty</DashTh>
+              <DashTh>Packages</DashTh>
+              <DashTh>Net wt</DashTh>
+              <DashTh>Gross wt</DashTh>
+              <DashTh>Source</DashTh>
+              <DashTh>Reviewed</DashTh>
+            </DashTableHeaderRow>
+          </DashTableHead>
+          <DashTbody>
+            {lines.length === 0 ? (
+              <DashTableEmpty colSpan={8}>
+                No packing list lines yet.
+              </DashTableEmpty>
+            ) : (
+              lines.map(({ line, documentName }) => (
+                <DashTr key={line.id}>
+                  <DashTd>{line.lineNumber}</DashTd>
+                  <DashTd>{line.supplierDescription}</DashTd>
+                  <DashTd>
+                    {line.quantity} {line.unitOfMeasure}
+                  </DashTd>
+                  <DashTd>
+                    {line.numberOfPackages ?? "—"}
+                    {line.packageType ? ` (${line.packageType})` : ""}
+                  </DashTd>
+                  <DashTd>{line.netWeightKg ?? "—"}</DashTd>
+                  <DashTd>{line.grossWeightKg ?? "—"}</DashTd>
+                  <DashTd muted className="text-xs">
+                    {documentName ?? "—"}
+                  </DashTd>
+                  <DashTd>
+                    <StatusBadge
+                      label={line.isReviewed ? "Reviewed" : "Pending"}
+                      status={line.isReviewed ? "completed" : "uploaded"}
+                    />
+                  </DashTd>
+                </DashTr>
+              ))
+            )}
+          </DashTbody>
+        </DashTable>
       </DashCard>
     </div>
   );

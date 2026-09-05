@@ -39,8 +39,13 @@ export async function listImportCases(params: {
   status?: ImportCaseStatus;
   limit: number;
   offset: number;
+  clientUserId?: string;
 }) {
   const conditions = [eq(importCases.tenantId, params.tenantId)];
+
+  if (params.clientUserId) {
+    conditions.push(eq(importCases.clientUserId, params.clientUserId));
+  }
 
   if (params.status) {
     conditions.push(eq(importCases.status, params.status));
@@ -66,12 +71,14 @@ export async function listImportCases(params: {
         id: importCases.id,
         caseNumber: importCases.caseNumber,
         status: importCases.status,
+        trackingStatus: importCases.trackingStatus,
         importerName: importCases.importerName,
         supplierName: importCases.supplierName,
         shipmentReference: importCases.shipmentReference,
         assignedAgentId: importCases.assignedAgentId,
         assignedAgentName: users.fullName,
         assignedAgentEmail: users.email,
+        clientUserId: importCases.clientUserId,
         createdAt: importCases.createdAt,
         updatedAt: importCases.updatedAt,
       })
@@ -183,10 +190,53 @@ export async function listTenantUsers(tenantId: string) {
       fullName: users.fullName,
       email: users.email,
       role: users.role,
+      phone: users.phone,
     })
     .from(users)
-    .where(and(eq(users.tenantId, tenantId), eq(users.status, "active")))
+    .where(
+      and(
+        eq(users.tenantId, tenantId),
+        eq(users.status, "active"),
+        sql`${users.role} <> 'client'`,
+      ),
+    )
     .orderBy(users.fullName);
+}
+
+export async function searchTenantClients(params: {
+  tenantId: string;
+  query?: string;
+  limit?: number;
+}) {
+  const limit = params.limit ?? 20;
+  const conditions = [
+    eq(users.tenantId, params.tenantId),
+    eq(users.status, "active"),
+    eq(users.role, "client"),
+  ];
+
+  if (params.query?.trim()) {
+    const term = `%${params.query.trim()}%`;
+    conditions.push(
+      or(
+        ilike(users.fullName, term),
+        ilike(users.email, term),
+        ilike(users.phone, term),
+      )!,
+    );
+  }
+
+  return db
+    .select({
+      id: users.id,
+      fullName: users.fullName,
+      email: users.email,
+      phone: users.phone,
+    })
+    .from(users)
+    .where(and(...conditions))
+    .orderBy(users.fullName)
+    .limit(limit);
 }
 
 export type WriteAuditLogParams = {

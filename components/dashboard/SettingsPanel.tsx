@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { authClient } from "@/lib/auth/auth-client";
 import {
@@ -143,7 +143,27 @@ export function SettingsPanel({
               checked={prefs.emailOnFailure}
               onChange={(v) => setPrefs((p) => ({ ...p, emailOnFailure: v }))}
             />
+            <ToggleRow
+              label="Dashboard shipment updates"
+              description="Show tracking updates in your dashboard feed."
+              checked={prefs.notifyDashboard}
+              onChange={(v) => setPrefs((p) => ({ ...p, notifyDashboard: v }))}
+            />
+            <ToggleRow
+              label="Telegram shipment updates"
+              description="Send tracking updates to your linked Telegram chat."
+              checked={prefs.notifyTelegram}
+              onChange={(v) => setPrefs((p) => ({ ...p, notifyTelegram: v }))}
+            />
+            <ToggleRow
+              label="SMS shipment updates"
+              description="Send tracking updates via SMS Ethiopia to your phone."
+              checked={prefs.notifySms}
+              onChange={(v) => setPrefs((p) => ({ ...p, notifySms: v }))}
+            />
           </div>
+
+          <TelegramConnectSection />
 
           <div className="space-y-5 pt-2 border-t border-gray-100">
             <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">
@@ -299,6 +319,12 @@ export function SettingsPanel({
                   setPrefs((p) => ({ ...p, showInactiveUsers: v }))
                 }
               />
+              <Link
+                href="/dashboard/settings/channels"
+                className="inline-flex text-sm font-medium text-[#007bff] hover:underline"
+              >
+                Configure Telegram &amp; SMS channels →
+              </Link>
             </div>
           )}
         </div>
@@ -340,6 +366,99 @@ export function SettingsPanel({
           </button>
         </div>
       </DashCard>
+    </div>
+  );
+}
+
+function TelegramConnectSection() {
+  const [status, setStatus] = useState<{
+    linked: boolean;
+    botUsername: string | null;
+    telegramEnabled: boolean;
+  } | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    void (async () => {
+      try {
+        const res = await fetch("/api/account/telegram");
+        if (!res.ok) return;
+        const data = (await res.json()) as {
+          linked: boolean;
+          botUsername: string | null;
+          telegramEnabled: boolean;
+        };
+        setStatus(data);
+      } catch {
+        /* ignore */
+      }
+    })();
+  }, []);
+
+  async function connect() {
+    setBusy(true);
+    try {
+      const res = await fetch("/api/account/telegram", { method: "POST" });
+      const data = (await res.json()) as { deepLink?: string; error?: string };
+      if (!res.ok) throw new Error(data.error ?? "Could not create link");
+      if (data.deepLink) {
+        window.open(data.deepLink, "_blank", "noopener,noreferrer");
+        toast.success("Open Telegram and press Start to finish linking");
+      }
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Link failed");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function unlink() {
+    setBusy(true);
+    try {
+      const res = await fetch("/api/account/telegram", { method: "DELETE" });
+      if (!res.ok) throw new Error("Unlink failed");
+      setStatus((s) => (s ? { ...s, linked: false } : s));
+      toast.success("Telegram unlinked");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Unlink failed");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (!status?.telegramEnabled) return null;
+
+  return (
+    <div className="space-y-3 pt-2 border-t border-gray-100">
+      <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">
+        Telegram
+      </p>
+      <p className="text-xs text-gray-500">
+        {status.linked
+          ? "Your Telegram is linked for shipment updates and (for staff) /status commands."
+          : `Link Telegram${status.botUsername ? ` (@${status.botUsername})` : ""} to receive updates.`}
+      </p>
+      <div className="flex flex-wrap gap-2">
+        {!status.linked ? (
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => void connect()}
+            className="px-4 py-2 rounded-full bg-[#007bff] text-white text-sm font-semibold hover:bg-[#0069d9] disabled:opacity-50"
+          >
+            {busy ? "Preparing…" : "Connect Telegram"}
+          </button>
+        ) : (
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => void unlink()}
+            className="px-4 py-2 rounded-full border border-gray-200 text-sm font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+          >
+            Unlink Telegram
+          </button>
+        )}
+      </div>
     </div>
   );
 }

@@ -28,6 +28,13 @@ export const STATUS_STYLES: Record<string, string> = {
   open: "bg-orange-100 text-orange-800",
   resolved: "bg-emerald-100 text-emerald-800",
   ignored: "bg-slate-100 text-slate-500",
+  // Client shipment tracking
+  received: "bg-slate-100 text-slate-700",
+  documents_in_progress: "bg-sky-100 text-sky-800",
+  classification: "bg-indigo-100 text-indigo-800",
+  customs_clearance: "bg-amber-100 text-amber-800",
+  ready_for_pickup: "bg-orange-100 text-orange-800",
+  delivered: "bg-emerald-100 text-emerald-800",
 };
 
 export function StatusBadge({
@@ -70,18 +77,67 @@ export function TruncatedText({
   );
 }
 
+export type BreadcrumbItem = {
+  label: string;
+  href?: string;
+};
+
+export function Breadcrumbs({ items }: { items: BreadcrumbItem[] }) {
+  if (items.length === 0) return null;
+
+  return (
+    <nav aria-label="Breadcrumb">
+      <ol className="flex items-center gap-2 text-xs text-slate-500 min-w-0 flex-wrap">
+        {items.map((item, index) => {
+          const isLast = index === items.length - 1;
+          return (
+            <li
+              key={`${item.label}-${index}`}
+              className="flex items-center gap-2 min-w-0"
+            >
+              {index > 0 ? (
+                <span className="text-slate-300" aria-hidden>
+                  /
+                </span>
+              ) : null}
+              {item.href && !isLast ? (
+                <Link
+                  href={item.href}
+                  className="hover:text-indigo-600 transition-colors shrink-0"
+                >
+                  {item.label}
+                </Link>
+              ) : (
+                <span
+                  className="text-slate-700 font-medium truncate"
+                  aria-current={isLast ? "page" : undefined}
+                >
+                  {item.label}
+                </span>
+              )}
+            </li>
+          );
+        })}
+      </ol>
+    </nav>
+  );
+}
+
 export function PageHeader({
   title,
   description,
   action,
+  breadcrumbs,
 }: {
   title: string;
   description?: string;
   action?: ReactNode;
+  breadcrumbs?: BreadcrumbItem[];
 }) {
   return (
     <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
-      <div>
+      <div className="min-w-0 space-y-1.5">
+        {breadcrumbs?.length ? <Breadcrumbs items={breadcrumbs} /> : null}
         <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 tracking-tight">
           {title}
         </h1>
@@ -219,3 +275,17 @@ export const dashInputClass =
 
 export const dashSelectClass =
   "py-2 pl-3 pr-8 text-sm text-gray-900 bg-white border border-gray-200 rounded-xl focus:outline-none focus:border-[#007bff] focus:ring-[3px] focus:ring-[#007bff]/12";
+
+export {
+  DashTable,
+  DashTableHead,
+  DashTableHeaderRow,
+  DashTh,
+  DashTbody,
+  DashTr,
+  DashTd,
+  DashTableEmpty,
+  DashTableFooter,
+  DashTableAction,
+  DashTableToolbar,
+} from "./DashTable";

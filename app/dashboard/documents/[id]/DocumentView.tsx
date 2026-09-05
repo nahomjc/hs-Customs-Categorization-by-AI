@@ -12,7 +12,7 @@ import { NEED_INFO_HS } from "@/lib/allowedHsCodes";
 import { parseDocumentClassificationMeta } from "@/lib/documentClassificationMeta";
 import { DocumentHeroHeader } from "@/components/dashboard/document/DocumentHeroHeader";
 import { HsCodeBadge } from "@/components/dashboard/document/HsCodeBadge";
-import { DashLink, dashInputClass } from "@/components/dashboard/ui";
+import { Breadcrumbs, dashInputClass } from "@/components/dashboard/ui";
 import { DocumentChat } from "./DocumentChat";
 import { DocumentProcessingStepper } from "./DocumentProcessingStepper";
 
@@ -364,23 +364,12 @@ export function DocumentView(props: {
   if (status !== "completed" && status !== "failed") {
     return (
       <div className="w-full min-w-0 space-y-5">
-        <DashLink href="/dashboard" className="inline-flex items-center gap-1.5 text-slate-500 hover:text-slate-900">
-          <svg
-            aria-hidden="true"
-            className="w-4 h-4"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M15 19l-7-7 7-7"
-            />
-          </svg>
-          Back to dashboard
-        </DashLink>
+        <Breadcrumbs
+          items={[
+            { label: "History", href: "/dashboard/history" },
+            { label: fileName ?? "Document" },
+          ]}
+        />
         <DocumentProcessingStepper
           fileName={fileName}
           status={status}
@@ -396,23 +385,12 @@ export function DocumentView(props: {
   if (error || status === "failed") {
     return (
       <div className="w-full min-w-0 space-y-5">
-        <DashLink href="/dashboard" className="inline-flex items-center gap-1.5 text-slate-500 hover:text-slate-900">
-          <svg
-            aria-hidden="true"
-            className="w-4 h-4"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M15 19l-7-7 7-7"
-            />
-          </svg>
-          Back to dashboard
-        </DashLink>
+        <Breadcrumbs
+          items={[
+            { label: "History", href: "/dashboard/history" },
+            { label: fileName ?? "Document" },
+          ]}
+        />
         <div className="overflow-hidden rounded-3xl border border-red-100 bg-white shadow-[0_8px_40px_-12px_rgba(15,23,42,0.1)]">
           <div className="relative px-6 py-10 text-center sm:px-10">
             <div

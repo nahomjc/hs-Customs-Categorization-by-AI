@@ -71,7 +71,9 @@ export default async function DashboardLayout({
           {children}
         </main>
       </div>
-      <DashboardAssistantChat />
+      {profileSession?.profile?.role !== "client" ? (
+        <DashboardAssistantChat />
+      ) : null}
     </div>
   );
 }

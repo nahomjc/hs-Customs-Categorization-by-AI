@@ -1,5 +1,4 @@
-import Link from "next/link";
-import { StatusBadge } from "@/components/dashboard/ui";
+import { StatusBadge, Breadcrumbs } from "@/components/dashboard/ui";
 import { getCountryLabel } from "@/lib/countries";
 import {
   IMPORT_CASE_STATUS_LABELS,
@@ -94,18 +93,12 @@ export function ImportCaseHero({
       <div className="relative p-4 sm:p-5 space-y-3.5">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="min-w-0 space-y-1">
-            <nav className="flex items-center gap-2 text-xs text-slate-500">
-              <Link
-                href="/dashboard/import-cases"
-                className="hover:text-indigo-600 transition-colors"
-              >
-                Import cases
-              </Link>
-              <span className="text-slate-300">/</span>
-              <span className="text-slate-700 font-medium truncate">
-                {importCase.caseNumber}
-              </span>
-            </nav>
+            <Breadcrumbs
+              items={[
+                { label: "Import cases", href: "/dashboard/import-cases" },
+                { label: importCase.caseNumber },
+              ]}
+            />
 
             <div className="flex flex-wrap items-center gap-2">
               <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-slate-900">
@@ -172,13 +165,6 @@ export function ImportCaseHero({
                 </p>
               </div>
             </div>
-
-            <Link
-              href="/dashboard/import-cases"
-              className="hidden sm:inline text-xs font-medium text-indigo-600 hover:text-indigo-700 hover:underline whitespace-nowrap"
-            >
-              ← All cases
-            </Link>
           </div>
         </div>
 

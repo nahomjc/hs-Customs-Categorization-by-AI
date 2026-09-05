@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { AnalyticsBreakdownBars } from "@/components/dashboard/AnalyticsBreakdownBars";
 import { AnalyticsDateFilter } from "@/components/dashboard/AnalyticsDateFilter";
 import { DashboardStatCard } from "@/components/dashboard/DashboardStatCard";
@@ -8,6 +7,15 @@ import {
   DashCard,
   DashCardHeader,
   DashLink,
+  DashTable,
+  DashTableAction,
+  DashTableEmpty,
+  DashTableHead,
+  DashTableHeaderRow,
+  DashTbody,
+  DashTd,
+  DashTh,
+  DashTr,
   StatusBadge,
 } from "@/components/dashboard/ui";
 import {
@@ -283,88 +291,64 @@ export function AnalyticsView({
             ) : undefined
           }
         />
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-slate-100 bg-slate-50/80 text-left">
-                <th className="px-5 py-3 text-xs font-bold uppercase tracking-wider text-slate-500">
-                  Case #
-                </th>
-                <th className="px-5 py-3 text-xs font-bold uppercase tracking-wider text-slate-500">
-                  Importer
-                </th>
-                <th className="px-5 py-3 text-xs font-bold uppercase tracking-wider text-slate-500">
-                  Supplier
-                </th>
-                <th className="px-5 py-3 w-28 text-xs font-bold uppercase tracking-wider text-slate-500">
-                  Date
-                </th>
-                <th className="px-5 py-3 w-40 text-xs font-bold uppercase tracking-wider text-slate-500">
-                  Status
-                </th>
-                <th className="px-5 py-3 w-20 text-right text-xs font-bold uppercase tracking-wider text-slate-500">
-                  Action
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {importCasesData.recentInRange.length === 0 ? (
-                <tr>
-                  <td colSpan={6} className="p-0">
-                    <div className="flex flex-col items-center justify-center px-6 py-14 text-center">
-                      <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-100 text-slate-400">
-                        <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
-                        </svg>
-                      </div>
-                      <p className="font-semibold text-slate-800">No import cases in this range</p>
-                      <p className="mt-1 text-sm text-slate-500">
-                        Try expanding the date filter or create a new import case.
-                      </p>
-                    </div>
-                  </td>
-                </tr>
-              ) : (
-                importCasesData.recentInRange.map((item) => (
-                  <tr
-                    key={item.id}
-                    className="border-t border-slate-50 transition-colors hover:bg-violet-50/20"
-                  >
-                    <td className="max-w-[160px] truncate px-5 py-3.5 font-semibold text-slate-900 sm:max-w-xs">
-                      {item.caseNumber}
-                    </td>
-                    <td className="px-5 py-3.5 text-slate-700">
-                      {item.importerName ?? "—"}
-                    </td>
-                    <td className="px-5 py-3.5 text-slate-700">
-                      {item.supplierName ?? "—"}
-                    </td>
-                    <td className="px-5 py-3.5 whitespace-nowrap text-slate-500">
-                      {formatDocDate(item.createdAt)}
-                    </td>
-                    <td className="px-5 py-3.5">
-                      <StatusBadge
-                        status={item.status}
-                        label={formatImportCaseStatus(item.status)}
-                      />
-                    </td>
-                    <td className="px-5 py-3.5 text-right">
-                      <Link
-                        href={`/dashboard/import-cases/${item.id}`}
-                        className="inline-flex items-center gap-1 rounded-xl bg-violet-50 px-3 py-1.5 text-sm font-semibold text-violet-700 transition-colors hover:bg-violet-100"
-                      >
-                        Open
-                        <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                        </svg>
-                      </Link>
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
+        <DashTable>
+          <DashTableHead>
+            <DashTableHeaderRow>
+              <DashTh>Case #</DashTh>
+              <DashTh>Importer</DashTh>
+              <DashTh>Supplier</DashTh>
+              <DashTh className="w-28">Date</DashTh>
+              <DashTh className="w-40">Status</DashTh>
+              <DashTh align="right" className="w-20">
+                Action
+              </DashTh>
+            </DashTableHeaderRow>
+          </DashTableHead>
+          <DashTbody>
+            {importCasesData.recentInRange.length === 0 ? (
+              <DashTableEmpty colSpan={6} className="p-0">
+                <div className="flex flex-col items-center justify-center px-6 py-14 text-center">
+                  <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-100 text-slate-400">
+                    <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+                    </svg>
+                  </div>
+                  <p className="font-semibold text-slate-800">No import cases in this range</p>
+                  <p className="mt-1 text-sm text-slate-500">
+                    Try expanding the date filter or create a new import case.
+                  </p>
+                </div>
+              </DashTableEmpty>
+            ) : (
+              importCasesData.recentInRange.map((item) => (
+                <DashTr key={item.id}>
+                  <DashTd className="max-w-[160px] truncate font-semibold text-gray-900 sm:max-w-xs">
+                    {item.caseNumber}
+                  </DashTd>
+                  <DashTd>{item.importerName ?? "—"}</DashTd>
+                  <DashTd>{item.supplierName ?? "—"}</DashTd>
+                  <DashTd muted nowrap>
+                    {formatDocDate(item.createdAt)}
+                  </DashTd>
+                  <DashTd>
+                    <StatusBadge
+                      status={item.status}
+                      label={formatImportCaseStatus(item.status)}
+                    />
+                  </DashTd>
+                  <DashTd align="right">
+                    <DashTableAction href={`/dashboard/import-cases/${item.id}`}>
+                      Open
+                      <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                      </svg>
+                    </DashTableAction>
+                  </DashTd>
+                </DashTr>
+              ))
+            )}
+          </DashTbody>
+        </DashTable>
       </DashCard>
 
       <div className="pt-2">
@@ -485,92 +469,74 @@ export function AnalyticsView({
             ) : undefined
           }
         />
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-slate-100 bg-slate-50/80 text-left">
-                <th className="px-5 py-3 text-xs font-bold uppercase tracking-wider text-slate-500">
-                  File
-                </th>
-                <th className="px-5 py-3 w-24 text-xs font-bold uppercase tracking-wider text-slate-500">
-                  Type
-                </th>
-                <th className="px-5 py-3 w-28 text-xs font-bold uppercase tracking-wider text-slate-500">
-                  Date
-                </th>
-                <th className="px-5 py-3 w-32 text-xs font-bold uppercase tracking-wider text-slate-500">
-                  Status
-                </th>
-                <th className="px-5 py-3 w-20 text-right text-xs font-bold uppercase tracking-wider text-slate-500">
-                  Action
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {data.recentInRange.length === 0 ? (
-                <tr>
-                  <td colSpan={5} className="p-0">
-                    <div className="flex flex-col items-center justify-center px-6 py-14 text-center">
-                      <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-100 text-slate-400">
-                        <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+        <DashTable>
+          <DashTableHead>
+            <DashTableHeaderRow>
+              <DashTh>File</DashTh>
+              <DashTh className="w-24">Type</DashTh>
+              <DashTh className="w-28">Date</DashTh>
+              <DashTh className="w-32">Status</DashTh>
+              <DashTh align="right" className="w-20">
+                Action
+              </DashTh>
+            </DashTableHeaderRow>
+          </DashTableHead>
+          <DashTbody>
+            {data.recentInRange.length === 0 ? (
+              <DashTableEmpty colSpan={5} className="p-0">
+                <div className="flex flex-col items-center justify-center px-6 py-14 text-center">
+                  <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-100 text-slate-400">
+                    <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                    </svg>
+                  </div>
+                  <p className="font-semibold text-slate-800">No documents in this range</p>
+                  <p className="mt-1 text-sm text-slate-500">
+                    Try expanding the date filter or upload a new packing list.
+                  </p>
+                </div>
+              </DashTableEmpty>
+            ) : (
+              data.recentInRange.map((doc) => {
+                const ft = doc.fileType ?? "";
+                const typeBadge =
+                  FILE_TYPE_BADGE[ft] ??
+                  "bg-slate-50 text-slate-600 border-slate-200/80";
+                return (
+                  <DashTr key={doc.id}>
+                    <DashTd className="max-w-[200px] truncate font-semibold text-gray-900 sm:max-w-md">
+                      {doc.originalFileName ?? "—"}
+                    </DashTd>
+                    <DashTd>
+                      <span
+                        className={`inline-flex rounded-lg border px-2 py-0.5 text-[11px] font-bold uppercase tracking-wide ${typeBadge}`}
+                      >
+                        {FILE_TYPE_LABELS[ft] ?? ft ?? "—"}
+                      </span>
+                    </DashTd>
+                    <DashTd muted nowrap>
+                      {formatDocDate(doc.createdAt)}
+                    </DashTd>
+                    <DashTd>
+                      <StatusBadge
+                        status={doc.status}
+                        label={formatStatus(doc.status)}
+                      />
+                    </DashTd>
+                    <DashTd align="right">
+                      <DashTableAction href={`/dashboard/documents/${doc.id}`}>
+                        View
+                        <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                         </svg>
-                      </div>
-                      <p className="font-semibold text-slate-800">No documents in this range</p>
-                      <p className="mt-1 text-sm text-slate-500">
-                        Try expanding the date filter or upload a new packing list.
-                      </p>
-                    </div>
-                  </td>
-                </tr>
-              ) : (
-                data.recentInRange.map((doc) => {
-                  const ft = doc.fileType ?? "";
-                  const typeBadge =
-                    FILE_TYPE_BADGE[ft] ??
-                    "bg-slate-50 text-slate-600 border-slate-200/80";
-                  return (
-                    <tr
-                      key={doc.id}
-                      className="border-t border-slate-50 transition-colors hover:bg-indigo-50/20"
-                    >
-                      <td className="max-w-[200px] truncate px-5 py-3.5 font-semibold text-slate-900 sm:max-w-md">
-                        {doc.originalFileName ?? "—"}
-                      </td>
-                      <td className="px-5 py-3.5">
-                        <span
-                          className={`inline-flex rounded-lg border px-2 py-0.5 text-[11px] font-bold uppercase tracking-wide ${typeBadge}`}
-                        >
-                          {FILE_TYPE_LABELS[ft] ?? ft ?? "—"}
-                        </span>
-                      </td>
-                      <td className="px-5 py-3.5 whitespace-nowrap text-slate-500">
-                        {formatDocDate(doc.createdAt)}
-                      </td>
-                      <td className="px-5 py-3.5">
-                        <StatusBadge
-                          status={doc.status}
-                          label={formatStatus(doc.status)}
-                        />
-                      </td>
-                      <td className="px-5 py-3.5 text-right">
-                        <Link
-                          href={`/dashboard/documents/${doc.id}`}
-                          className="inline-flex items-center gap-1 rounded-xl bg-indigo-50 px-3 py-1.5 text-sm font-semibold text-indigo-700 transition-colors hover:bg-indigo-100"
-                        >
-                          View
-                          <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                          </svg>
-                        </Link>
-                      </td>
-                    </tr>
-                  );
-                })
-              )}
-            </tbody>
-          </table>
-        </div>
+                      </DashTableAction>
+                    </DashTd>
+                  </DashTr>
+                );
+              })
+            )}
+          </DashTbody>
+        </DashTable>
       </DashCard>
     </div>
   );

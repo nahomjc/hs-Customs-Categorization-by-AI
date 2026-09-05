@@ -1,7 +1,18 @@
 "use client";
 
 import Link from "next/link";
-import { DashCard, DashCardHeader } from "@/components/dashboard/ui";
+import {
+  DashCard,
+  DashCardHeader,
+  DashTable,
+  DashTableEmpty,
+  DashTableHead,
+  DashTableHeaderRow,
+  DashTbody,
+  DashTd,
+  DashTh,
+  DashTr,
+} from "@/components/dashboard/ui";
 import {
   formatAuditAction,
   formatAuditDetails,
@@ -37,87 +48,83 @@ export function AuditLogTable({
   showCaseLink = false,
   emptyMessage = "No activity recorded yet.",
 }: AuditLogTableProps) {
+  const colSpan = showCaseLink ? 5 : 4;
+
   return (
     <DashCard>
       <DashCardHeader title={title} />
       {description ? (
-        <p className="px-5 pt-4 text-sm text-slate-500">{description}</p>
+        <p className="px-5 pt-4 text-sm text-gray-500">{description}</p>
       ) : null}
-      {entries.length === 0 ? (
-        <p className="px-5 py-8 text-sm text-slate-500 text-center">
-          {emptyMessage}
-        </p>
-      ) : (
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-slate-100 text-left text-xs font-medium uppercase tracking-wider text-slate-500">
-                <th className="px-5 py-3">When</th>
-                <th className="px-5 py-3">User</th>
-                <th className="px-5 py-3">Action</th>
-                {showCaseLink ? (
-                  <th className="px-5 py-3">Case</th>
-                ) : null}
-                <th className="px-5 py-3">Details</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-50">
-              {entries.map((entry) => {
-                const details =
-                  formatAuditDetails(entry.action, entry.newData) ??
-                  entry.reason ??
-                  null;
+      <DashTable>
+        <DashTableHead>
+          <DashTableHeaderRow>
+            <DashTh>When</DashTh>
+            <DashTh>User</DashTh>
+            <DashTh>Action</DashTh>
+            {showCaseLink ? <DashTh>Case</DashTh> : null}
+            <DashTh>Details</DashTh>
+          </DashTableHeaderRow>
+        </DashTableHead>
+        <DashTbody>
+          {entries.length === 0 ? (
+            <DashTableEmpty colSpan={colSpan}>{emptyMessage}</DashTableEmpty>
+          ) : (
+            entries.map((entry) => {
+              const details =
+                formatAuditDetails(entry.action, entry.newData) ??
+                entry.reason ??
+                null;
 
-                return (
-                  <tr key={entry.id} className="hover:bg-slate-50/60">
-                    <td className="px-5 py-3 text-slate-600 whitespace-nowrap">
-                      {formatDate(entry.createdAt)}
-                    </td>
-                    <td className="px-5 py-3">
-                      {entry.userId ? (
+              return (
+                <DashTr key={entry.id}>
+                  <DashTd muted nowrap>
+                    {formatDate(entry.createdAt)}
+                  </DashTd>
+                  <DashTd>
+                    {entry.userId ? (
+                      <Link
+                        href={`/dashboard/users/${entry.userId}`}
+                        className="font-medium text-[#007bff] hover:underline"
+                      >
+                        {formatUser(entry)}
+                      </Link>
+                    ) : (
+                      <span className="text-gray-700">{formatUser(entry)}</span>
+                    )}
+                  </DashTd>
+                  <DashTd className="font-medium text-gray-900">
+                    {formatAuditAction(entry.action)}
+                  </DashTd>
+                  {showCaseLink ? (
+                    <DashTd>
+                      {entry.importCaseId && entry.caseNumber ? (
                         <Link
-                          href={`/dashboard/users/${entry.userId}`}
+                          href={`/dashboard/import-cases/${entry.importCaseId}`}
                           className="font-medium text-[#007bff] hover:underline"
                         >
-                          {formatUser(entry)}
+                          {entry.caseNumber}
                         </Link>
                       ) : (
-                        <span className="text-slate-700">{formatUser(entry)}</span>
+                        <span className="text-gray-400">—</span>
                       )}
-                    </td>
-                    <td className="px-5 py-3 text-slate-900 font-medium">
-                      {formatAuditAction(entry.action)}
-                    </td>
-                    {showCaseLink ? (
-                      <td className="px-5 py-3">
-                        {entry.importCaseId && entry.caseNumber ? (
-                          <Link
-                            href={`/dashboard/import-cases/${entry.importCaseId}`}
-                            className="font-medium text-[#007bff] hover:underline"
-                          >
-                            {entry.caseNumber}
-                          </Link>
-                        ) : (
-                          <span className="text-slate-400">—</span>
-                        )}
-                      </td>
-                    ) : null}
-                    <td className="px-5 py-3 text-slate-600 max-w-xs">
-                      {details ? (
-                        <span className="line-clamp-2" title={details}>
-                          {details}
-                        </span>
-                      ) : (
-                        <span className="text-slate-400">—</span>
-                      )}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      )}
+                    </DashTd>
+                  ) : null}
+                  <DashTd muted className="max-w-xs">
+                    {details ? (
+                      <span className="line-clamp-2" title={details}>
+                        {details}
+                      </span>
+                    ) : (
+                      <span className="text-gray-400">—</span>
+                    )}
+                  </DashTd>
+                </DashTr>
+              );
+            })
+          )}
+        </DashTbody>
+      </DashTable>
     </DashCard>
   );
 }

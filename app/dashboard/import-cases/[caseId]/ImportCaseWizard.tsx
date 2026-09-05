@@ -67,6 +67,13 @@ type AgentOption = {
   email: string;
 };
 
+type ClientOption = {
+  id: string;
+  fullName: string | null;
+  email: string;
+  phone: string | null;
+};
+
 type ImportCaseWizardProps = {
   importCase: ImportCaseRow;
   documents: ImportCaseDocumentRow[];
@@ -78,6 +85,7 @@ type ImportCaseWizardProps = {
   groupings: GroupingWithProducts[];
   referencePopulated: boolean;
   agents: AgentOption[];
+  client?: ClientOption | null;
   auditLogs: AuditLogView[];
 };
 
@@ -112,6 +120,7 @@ export function ImportCaseWizard({
   groupings,
   referencePopulated,
   agents,
+  client = null,
   auditLogs,
 }: ImportCaseWizardProps) {
   const router = useRouter();
@@ -390,7 +399,11 @@ export function ImportCaseWizard({
 
             <div className="space-y-6">
                 {currentStep === "case-info" ? (
-                  <OverviewTab importCase={importCase} agents={agents} />
+                  <OverviewTab
+                    importCase={importCase}
+                    agents={agents}
+                    client={client}
+                  />
                 ) : null}
                 {currentStep === "documents" ? (
                   <DocumentsTab

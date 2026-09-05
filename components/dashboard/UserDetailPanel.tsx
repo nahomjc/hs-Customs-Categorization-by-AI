@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { AuditLogTable } from "@/components/dashboard/AuditLogTable";
+import { UserAccessSettingsCard } from "@/components/dashboard/UserAccessSettingsCard";
 import { DashCard, DashCardHeader, DashLink, StatusBadge } from "@/components/dashboard/ui";
-import { UserRoleSelect } from "@/components/dashboard/UserRoleSelect";
 import { USER_ROLE_LABELS, isUserRole } from "@/lib/auth/roles";
 import type { getDashboardUserDetail } from "@/lib/dashboard/users";
 import type { AuditLogView } from "@/lib/import-cases/audit-queries";
@@ -42,6 +42,11 @@ function getPhoneFromMeta(meta: unknown): string | null {
   return null;
 }
 
+function getDisplayPhone(user: { phone?: string | null; meta: unknown }): string | null {
+  if (user.phone?.trim()) return user.phone.trim();
+  return getPhoneFromMeta(user.meta);
+}
+
 type UserDetailPanelProps = {
   user: UserDetail;
   activityLog?: AuditLogView[];
@@ -62,7 +67,7 @@ export function UserDetailPanel({
   const roleLabel = isUserRole(user.role)
     ? USER_ROLE_LABELS[user.role]
     : user.role;
-  const phone = getPhoneFromMeta(user.meta);
+  const phone = getDisplayPhone(user);
 
   return (
     <div className="space-y-6">
@@ -99,6 +104,24 @@ export function UserDetailPanel({
                 }`}
               >
                 {user.status}
+              </span>
+              <span
+                className={`inline-flex px-2.5 py-1 rounded-full text-xs font-medium ${
+                  user.emailVerified
+                    ? "bg-emerald-50 text-emerald-700"
+                    : "bg-amber-50 text-amber-800"
+                }`}
+              >
+                Email {user.emailVerified ? "verified" : "unverified"}
+              </span>
+              <span
+                className={`inline-flex px-2.5 py-1 rounded-full text-xs font-medium ${
+                  user.phoneVerified
+                    ? "bg-emerald-50 text-emerald-700"
+                    : "bg-amber-50 text-amber-800"
+                }`}
+              >
+                Phone {user.phoneVerified ? "verified" : "unverified"}
               </span>
               <span className="inline-flex px-2.5 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-600">
                 {user.tenantId}
@@ -140,45 +163,14 @@ export function UserDetailPanel({
       </div>
 
       {variant === "admin" ? (
-        <DashCard>
-          <DashCardHeader title="Role" />
-          <div className="p-5 sm:p-6">
-            {canManageRoles ? (
-              <>
-                <label
-                  htmlFor={`role-${user.id}`}
-                  className="block text-sm font-medium text-gray-700 mb-1.5"
-                >
-                  Assign role
-                </label>
-                <div className="max-w-xs">
-                  <UserRoleSelect
-                    userId={user.id}
-                    value={user.role}
-                    canEdit
-                    id={`role-${user.id}`}
-                  />
-                </div>
-                <p className="mt-2 text-xs text-gray-500">
-                  Admin, Assessor, or User. Changes apply immediately.
-                </p>
-              </>
-            ) : (
-              <>
-                <p className="text-sm text-gray-700">
-                  Current role:{" "}
-                  <span className="font-medium text-gray-900">{roleLabel}</span>
-                </p>
-                <p className="mt-2 text-sm text-gray-500">
-                  Only admins can change roles.
-                  {viewerRole && viewerRole !== "admin"
-                    ? ` You are signed in as ${isUserRole(viewerRole) ? USER_ROLE_LABELS[viewerRole] : viewerRole}.`
-                    : " Ask an administrator to grant you admin access, or promote your account in the database."}
-                </p>
-              </>
-            )}
-          </div>
-        </DashCard>
+        <UserAccessSettingsCard
+          userId={user.id}
+          role={user.role}
+          emailVerified={Boolean(user.emailVerified)}
+          phoneVerified={Boolean(user.phoneVerified)}
+          canEdit={canManageRoles}
+          viewerRole={viewerRole}
+        />
       ) : null}
 
       <AuditLogTable

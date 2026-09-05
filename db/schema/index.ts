@@ -21,3 +21,7 @@ export * from "./documentChecks";
 export * from "./productGroupings";
 export * from "./productGroupingItems";
 export * from "./auditLogs";
+export * from "./tenantChannelSettings";
+export * from "./trackingStatusEvents";
+export * from "./notifications";
+export * from "./notificationLogs";

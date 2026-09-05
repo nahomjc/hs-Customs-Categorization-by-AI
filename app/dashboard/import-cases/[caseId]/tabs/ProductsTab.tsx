@@ -8,6 +8,11 @@ import {
   DashButton,
   DashCard,
   DashCardHeader,
+  DashTable,
+  DashTableHead,
+  DashTableHeaderRow,
+  DashTbody,
+  DashTh,
   StatusBadge,
   TruncatedText,
   dashInputClass,
@@ -171,7 +176,7 @@ export function ProductsTab({ caseId, initialProducts }: ProductsTabProps) {
             </p>
           </div>
         ) : (
-          <table className="w-full table-fixed text-xs">
+          <DashTable tableClassName="table-fixed text-xs">
             <colgroup>
               <col className="w-8" />
               <col className="w-[26%]" />
@@ -180,17 +185,19 @@ export function ProductsTab({ caseId, initialProducts }: ProductsTabProps) {
               <col className="w-[16%]" />
               <col className="w-[88px]" />
             </colgroup>
-            <thead>
-              <tr className="border-b border-slate-100 bg-slate-50/50 text-left uppercase tracking-wide text-slate-500">
-                <th className="px-3 py-2">#</th>
-                <th className="px-3 py-2">Product</th>
-                <th className="px-3 py-2">Qty</th>
-                <th className="px-3 py-2">Lines</th>
-                <th className="px-3 py-2">Status</th>
-                <th className="px-3 py-2 text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
+            <DashTableHead>
+              <DashTableHeaderRow>
+                <DashTh density="compact">#</DashTh>
+                <DashTh density="compact">Product</DashTh>
+                <DashTh density="compact">Qty</DashTh>
+                <DashTh density="compact">Lines</DashTh>
+                <DashTh density="compact">Status</DashTh>
+                <DashTh density="compact" align="right">
+                  Actions
+                </DashTh>
+              </DashTableHeaderRow>
+            </DashTableHead>
+            <DashTbody>
               {products.map(
                 ({ product, invoiceSources, packingSources }) => (
                   <ProductTableRow
@@ -216,8 +223,8 @@ export function ProductsTab({ caseId, initialProducts }: ProductsTabProps) {
                   />
                 ),
               )}
-            </tbody>
-          </table>
+            </DashTbody>
+          </DashTable>
         )}
       </DashCard>
     </div>

@@ -2,8 +2,6 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import Link from "next/link";
-import { DashLink } from "@/components/dashboard/ui";
 
 type UploadFileType = "pdf" | "xlsx" | "docx" | "csv";
 
@@ -308,10 +306,6 @@ export function UploadForm({ autoOpenDocument }: UploadFormProps) {
           </>
         )}
       </button>
-
-      <p className="text-center text-sm text-gray-500">
-        <DashLink href="/dashboard">← Back to dashboard</DashLink>
-      </p>
     </div>
   );
 }

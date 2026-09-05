@@ -7,6 +7,13 @@ import {
   DashButton,
   DashCard,
   DashCardHeader,
+  DashTable,
+  DashTableHead,
+  DashTableHeaderRow,
+  DashTbody,
+  DashTd,
+  DashTh,
+  DashTr,
   StatusBadge,
   dashSelectClass,
 } from "@/components/dashboard/ui";
@@ -282,29 +289,27 @@ export function DocumentsTab({
               this case
             </p>
           </div>
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[640px] text-sm">
-              <thead>
-                <tr className="border-b border-slate-100 bg-slate-50/80 text-left text-[11px] font-semibold uppercase tracking-wide text-slate-500">
-                  <th className="px-5 py-3">File</th>
-                  <th className="px-3 py-3">Type</th>
-                  <th className="px-3 py-3">Status</th>
-                  <th className="px-3 py-3">Extraction</th>
-                  <th className="px-5 py-3 text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {documents.map((doc) => (
-                  <DocumentRow
-                    key={doc.id}
-                    doc={doc}
-                    extractingId={extractingId}
-                    onExtract={handleExtract}
-                  />
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <DashTable tableClassName="min-w-[640px]">
+            <DashTableHead>
+              <DashTableHeaderRow>
+                <DashTh>File</DashTh>
+                <DashTh>Type</DashTh>
+                <DashTh>Status</DashTh>
+                <DashTh>Extraction</DashTh>
+                <DashTh align="right">Actions</DashTh>
+              </DashTableHeaderRow>
+            </DashTableHead>
+            <DashTbody>
+              {documents.map((doc) => (
+                <DocumentRow
+                  key={doc.id}
+                  doc={doc}
+                  extractingId={extractingId}
+                  onExtract={handleExtract}
+                />
+              ))}
+            </DashTbody>
+          </DashTable>
         </section>
       ) : null}
     </DashCard>
@@ -421,50 +426,50 @@ function DocumentRow({
   const type = doc.documentType as DocumentType;
 
   return (
-    <tr className="hover:bg-slate-50/60">
-      <td className="px-5 py-3.5">
-        <div className="flex items-center gap-3 min-w-0">
-          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-slate-600">
+    <DashTr>
+      <DashTd>
+        <div className="flex min-w-0 items-center gap-3">
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-gray-100 text-gray-600">
             <FileIcon fileName={doc.originalFileName} />
           </div>
           <div className="min-w-0">
-            <p className="font-medium text-slate-900 truncate">
+            <p className="truncate font-medium text-gray-900">
               {doc.originalFileName}
             </p>
-            <p className="text-xs text-slate-500">
+            <p className="text-xs text-gray-500">
               {doc.fileSizeBytes ? formatBytes(doc.fileSizeBytes) : "—"}
               {doc.documentNumber ? ` · #${doc.documentNumber}` : ""}
             </p>
           </div>
         </div>
-      </td>
-      <td className="px-3 py-3.5 text-slate-600">
+      </DashTd>
+      <DashTd muted>
         {DOCUMENT_TYPE_LABELS[type] ?? doc.documentType}
-      </td>
-      <td className="px-3 py-3.5">
+      </DashTd>
+      <DashTd>
         <StatusBadge label={doc.status ?? "uploaded"} status={doc.status ?? "uploaded"} />
-      </td>
-      <td className="px-3 py-3.5">
+      </DashTd>
+      <DashTd>
         <StatusBadge
           label={EXTRACTION_LABELS[doc.extractionStatus ?? "pending"] ?? doc.extractionStatus ?? "Pending"}
           status={doc.extractionStatus ?? "pending"}
         />
-      </td>
-      <td className="px-5 py-3.5 text-right">
+      </DashTd>
+      <DashTd align="right">
         {(doc.extractionStatus === "pending" ||
           doc.extractionStatus === "failed") && (
           <DashButton
             type="button"
             variant="ghost"
-            className="text-xs px-3 py-1.5"
+            className="px-3 py-1.5 text-xs"
             disabled={extractingId === doc.id}
             onClick={() => onExtract(doc.id)}
           >
             {extractingId === doc.id ? "Extracting…" : "Extract"}
           </DashButton>
         )}
-      </td>
-    </tr>
+      </DashTd>
+    </DashTr>
   );
 }
 

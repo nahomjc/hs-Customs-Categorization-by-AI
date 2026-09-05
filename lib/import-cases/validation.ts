@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { DOCUMENT_TYPES, IMPORT_CASE_STATUSES } from "./constants";
+import { TRACKING_STATUSES } from "@/lib/tracking/constants";
 
 export const createImportCaseSchema = z.object({
   importerName: z.string().trim().min(1, "Importer name is required").max(255),
@@ -10,6 +11,7 @@ export const createImportCaseSchema = z.object({
   importProcedureCode: z.string().trim().max(50).optional().nullable(),
   incoterm: z.string().trim().max(20).optional().nullable(),
   assignedAgentId: z.string().uuid().optional().nullable(),
+  clientUserId: z.string().uuid({ message: "Client is required" }),
   notes: z.string().trim().max(5000).optional().nullable(),
 });
 
@@ -17,6 +19,7 @@ export const updateImportCaseSchema = createImportCaseSchema
   .partial()
   .extend({
     status: z.enum(IMPORT_CASE_STATUSES).optional(),
+    clientUserId: z.string().uuid().optional().nullable(),
     importerTinNumber: z.string().trim().max(50).optional().nullable(),
     billOfLadingNumber: z.string().trim().max(100).optional().nullable(),
     airwayBillNumber: z.string().trim().max(100).optional().nullable(),
@@ -26,6 +29,11 @@ export const updateImportCaseSchema = createImportCaseSchema
     insuranceAmount: z.string().trim().optional().nullable(),
     estimatedCifAmount: z.string().trim().optional().nullable(),
   });
+
+export const updateTrackingSchema = z.object({
+  trackingStatus: z.enum(TRACKING_STATUSES),
+  trackingNote: z.string().trim().max(2000).optional().nullable(),
+});
 
 export const listImportCasesQuerySchema = z.object({
   search: z.string().trim().optional(),

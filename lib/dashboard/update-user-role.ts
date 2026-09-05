@@ -1,11 +1,12 @@
 import { db } from "@/db";
 import { users } from "@/db/schema";
 import { isUserRole, type UserRole } from "@/lib/auth/roles";
+import { syncAuthUserRole } from "@/lib/auth/sync-auth-role";
 import { eq } from "drizzle-orm";
 
 export async function updateUserRole(
   userId: string,
-  role: UserRole
+  role: UserRole,
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   if (!isUserRole(role)) {
     return { ok: false, error: "Invalid role" };
@@ -21,14 +22,14 @@ export async function updateUserRole(
     return { ok: false, error: "User not found" };
   }
 
-  if (target.role === role) {
-    return { ok: true };
+  if (target.role !== role) {
+    await db
+      .update(users)
+      .set({ role, updatedAt: new Date() })
+      .where(eq(users.id, userId));
   }
 
-  await db
-    .update(users)
-    .set({ role, updatedAt: new Date() })
-    .where(eq(users.id, userId));
+  await syncAuthUserRole(userId, role);
 
   return { ok: true };
 }

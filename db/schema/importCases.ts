@@ -42,6 +42,18 @@ export const importCases = pgTable(
     assignedAgentId: uuid("assigned_agent_id").references(() => users.id, {
       onDelete: "set null",
     }),
+    clientUserId: uuid("client_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    trackingStatus: varchar("tracking_status", { length: 40 })
+      .default("received")
+      .notNull(),
+    trackingNote: text("tracking_note"),
+    trackingUpdatedAt: timestamp("tracking_updated_at", { withTimezone: true }),
+    trackingUpdatedByUserId: uuid("tracking_updated_by_user_id").references(
+      () => users.id,
+      { onDelete: "set null" },
+    ),
     createdByUserId: uuid("created_by_user_id")
       .references(() => users.id, { onDelete: "set null" })
       .notNull(),
@@ -65,6 +77,9 @@ export const importCases = pgTable(
     ),
     idxImportCasesAssignedAgent: index("idx_import_cases_assigned_agent").on(
       table.assignedAgentId,
+    ),
+    idxImportCasesClientUser: index("idx_import_cases_client_user").on(
+      table.clientUserId,
     ),
     idxImportCasesCaseNumber: index("idx_import_cases_case_number").on(
       table.caseNumber,

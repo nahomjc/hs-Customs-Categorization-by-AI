@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { Breadcrumbs } from "@/components/dashboard/ui";
 import { fileTypeIconColor, fileTypeLabel } from "@/lib/documentUiUtils";
 
 type DocumentHeroHeaderProps = {
@@ -40,26 +41,12 @@ export function DocumentHeroHeader({
       <div className="relative px-5 py-5 sm:px-7 sm:py-6">
         <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
           <div className="min-w-0 flex-1 space-y-4">
-            <Link
-              href="/dashboard"
-              className="inline-flex items-center gap-1.5 text-sm font-medium text-slate-500 transition-colors hover:text-slate-900"
-            >
-              <svg
-                aria-hidden
-                className="h-4 w-4"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M15 19l-7-7 7-7"
-                />
-              </svg>
-              Dashboard
-            </Link>
+            <Breadcrumbs
+              items={[
+                { label: "History", href: "/dashboard/history" },
+                { label: fileName ?? "Document" },
+              ]}
+            />
 
             <div className="flex items-start gap-4">
               <div

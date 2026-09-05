@@ -1,10 +1,21 @@
+import { redirect } from "next/navigation";
 import { DashButton, PageHeader } from "@/components/dashboard/ui";
+import { getSessionUserProfile } from "@/lib/auth/require-admin";
+import { isClientRole, isStaffRole } from "@/lib/auth/roles";
 import { getTenantId, listImportCases } from "@/lib/import-cases/queries";
 import { ImportCasesTable } from "./ImportCasesTable";
 
 export const dynamic = "force-dynamic";
 
 export default async function ImportCasesPage() {
+  const session = await getSessionUserProfile();
+  if (isClientRole(session?.profile?.role)) {
+    redirect("/dashboard/my-shipments");
+  }
+  if (!isStaffRole(session?.profile?.role)) {
+    redirect("/dashboard");
+  }
+
   const tenantId = getTenantId();
   let items: Awaited<ReturnType<typeof listImportCases>>["items"] = [];
   let total = 0;

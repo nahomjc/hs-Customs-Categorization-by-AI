@@ -4,6 +4,10 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { toast } from "sonner";
 import {
+  ClientSearchSelect,
+  type ClientOption,
+} from "@/components/dashboard/ClientSearchSelect";
+import {
   DashButton,
   DashCard,
   dashInputClass,
@@ -24,6 +28,7 @@ type CreateImportCaseFormProps = {
 export function CreateImportCaseForm({ agents }: CreateImportCaseFormProps) {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
+  const [clientLabel, setClientLabel] = useState("");
   const [form, setForm] = useState({
     importerName: "Impact logistic",
     supplierName: "",
@@ -33,6 +38,7 @@ export function CreateImportCaseForm({ agents }: CreateImportCaseFormProps) {
     importProcedureCode: "",
     incoterm: "",
     assignedAgentId: "",
+    clientUserId: "",
     notes: "",
   });
 
@@ -42,6 +48,10 @@ export function CreateImportCaseForm({ agents }: CreateImportCaseFormProps) {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    if (!form.clientUserId) {
+      toast.error("Please select a client");
+      return;
+    }
     setLoading(true);
     try {
       const res = await fetch("/api/import-cases", {
@@ -56,6 +66,7 @@ export function CreateImportCaseForm({ agents }: CreateImportCaseFormProps) {
           importProcedureCode: form.importProcedureCode || null,
           incoterm: form.incoterm || null,
           assignedAgentId: form.assignedAgentId || null,
+          clientUserId: form.clientUserId,
           notes: form.notes || null,
         }),
       });
@@ -77,6 +88,24 @@ export function CreateImportCaseForm({ agents }: CreateImportCaseFormProps) {
   return (
     <DashCard>
       <form onSubmit={handleSubmit} className="p-5 sm:p-6 space-y-5">
+        <Field label="Client *" htmlFor="client-user">
+          <ClientSearchSelect
+            id="client-user"
+            required
+            value={form.clientUserId}
+            selectedLabel={clientLabel || null}
+            onChange={(clientId, client?: ClientOption | null) => {
+              updateField("clientUserId", clientId);
+              setClientLabel(
+                client
+                  ? `${client.fullName ?? client.email}${
+                      client.phone ? ` · ${client.phone}` : ""
+                    }`
+                  : "",
+              );
+            }}
+          />
+        </Field>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <Field label="Importer name *">
             <input
