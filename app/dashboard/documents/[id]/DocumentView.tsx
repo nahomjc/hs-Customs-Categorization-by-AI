@@ -424,7 +424,7 @@ export function DocumentView(props: {
                 type="button"
                 onClick={retryProcessing}
                 disabled={processing}
-                className="inline-flex items-center justify-center px-5 py-2.5 rounded-2xl bg-gradient-to-r from-indigo-600 to-violet-600 text-white text-sm font-semibold shadow-lg shadow-indigo-500/20 hover:shadow-indigo-500/30 transition-all disabled:opacity-50"
+                className="inline-flex items-center justify-center px-5 py-2.5 rounded-xl bg-[#007bff] text-white text-sm font-semibold shadow-sm hover:bg-[#0069d9] transition-colors disabled:opacity-50"
               >
                 {processing ? "Retrying…" : "Try again"}
               </button>

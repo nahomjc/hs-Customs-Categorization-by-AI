@@ -225,12 +225,12 @@ export function DashButton({
   type?: "button" | "submit";
 }) {
   const base =
-    "inline-flex items-center justify-center gap-2 font-semibold text-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed";
+    "inline-flex items-center justify-center gap-2 font-semibold text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed";
   const variants = {
     primary:
-      "px-5 py-2.5 rounded-2xl bg-gradient-to-r from-indigo-600 via-violet-600 to-indigo-600 text-white hover:shadow-lg hover:shadow-indigo-500/25 shadow-md shadow-indigo-500/20",
+      "px-5 py-2.5 rounded-xl bg-[#007bff] text-white shadow-sm hover:bg-[#0069d9]",
     secondary:
-      "px-5 py-2.5 rounded-full border border-gray-200 bg-white text-gray-900 hover:bg-gray-50",
+      "px-5 py-2.5 rounded-xl border border-gray-200 bg-white text-gray-900 hover:bg-gray-50",
     ghost:
       "px-3 py-1.5 rounded-lg text-[#007bff] bg-blue-50 hover:bg-blue-100",
   };

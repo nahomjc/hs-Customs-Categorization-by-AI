@@ -34,6 +34,71 @@ function formatUpdated(shipment: ClientShipmentSummary) {
   });
 }
 
+function ShipmentsTable({ shipments }: { shipments: ClientShipmentSummary[] }) {
+  return (
+    <DashCard>
+      <DashTable>
+        <DashTableHead>
+          <DashTableHeaderRow>
+            <DashTh>Case #</DashTh>
+            <DashTh>Reference</DashTh>
+            <DashTh>Supplier</DashTh>
+            <DashTh>Status</DashTh>
+            <DashTh>Updated</DashTh>
+            <DashTh align="right">Action</DashTh>
+          </DashTableHeaderRow>
+        </DashTableHead>
+        <DashTbody>
+          {shipments.length === 0 ? (
+            <DashTableEmpty colSpan={6}>No shipments yet.</DashTableEmpty>
+          ) : (
+            shipments.map((shipment) => (
+              <DashTr key={shipment.id}>
+                <DashTd className="font-mono font-semibold text-gray-900">
+                  <Link
+                    href={`/dashboard/my-shipments/${shipment.id}`}
+                    className="text-[#007bff] hover:underline"
+                  >
+                    {shipment.caseNumber}
+                  </Link>
+                </DashTd>
+                <DashTd muted>{shipment.shipmentReference ?? "—"}</DashTd>
+                <DashTd>{shipment.supplierName ?? "—"}</DashTd>
+                <DashTd>
+                  <StatusBadge
+                    label={getTrackingLabel(shipment.trackingStatus)}
+                    status={shipment.trackingStatus}
+                  />
+                </DashTd>
+                <DashTd muted nowrap>
+                  {formatUpdated(shipment)}
+                </DashTd>
+                <DashTd align="right">
+                  <DashTableAction
+                    href={`/dashboard/my-shipments/${shipment.id}`}
+                  >
+                    View
+                  </DashTableAction>
+                </DashTd>
+              </DashTr>
+            ))
+          )}
+        </DashTbody>
+      </DashTable>
+    </DashCard>
+  );
+}
+
+function ShipmentsCards({ shipments }: { shipments: ClientShipmentSummary[] }) {
+  return (
+    <div className="grid gap-3 sm:grid-cols-2 sm:gap-4 xl:grid-cols-3">
+      {shipments.map((shipment) => (
+        <ClientShipmentCard key={shipment.id} shipment={shipment} />
+      ))}
+    </div>
+  );
+}
+
 export function MyShipmentsView({
   shipments,
 }: {
@@ -61,7 +126,7 @@ export function MyShipmentsView({
 
   if (shipments.length === 0) {
     return (
-      <div className="rounded-3xl border border-dashed border-slate-200 bg-white px-6 py-16 text-center shadow-[0_4px_24px_-12px_rgba(15,23,42,0.08)]">
+      <div className="rounded-3xl border border-dashed border-slate-200 bg-white px-5 py-12 text-center shadow-[0_4px_24px_-12px_rgba(15,23,42,0.08)] sm:px-6 sm:py-16">
         <p className="text-base font-semibold text-slate-900">
           No shipments yet
         </p>
@@ -74,13 +139,14 @@ export function MyShipmentsView({
   }
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between gap-3">
+    <div className="w-full min-w-0 space-y-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <p className="text-sm text-gray-500">
           {shipments.length} shipment{shipments.length === 1 ? "" : "s"}
         </p>
+        {/* View toggle: desktop only — mobile always cards */}
         <div
-          className="inline-flex rounded-xl border border-gray-200 bg-white p-1"
+          className="hidden rounded-xl border border-gray-200 bg-white p-1 md:inline-flex"
           role="group"
           aria-label="View mode"
         >
@@ -113,66 +179,19 @@ export function MyShipmentsView({
         </div>
       </div>
 
-      {view === "card" ? (
-        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-          {shipments.map((shipment) => (
-            <ClientShipmentCard key={shipment.id} shipment={shipment} />
-          ))}
-        </div>
-      ) : (
-        <DashCard>
-          <DashTable>
-            <DashTableHead>
-              <DashTableHeaderRow>
-                <DashTh>Case #</DashTh>
-                <DashTh>Reference</DashTh>
-                <DashTh>Supplier</DashTh>
-                <DashTh>Status</DashTh>
-                <DashTh>Updated</DashTh>
-                <DashTh align="right">Action</DashTh>
-              </DashTableHeaderRow>
-            </DashTableHead>
-            <DashTbody>
-              {shipments.length === 0 ? (
-                <DashTableEmpty colSpan={6}>No shipments yet.</DashTableEmpty>
-              ) : (
-                shipments.map((shipment) => (
-                  <DashTr key={shipment.id}>
-                    <DashTd className="font-mono font-semibold text-gray-900">
-                      <Link
-                        href={`/dashboard/my-shipments/${shipment.id}`}
-                        className="text-[#007bff] hover:underline"
-                      >
-                        {shipment.caseNumber}
-                      </Link>
-                    </DashTd>
-                    <DashTd muted>
-                      {shipment.shipmentReference ?? "—"}
-                    </DashTd>
-                    <DashTd>{shipment.supplierName ?? "—"}</DashTd>
-                    <DashTd>
-                      <StatusBadge
-                        label={getTrackingLabel(shipment.trackingStatus)}
-                        status={shipment.trackingStatus}
-                      />
-                    </DashTd>
-                    <DashTd muted nowrap>
-                      {formatUpdated(shipment)}
-                    </DashTd>
-                    <DashTd align="right">
-                      <DashTableAction
-                        href={`/dashboard/my-shipments/${shipment.id}`}
-                      >
-                        View
-                      </DashTableAction>
-                    </DashTd>
-                  </DashTr>
-                ))
-              )}
-            </DashTbody>
-          </DashTable>
-        </DashCard>
-      )}
+      {/* Mobile: always cards */}
+      <div className="md:hidden">
+        <ShipmentsCards shipments={shipments} />
+      </div>
+
+      {/* Desktop: list or cards from toggle */}
+      <div className="hidden md:block">
+        {view === "card" ? (
+          <ShipmentsCards shipments={shipments} />
+        ) : (
+          <ShipmentsTable shipments={shipments} />
+        )}
+      </div>
     </div>
   );
 }

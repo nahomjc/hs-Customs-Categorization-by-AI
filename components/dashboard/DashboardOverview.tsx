@@ -270,7 +270,7 @@ export async function DashboardOverview() {
             {importCasesData.recentInRange.length === 0 ? (
               <DashTableEmpty colSpan={5} className="p-0">
                 <div className="flex flex-col items-center justify-center px-6 py-14 text-center">
-                  <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-violet-500 to-indigo-600 text-white shadow-lg shadow-violet-500/25">
+                  <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-[#007bff] text-white shadow-md shadow-blue-500/20">
                     <svg
                       className="h-8 w-8"
                       fill="none"
@@ -296,7 +296,7 @@ export async function DashboardOverview() {
                   </p>
                   <Link
                     href="/dashboard/import-cases/new"
-                    className="mt-5 inline-flex items-center gap-2 rounded-2xl bg-gradient-to-r from-violet-600 to-indigo-600 px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-violet-500/20 transition-all hover:shadow-violet-500/30"
+                    className="mt-5 inline-flex items-center gap-2 rounded-xl bg-[#007bff] px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-[#0069d9]"
                   >
                     Create your first case
                   </Link>

@@ -59,7 +59,7 @@ export function DashboardSidebar({
   const links = getDashboardNavLinks({ isAdmin, isClient });
 
   return (
-    <aside className="hidden lg:flex w-[17rem] shrink-0 flex-col overflow-hidden rounded-3xl border border-slate-200/70 bg-white shadow-[0_4px_24px_-8px_rgba(15,23,42,0.08)] sticky top-[4.5rem] max-h-[calc(100vh-6rem)]">
+    <aside className="hidden lg:flex w-[17rem] shrink-0 flex-col overflow-hidden rounded-3xl border border-slate-200/70 bg-white shadow-[0_4px_24px_-8px_rgba(15,23,42,0.08)] sticky top-[4.5rem] max-h-[calc(100vh-6rem)] lg:ml-3">
       <div className="border-b border-slate-100 px-5 py-4">
         <p className="text-[11px] font-bold uppercase tracking-widest text-slate-400">
           Workspace

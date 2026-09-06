@@ -252,7 +252,7 @@ export function ImportCaseWizard({
             </p>
             <div className="mt-3 h-1.5 rounded-full bg-slate-100 overflow-hidden">
               <div
-                className="h-full rounded-full bg-gradient-to-r from-indigo-500 to-violet-500 transition-all duration-500"
+                className="h-full rounded-full bg-[#007bff] transition-all duration-500"
                 style={{
                   width: `${(completedCount / WIZARD_STEPS.length) * 100}%`,
                 }}
@@ -351,7 +351,7 @@ export function ImportCaseWizard({
         {/* Step header */}
         <div className="rounded-2xl border border-slate-200/80 bg-white px-5 py-5 sm:px-6 shadow-sm">
           <div className="flex items-start gap-4">
-            <div className="hidden sm:flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-500 to-violet-600 text-white shadow-md shadow-indigo-500/20">
+            <div className="hidden sm:flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-[#007bff] text-white shadow-sm">
               <svg
                 className="h-6 w-6"
                 fill="none"
@@ -512,7 +512,7 @@ function StepIcon({
   if (status === "current") {
     return (
       <span
-        className={`${base} bg-gradient-to-br from-indigo-600 to-violet-600 text-white shadow-sm`}
+        className={`${base} bg-[#007bff] text-white shadow-sm`}
       >
         <svg
           className="h-4 w-4"

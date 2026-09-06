@@ -55,7 +55,7 @@ export default async function MyShipmentDetailPage({ params }: PageProps) {
   const current = shipment.trackingStatus as TrackingStatus;
 
   return (
-    <div className="space-y-6">
+    <div className="w-full min-w-0 space-y-5 sm:space-y-6">
       <PageHeader
         title={shipment.caseNumber}
         description="Clearance workflow for this shipment"
@@ -72,7 +72,7 @@ export default async function MyShipmentDetailPage({ params }: PageProps) {
         }
       />
 
-      <div className="grid gap-4 sm:grid-cols-3">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3 sm:gap-4">
         <InfoTile
           label="Supplier"
           value={shipment.supplierName ?? "—"}
@@ -90,7 +90,7 @@ export default async function MyShipmentDetailPage({ params }: PageProps) {
       </div>
 
       <DashCard className="overflow-hidden">
-        <div className="border-b border-slate-100 bg-gradient-to-r from-slate-50 to-white px-5 py-4">
+        <div className="border-b border-slate-100 bg-gradient-to-r from-slate-50 to-white px-4 py-3.5 sm:px-5 sm:py-4">
           <p className="text-xs font-bold uppercase tracking-wider text-slate-400">
             Workflow
           </p>
@@ -98,7 +98,7 @@ export default async function MyShipmentDetailPage({ params }: PageProps) {
             Track where your shipment is right now
           </p>
         </div>
-        <div className="p-5 sm:p-6">
+        <div className="p-4 sm:p-6">
           <ShipmentWorkflowStepper
             status={current}
             note={shipment.trackingNote}
@@ -110,7 +110,7 @@ export default async function MyShipmentDetailPage({ params }: PageProps) {
 
       {events.length > 0 ? (
         <DashCard>
-          <div className="border-b border-slate-100 px-5 py-4">
+          <div className="border-b border-slate-100 px-4 py-3.5 sm:px-5 sm:py-4">
             <h2 className="text-sm font-semibold text-slate-900">
               Update history
             </h2>
@@ -119,7 +119,7 @@ export default async function MyShipmentDetailPage({ params }: PageProps) {
             {[...events].reverse().map((event) => (
               <li
                 key={`${event.status}-${event.createdAt.toISOString()}`}
-                className="flex items-start justify-between gap-4 px-5 py-3.5"
+                className="flex flex-col gap-1 px-4 py-3.5 sm:flex-row sm:items-start sm:justify-between sm:gap-4 sm:px-5"
               >
                 <div className="min-w-0">
                   <p className="text-sm font-medium text-slate-900">
@@ -143,7 +143,7 @@ export default async function MyShipmentDetailPage({ params }: PageProps) {
 
 function InfoTile({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-3xl border border-slate-200/80 bg-white px-5 py-4 shadow-[0_4px_20px_-12px_rgba(15,23,42,0.1)]">
+    <div className="rounded-2xl border border-slate-200/80 bg-white px-4 py-3.5 shadow-[0_4px_20px_-12px_rgba(15,23,42,0.1)] sm:rounded-3xl sm:px-5 sm:py-4">
       <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
         {label}
       </p>

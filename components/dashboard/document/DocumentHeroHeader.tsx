@@ -95,7 +95,7 @@ export function DocumentHeroHeader({
           <div className="flex shrink-0 flex-col gap-2 sm:flex-row lg:flex-col">
             <a
               href={downloadHref}
-              className="group inline-flex items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-indigo-600 via-violet-600 to-indigo-600 px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-indigo-500/25 transition-all hover:shadow-xl hover:shadow-indigo-500/30 hover:-translate-y-0.5"
+              className="group inline-flex items-center justify-center gap-2 rounded-xl bg-[#007bff] px-5 py-3 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-[#0069d9]"
             >
               <svg
                 aria-hidden

@@ -164,7 +164,7 @@ export function DocumentProcessingStepper({
           aria-hidden
         />
         <div className="relative flex items-start gap-4">
-          <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-600 to-violet-600 shadow-lg shadow-indigo-500/25">
+          <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-[#007bff] shadow-md shadow-blue-500/20">
             <svg
               aria-hidden
               className="h-7 w-7 animate-pulse text-white"
@@ -201,7 +201,7 @@ export function DocumentProcessingStepper({
           </div>
           <div className="h-2.5 overflow-hidden rounded-full bg-slate-100" aria-hidden>
             <div
-              className="h-full rounded-full bg-gradient-to-r from-indigo-600 via-violet-600 to-indigo-600 transition-all duration-500 ease-out shadow-sm shadow-indigo-500/30"
+              className="h-full rounded-full bg-[#007bff] transition-all duration-500 ease-out shadow-sm shadow-blue-500/20"
               style={{ width: `${percent}%` }}
             />
           </div>
@@ -272,7 +272,7 @@ export function DocumentProcessingStepper({
                 </div>
                 <div className="h-2 overflow-hidden rounded-full bg-white/80">
                   <div
-                    className="h-full rounded-full bg-gradient-to-r from-indigo-600 to-violet-600 transition-all duration-300"
+                    className="h-full rounded-full bg-[#007bff] transition-all duration-300"
                     style={{
                       width: `${Math.min(100, Math.round((classified / total) * 100))}%`,
                     }}
