@@ -81,16 +81,14 @@ export function DashboardSidebar({
             />
           ))}
         </div>
-        {!isClient ? (
-          <div className="mt-3 border-t border-slate-100 pt-3">
-            <SidebarLink
-              href={settingsLink.href}
-              label={settingsLink.label}
-              exact={settingsLink.exact}
-              pathname={pathname}
-            />
-          </div>
-        ) : null}
+        <div className="mt-3 border-t border-slate-100 pt-3">
+          <SidebarLink
+            href={settingsLink.href}
+            label={settingsLink.label}
+            exact={settingsLink.exact}
+            pathname={pathname}
+          />
+        </div>
       </nav>
     </aside>
   );
@@ -124,18 +122,16 @@ export function DashboardMobileNav({
           {label}
         </Link>
       ))}
-      {!isClient ? (
-        <Link
-          href={settingsLink.href}
-          className={`shrink-0 rounded-full px-3.5 py-1.5 text-xs font-semibold transition-colors ${
-            isDashboardNavActive(pathname, settingsLink.href, settingsLink.exact)
-              ? "bg-[#007bff] text-white"
-              : "bg-white text-slate-600 border border-slate-200"
-          }`}
-        >
-          {settingsLink.label}
-        </Link>
-      ) : null}
+      <Link
+        href={settingsLink.href}
+        className={`shrink-0 rounded-full px-3.5 py-1.5 text-xs font-semibold transition-colors ${
+          isDashboardNavActive(pathname, settingsLink.href, settingsLink.exact)
+            ? "bg-[#007bff] text-white"
+            : "bg-white text-slate-600 border border-slate-200"
+        }`}
+      >
+        {settingsLink.label}
+      </Link>
     </nav>
   );
 }

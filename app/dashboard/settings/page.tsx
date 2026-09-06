@@ -35,7 +35,11 @@ export default async function SettingsPage() {
     <div className="space-y-8">
       <PageHeader
         title="Settings"
-        description="Manage your profile, workflow preferences, and session."
+        description={
+          role === "client"
+            ? "Manage notification preferences and connect Telegram."
+            : "Manage your profile, workflow preferences, and session."
+        }
       />
       <SettingsPanel
         email={profile.email ?? user.email}

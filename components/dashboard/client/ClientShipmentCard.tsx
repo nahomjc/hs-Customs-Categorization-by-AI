@@ -8,10 +8,10 @@ export type ClientShipmentSummary = {
   caseNumber: string;
   trackingStatus: string;
   trackingNote: string | null;
-  trackingUpdatedAt: Date | null;
+  trackingUpdatedAt: Date | string | null;
   supplierName: string | null;
   shipmentReference: string | null;
-  updatedAt: Date;
+  updatedAt: Date | string;
 };
 
 export function ClientShipmentCard({
@@ -19,7 +19,14 @@ export function ClientShipmentCard({
 }: {
   shipment: ClientShipmentSummary;
 }) {
-  const updated = shipment.trackingUpdatedAt ?? shipment.updatedAt;
+  const raw = shipment.trackingUpdatedAt ?? shipment.updatedAt;
+  const updated = raw instanceof Date ? raw : new Date(raw);
+  const updatedLabel = Number.isNaN(updated.getTime())
+    ? "—"
+    : updated.toLocaleDateString(undefined, {
+        month: "short",
+        day: "numeric",
+      });
 
   return (
     <Link
@@ -63,12 +70,7 @@ export function ClientShipmentCard({
           <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">
             Updated
           </p>
-          <p className="mt-0.5 text-xs text-slate-500">
-            {updated.toLocaleDateString(undefined, {
-              month: "short",
-              day: "numeric",
-            })}
-          </p>
+          <p className="mt-0.5 text-xs text-slate-500">{updatedLabel}</p>
         </div>
       </div>
 
