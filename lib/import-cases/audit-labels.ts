@@ -35,6 +35,53 @@ const ACTION_LABELS: Record<string, string> = {
   export_generated: "Generated export report",
 };
 
+export type AuditStepGroupId =
+  | "case-info"
+  | "documents"
+  | "invoice-lines"
+  | "packing-lines"
+  | "checks"
+  | "products"
+  | "classification"
+  | "grouping-export"
+  | "other";
+
+/** Map audit action → wizard step for history grouping. */
+export function getAuditStepGroup(action: string): AuditStepGroupId {
+  if (
+    action.startsWith("import_case_") ||
+    action === "import_case_created" ||
+    action === "import_case_updated"
+  ) {
+    return "case-info";
+  }
+  if (action.startsWith("document_")) return "documents";
+  if (action.startsWith("invoice_line") || action.startsWith("invoice_lines_")) {
+    return "invoice-lines";
+  }
+  if (action.startsWith("packing_line") || action.startsWith("packing_lines_")) {
+    return "packing-lines";
+  }
+  if (action.startsWith("checks_")) return "checks";
+  if (
+    action.startsWith("product_") ||
+    action.startsWith("products_") ||
+    action === "product_harmonized"
+  ) {
+    return "products";
+  }
+  if (
+    action.startsWith("classification_") ||
+    action.startsWith("classifications_")
+  ) {
+    return "classification";
+  }
+  if (action.startsWith("grouping_") || action.startsWith("export_")) {
+    return "grouping-export";
+  }
+  return "other";
+}
+
 function humanizeAction(action: string): string {
   return action
     .replace(/_/g, " ")
@@ -62,17 +109,38 @@ export function formatAuditDetails(
   if (typeof newData.productCount === "number") {
     parts.push(`${newData.productCount} product(s)`);
   }
+  if (typeof newData.matchCount === "number") {
+    parts.push(`${newData.matchCount} matched pair(s)`);
+  }
+  if (typeof newData.vddMatchTotal === "number" && newData.vddMatchTotal > 0) {
+    parts.push(`${newData.vddMatchTotal} VDD hit(s)`);
+  }
   if (typeof newData.classifiedCount === "number") {
     parts.push(`${newData.classifiedCount} classified`);
+  }
+  if (
+    typeof newData.needsReviewCount === "number" &&
+    newData.needsReviewCount > 0
+  ) {
+    parts.push(`${newData.needsReviewCount} need review`);
   }
   if (typeof newData.groupCount === "number") {
     parts.push(`${newData.groupCount} group(s)`);
   }
   if (typeof newData.documentType === "string") {
-    parts.push(newData.documentType.replace(/_/g, " "));
+    parts.push(String(newData.documentType).replace(/_/g, " "));
+  }
+  if (typeof newData.originalFileName === "string") {
+    parts.push(newData.originalFileName);
   }
   if (typeof newData.hsCode === "string") {
     parts.push(`HS ${newData.hsCode}`);
+  }
+  if (typeof newData.source === "string") {
+    parts.push(`via ${String(newData.source).replace(/_/g, " ")}`);
+  }
+  if (typeof newData.status === "string") {
+    parts.push(`status: ${newData.status}`);
   }
   if (typeof newData.format === "string") {
     parts.push(newData.format.toUpperCase());
@@ -82,6 +150,9 @@ export function formatAuditDetails(
   }
   if (typeof newData.caseNumber === "string") {
     parts.push(newData.caseNumber);
+  }
+  if (typeof newData.importerName === "string") {
+    parts.push(newData.importerName);
   }
 
   if (parts.length === 0 && action.includes("bulk")) {

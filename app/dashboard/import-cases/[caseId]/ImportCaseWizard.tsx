@@ -2,7 +2,7 @@
 
 import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { AuditLogTable } from "@/components/dashboard/AuditLogTable";
+import { CaseHistoryPanel } from "@/components/dashboard/import-case/CaseHistoryPanel";
 import { DashButton, DashCard } from "@/components/dashboard/ui";
 import type { AuditLogView } from "@/lib/import-cases/audit-queries";
 import type { DocumentCheckRow } from "@/db/schema/documentChecks";
@@ -433,9 +433,9 @@ export function ImportCaseWizard({
                   caseNumber={importCase.caseNumber}
                   initialGroupings={groupings}
                 />
-                <AuditLogTable
+                <CaseHistoryPanel
                   entries={auditLogs}
-                  description="Who uploaded documents, ran extraction, classification, grouping, and other workflow steps on this case."
+                  caseNumber={importCase.caseNumber}
                 />
               </>
             ) : null}
@@ -550,8 +550,8 @@ function StepHint({
           : "All HS codes approved. Continue to declaration grouping.",
     "grouping-export":
       groupings.length === 0
-        ? "Run grouping to combine products into declaration lines, then download the CSV export."
-        : "Declaration groups ready. Download the CSV export for customs review.",
+        ? "Run grouping to combine products into declaration lines, then download the CSV export. Case history below shows who did what at each step."
+        : "Declaration groups ready. Download the CSV export, then review the case history for approvals, notes, and timestamps.",
   };
 
   const hint = hints[stepId];

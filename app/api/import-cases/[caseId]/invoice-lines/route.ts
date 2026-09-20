@@ -16,6 +16,7 @@ import {
   getTenantId,
   writeAuditLog,
 } from "@/lib/import-cases/queries";
+import { runImportCaseChecks } from "@/lib/import-cases/run-case-checks";
 import {
   createInvoiceLineSchema,
 } from "@/lib/import-cases/validation";
@@ -117,6 +118,8 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     action: "invoice_line_created",
     newData: { lineNumber: created.lineNumber },
   });
+
+  await runImportCaseChecks(caseId);
 
   return NextResponse.json(created, { status: 201 });
 }

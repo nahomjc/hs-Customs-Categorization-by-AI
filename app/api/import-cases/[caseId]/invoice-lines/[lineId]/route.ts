@@ -1,4 +1,5 @@
-import { NextRequest, NextResponse } from "next/server";
+import type { NextRequest } from "next/server";
+import { NextResponse } from "next/server";
 import { and, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { invoiceLines } from "@/db/schema";
@@ -13,6 +14,7 @@ import {
   getTenantId,
   writeAuditLog,
 } from "@/lib/import-cases/queries";
+import { runImportCaseChecks } from "@/lib/import-cases/run-case-checks";
 import { updateInvoiceLineSchema } from "@/lib/import-cases/validation";
 
 type RouteParams = {
@@ -69,6 +71,9 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     action: "invoice_line_corrected",
     newData: updated as unknown as Record<string, unknown>,
   });
+
+  // Recompute open checks so quantity/UOM fixes clear stale errors.
+  await runImportCaseChecks(caseId);
 
   return NextResponse.json(updated);
 }

@@ -19,7 +19,7 @@ import {
   getTenantId,
   listTenantUsers,
 } from "@/lib/import-cases/queries";
-import { getCaseChecks } from "@/lib/import-cases/run-case-checks";
+import { getCaseChecks, runImportCaseChecks } from "@/lib/import-cases/run-case-checks";
 import { getWorkflowProgressPercent } from "@/lib/import-cases/workflow-progress";
 import { ImportCaseWizard } from "./ImportCaseWizard";
 
@@ -64,6 +64,10 @@ export default async function ImportCaseDetailPage({ params }: PageProps) {
     const caseRow = await getImportCaseById(caseId, tenantId);
     if (!caseRow) notFound();
     importCase = caseRow;
+
+    // Refresh open auto-checks from current lines before reading them.
+    await runImportCaseChecks(caseId);
+
     [
       documents,
       invoiceLines,

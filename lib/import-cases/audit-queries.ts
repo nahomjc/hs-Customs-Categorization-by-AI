@@ -25,7 +25,7 @@ function toRecord(value: unknown): Record<string, unknown> | null {
 export async function getCaseAuditLogs(
   caseId: string,
   tenantId: string,
-  limit = 100,
+  limit = 250,
 ): Promise<AuditLogView[]> {
   const rows = await db
     .select({

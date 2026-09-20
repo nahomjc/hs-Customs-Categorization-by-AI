@@ -16,6 +16,7 @@ import {
   getTenantId,
   writeAuditLog,
 } from "@/lib/import-cases/queries";
+import { runImportCaseChecks } from "@/lib/import-cases/run-case-checks";
 import { createPackingListLineSchema } from "@/lib/import-cases/validation";
 
 type RouteParams = { params: Promise<{ caseId: string }> };
@@ -119,6 +120,8 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     action: "packing_line_created",
     newData: { lineNumber: created.lineNumber },
   });
+
+  await runImportCaseChecks(caseId);
 
   return NextResponse.json(created, { status: 201 });
 }
