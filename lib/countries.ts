@@ -37,7 +37,7 @@ export const ISO_COUNTRIES: IsoCountry[] = ISO_ALPHA2_CODES.map((code) => ({
   name: regionNames?.of(code) ?? code,
 })).sort((a, b) => a.name.localeCompare(b.name, "en"));
 
-/** Regional-indicator emoji flag for an ISO 3166-1 alpha-2 code. */
+/** Regional-indicator emoji — unreliable on Windows (shows letters). Prefer getCountryFlagUrl. */
 export function getCountryFlag(code: string | null | undefined): string {
   if (!code) return "";
   const cc = code.trim().toUpperCase();
@@ -47,10 +47,19 @@ export function getCountryFlag(code: string | null | undefined): string {
   );
 }
 
+/** CDN PNG flag URL — works on all platforms (Windows/macOS/Linux browsers). */
+export function getCountryFlagUrl(
+  code: string | null | undefined,
+  width: 20 | 40 | 80 = 20,
+): string | null {
+  if (!code) return null;
+  const cc = code.trim().toLowerCase();
+  if (!/^[a-z]{2}$/.test(cc)) return null;
+  return `https://flagcdn.com/w${width}/${cc}.png`;
+}
+
 export function getCountryLabel(code: string | null | undefined): string {
   if (!code) return "";
   const match = ISO_COUNTRIES.find((c) => c.code === code);
-  const flag = getCountryFlag(code);
-  const text = match ? `${match.code} — ${match.name}` : code;
-  return flag ? `${flag} ${text}` : text;
+  return match ? `${match.code} — ${match.name}` : code;
 }

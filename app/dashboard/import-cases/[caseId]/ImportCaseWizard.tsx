@@ -277,13 +277,11 @@ export function ImportCaseWizard({
                       : step.description
                   }
                   className={`relative flex h-10 w-full items-center justify-center px-3 text-center text-[11px] font-semibold leading-tight transition-colors sm:h-11 sm:px-4 sm:text-xs ${
-                    isActive
+                    isActive || isComplete
                       ? "bg-[#2563eb] text-white shadow-sm"
-                      : isComplete
-                        ? "bg-emerald-100 text-emerald-800 hover:bg-emerald-200"
-                        : unlocked
-                          ? "bg-slate-100 text-slate-600 hover:bg-slate-200/90"
-                          : "cursor-not-allowed bg-slate-50 text-slate-300"
+                      : unlocked
+                        ? "bg-slate-100 text-slate-600 hover:bg-slate-200/90"
+                        : "cursor-not-allowed bg-slate-50 text-slate-300"
                   }`}
                   style={{
                     clipPath: chevronClipPath(segmentFirst, segmentLast, tip),
