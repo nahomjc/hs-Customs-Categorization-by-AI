@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 import { db } from "@/db";
 import {
   importCases,
@@ -15,12 +15,14 @@ import {
 } from "./match-lines";
 import { normalizeProductDescription } from "./normalize-product";
 import { writeAuditLog } from "./queries";
+import { persistVddMatchesForProducts } from "@/lib/vdd/persist-product-matches";
 
 export type HarmonizeResult = {
   productCount: number;
   matchCount: number;
   unmatchedInvoiceCount: number;
   unmatchedPackingCount: number;
+  vddMatchTotal: number;
 };
 
 export async function harmonizeImportCase(
@@ -225,6 +227,20 @@ export async function harmonizeImportCase(
     })
     .where(eq(importCases.id, caseId));
 
+  // Search VDD for each created product and persist matches (decision support).
+  let vddMatchTotal = 0;
+  if (createdProductIds.length > 0) {
+    const createdProducts = await db
+      .select()
+      .from(importProducts)
+      .where(inArray(importProducts.id, createdProductIds));
+    const { totalMatches } = await persistVddMatchesForProducts(
+      tenantId,
+      createdProducts,
+    );
+    vddMatchTotal = totalMatches;
+  }
+
   await writeAuditLog({
     tenantId,
     importCaseId: caseId,
@@ -235,6 +251,7 @@ export async function harmonizeImportCase(
     newData: {
       productCount: sequence,
       matchCount: matchResult.matches.length,
+      vddMatchTotal,
     },
   });
 
@@ -243,5 +260,6 @@ export async function harmonizeImportCase(
     matchCount: matchResult.matches.length,
     unmatchedInvoiceCount: matchResult.unmatchedInvoiceLineIds.length,
     unmatchedPackingCount: matchResult.unmatchedPackingListLineIds.length,
+    vddMatchTotal,
   };
 }

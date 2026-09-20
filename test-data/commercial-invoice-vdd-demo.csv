@@ -1,0 +1,23 @@
+Commercial Invoice
+
+Invoice Number,INV-VDD-2026-001
+Invoice Date,2026-09-10
+Supplier Name,Guangzhou Gonglang Electric Co. Ltd.
+Supplier Country,CN
+Buyer / Importer,Impact Logistic PLC
+Buyer Country,ET
+Currency,USD
+Incoterm,FOB
+Country of Origin,CN
+
+Line,Description,SKU,Brand,Model,Quantity,Unit,Unit Price,Line Total
+1,Electric motor for workshop GONGLANG YY7134 370W,MOT-YY7134,GONGLANG,YY7134,50,pcs,28.50,1425.00
+2,Textured polyester yarn 150D white SUNTEX,YRN-150D-W,SUNTEX,ST-150D,200,kg,2.15,430.00
+3,Textile printing thickener paste Keda KD-PT100,THK-KEDA-01,Keda,KD-PT100,80,kg,3.40,272.00
+4,LED bulb 9W warm white BrightLite BL-9W,BLB-9W-WW,BrightLite,BL-9W,1000,pcs,1.25,1250.00
+5,Canned tomato paste 400g GoldenCan,TOM-400G,GoldenCan,GC-400,500,pcs,0.85,425.00
+6,Electric motor GONGLANG YY8200 550W,MOT-YY8200,GONGLANG,YY8200,10,pcs,39.00,390.00
+
+Invoice Total,,,,,,,,4192.00
+
+Notes,Payment terms: 30% deposit 70% before shipment. Shipment ref: SHP-VDD-ET-2026-0910. Descriptions aligned to VDD-SAMPLE-DEMO for brand/model search. Line 6 is a near-miss (different model/HS in VDD).

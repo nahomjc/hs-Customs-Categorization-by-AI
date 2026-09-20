@@ -55,10 +55,15 @@ export function ProductsTab({ caseId, initialProducts }: ProductsTabProps) {
         error?: string;
         productCount?: number;
         matchCount?: number;
+        vddMatchTotal?: number;
       };
       if (!res.ok) throw new Error(data.error ?? "Harmonization failed");
+      const vddPart =
+        data.vddMatchTotal != null && data.vddMatchTotal > 0
+          ? ` · ${data.vddMatchTotal} VDD hit(s)`
+          : "";
       toast.success(
-        `Created ${data.productCount} harmonized product(s) (${data.matchCount} matched pairs)`,
+        `Created ${data.productCount} harmonized product(s) (${data.matchCount} matched pairs)${vddPart}`,
       );
       await refreshProducts();
     } catch (error) {
@@ -199,12 +204,13 @@ export function ProductsTab({ caseId, initialProducts }: ProductsTabProps) {
             </DashTableHead>
             <DashTbody>
               {products.map(
-                ({ product, invoiceSources, packingSources }) => (
+                ({ product, invoiceSources, packingSources, vddMatches }) => (
                   <ProductTableRow
                     key={product.id}
                     product={product}
                     invoiceSources={invoiceSources}
                     packingSources={packingSources}
+                    vddMatches={vddMatches ?? []}
                     confirmingId={confirmingId}
                     editingId={editingId}
                     editDescription={editDescription}
@@ -235,6 +241,7 @@ type ProductTableRowProps = {
   product: CaseProductWithSources["product"];
   invoiceSources: CaseProductWithSources["invoiceSources"];
   packingSources: CaseProductWithSources["packingSources"];
+  vddMatches: CaseProductWithSources["vddMatches"];
   confirmingId: string | null;
   editingId: string | null;
   editDescription: string;
@@ -251,6 +258,7 @@ function ProductTableRow({
   product,
   invoiceSources,
   packingSources,
+  vddMatches,
   confirmingId,
   editingId,
   editDescription,
@@ -310,7 +318,7 @@ function ProductTableRow({
           )}
         </td>
         <td className="px-3 py-2">
-          {invoiceSources.length > 0 || packingSources.length > 0 ? (
+          {invoiceSources.length > 0 || packingSources.length > 0 || vddMatches.length > 0 ? (
             <button
               type="button"
               onClick={() => onToggleExpand(product.id)}
@@ -325,6 +333,11 @@ function ProductTableRow({
               {packingSources.length > 0
                 ? `${packingSources.length} pkg`
                 : null}
+              {(invoiceSources.length > 0 || packingSources.length > 0) &&
+              vddMatches.length > 0
+                ? " · "
+                : null}
+              {vddMatches.length > 0 ? `${vddMatches.length} vdd` : null}
             </button>
           ) : (
             "—"
@@ -401,6 +414,7 @@ function ProductTableRow({
                 }))}
               />
             </div>
+            <VddMatchesPanel matches={vddMatches} />
             {Array.isArray(product.missingInformation) &&
             (product.missingInformation as string[]).length > 0 ? (
               <p className="text-xs text-amber-700 mt-3">
@@ -454,6 +468,79 @@ function SourceDetail({
           </li>
         ))}
       </ul>
+    </div>
+  );
+}
+
+function VddMatchesPanel({
+  matches,
+}: {
+  matches: CaseProductWithSources["vddMatches"];
+}) {
+  return (
+    <div className="mt-4 text-xs">
+      <p className="font-semibold text-slate-500 mb-1">Similar VDD records</p>
+      <p className="text-slate-400 mb-2">
+        VDD references support review only. They do not determine the final HS
+        code or customs value.
+      </p>
+      {matches.length === 0 ? (
+        <p className="text-slate-400">
+          No VDD matches yet. Import VDD Excel under Settings → VDD, then
+          re-harmonize.
+        </p>
+      ) : (
+        <ul className="space-y-1.5">
+          {matches.map((m) => (
+            <li
+              key={m.id}
+              className="text-slate-700 bg-white rounded-lg px-3 py-2 border border-slate-100"
+            >
+              <div className="flex flex-wrap items-baseline justify-between gap-2">
+                <p className="font-medium">
+                  HS {m.hsCode}
+                  {m.hsCodeMatches === true ? (
+                    <span className="ml-2 text-emerald-600 font-normal">
+                      agrees with suggestion
+                    </span>
+                  ) : m.hsCodeMatches === false ? (
+                    <span className="ml-2 text-amber-600 font-normal">
+                      differs from suggestion
+                    </span>
+                  ) : null}
+                </p>
+                <p className="text-slate-500">
+                  {(Number(m.similarityScore) * 100).toFixed(0)}% similar
+                </p>
+              </div>
+              <p className="mt-0.5">
+                {[m.brandOrMake, m.model].filter(Boolean).join(" · ") || "—"}
+                {m.originCode ? ` · ${m.originCode}` : ""}
+              </p>
+              <p className="text-slate-500 mt-0.5">
+                {m.commonName ?? m.commercialDescription ?? "—"}
+              </p>
+              {m.declaredUnitPrice != null ? (
+                <p className="text-slate-400 mt-0.5">
+                  Declared{" "}
+                  {m.currencyCode} {m.declaredUnitPrice}
+                  {m.unitOfQuantity ? ` / ${m.unitOfQuantity}` : ""}
+                </p>
+              ) : null}
+              {m.matchReasons.length > 0 ? (
+                <p className="text-emerald-700 mt-1">
+                  Match: {m.matchReasons.join(", ")}
+                </p>
+              ) : null}
+              {m.differences.length > 0 ? (
+                <p className="text-amber-700 mt-0.5">
+                  Diff: {m.differences.join("; ")}
+                </p>
+              ) : null}
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   );
 }

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useId, useMemo, useRef, useState } from "react";
-import { ISO_COUNTRIES } from "@/lib/countries";
+import { getCountryFlag, ISO_COUNTRIES } from "@/lib/countries";
 import { dashInputClass } from "@/components/dashboard/ui";
 
 type CountrySearchSelectProps = {
@@ -25,6 +25,7 @@ export function CountrySearchSelect({
   const [query, setQuery] = useState("");
 
   const selected = ISO_COUNTRIES.find((c) => c.code === value);
+  const selectedFlag = getCountryFlag(value);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -65,8 +66,18 @@ export function CountrySearchSelect({
       ? `${selected.code} — ${selected.name}`
       : "";
 
+  const showFlagInInput = Boolean(selectedFlag) && !open;
+
   return (
     <div ref={rootRef} className="relative">
+      {showFlagInInput ? (
+        <span
+          aria-hidden
+          className="pointer-events-none absolute left-3 top-1/2 z-10 -translate-y-1/2 text-base leading-none"
+        >
+          {selectedFlag}
+        </span>
+      ) : null}
       <input
         id={inputId}
         type="text"
@@ -85,7 +96,9 @@ export function CountrySearchSelect({
           setOpen(true);
           if (selected && !query) setQuery("");
         }}
-        className={`${dashInputClass} pl-3`}
+        className={`${dashInputClass} ${showFlagInInput ? "pl-10" : "pl-3"} ${
+          value ? "pr-8" : ""
+        }`}
       />
       {value ? (
         <button
@@ -105,22 +118,30 @@ export function CountrySearchSelect({
           {filtered.length === 0 ? (
             <p className="px-3 py-2 text-sm text-slate-500">No countries found</p>
           ) : (
-            filtered.map((country) => (
-              <button
-                key={country.code}
-                type="button"
-                onMouseDown={(e) => e.preventDefault()}
-                onClick={() => handleSelect(country.code)}
-                className={`w-full px-3 py-2 text-left text-sm hover:bg-slate-50 ${
-                  country.code === value
-                    ? "bg-indigo-50 text-indigo-700"
-                    : "text-slate-800"
-                }`}
-              >
-                <span className="font-medium">{country.code}</span>
-                <span className="text-slate-500"> — {country.name}</span>
-              </button>
-            ))
+            filtered.map((country) => {
+              const flag = getCountryFlag(country.code);
+              return (
+                <button
+                  key={country.code}
+                  type="button"
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => handleSelect(country.code)}
+                  className={`flex w-full items-center gap-2.5 px-3 py-2 text-left text-sm hover:bg-slate-50 ${
+                    country.code === value
+                      ? "bg-indigo-50 text-indigo-700"
+                      : "text-slate-800"
+                  }`}
+                >
+                  <span className="w-5 shrink-0 text-base leading-none" aria-hidden>
+                    {flag || "🏳️"}
+                  </span>
+                  <span>
+                    <span className="font-medium">{country.code}</span>
+                    <span className="text-slate-500"> — {country.name}</span>
+                  </span>
+                </button>
+              );
+            })
           )}
         </div>
       ) : null}

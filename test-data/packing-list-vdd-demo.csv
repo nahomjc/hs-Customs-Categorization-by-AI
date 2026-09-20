@@ -1,0 +1,19 @@
+Packing List
+
+Packing List Number,PL-VDD-2026-001
+Related Invoice Number,INV-VDD-2026-001
+Packing List Date,2026-09-12
+Supplier Name,Guangzhou Gonglang Electric Co. Ltd.
+Shipment Reference,SHP-VDD-ET-2026-0910
+
+Line,Description,SKU,Quantity,Unit,Cartons,Package Type,Pcs per Carton,Net Weight (kg),Gross Weight (kg),Package Marks,Country of Origin
+1,Electric motor for workshop GONGLANG YY7134 370W new solid,MOT-YY7134,50,pcs,5,carton,10,62.500,70.000,YY7134 / MADE IN CHINA,CN
+2,Textured polyester yarn 150D white SUNTEX ST-150D,YRN-150D-W,200,kg,8,carton,25,200.000,212.000,ST-150D / TEXTILE,CN
+3,Textile printing thickener paste Keda KD-PT100 liquid,THK-KEDA-01,80,kg,4,drum,20,80.000,88.000,KD-PT100 / KEEP UPRIGHT,CN
+4,LED bulb 9W warm white BrightLite BL-9W 50 pcs/ctn,BLB-9W-WW,1000,pcs,20,carton,50,45.000,52.000,BL-9W / FRAGILE,CN
+5,Canned tomato paste 400g GoldenCan GC-400 24 cans/ctn,TOM-400G,500,pcs,21,carton,24,210.000,225.000,GC-400 / FOODSTUFF,CN
+6,Similar motor brand GONGLANG different model YY8200 550W,MOT-YY8200,10,pcs,2,carton,5,18.000,20.000,YY8200 / MADE IN CHINA,CN
+
+Total Cartons,,,,,60,,,615.500,667.000,,
+
+Notes,Linked to INV-VDD-2026-001. Descriptions mirror VDD commercial text for exact brand/model hits. Line 6 tests partial VDD match (YY8200).

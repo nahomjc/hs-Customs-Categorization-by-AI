@@ -26,6 +26,11 @@ export interface ClassifyItemOptions {
   unit?: string;
   /** Import-case / tariff mode: food, oils, general goods — not furniture-only. */
   mode?: ClassifyItemMode;
+  /**
+   * Optional VDD historical evidence text for the reasoning step.
+   * Decision support only — must not auto-copy HS codes.
+   */
+  vddEvidenceText?: string;
 }
 
 const ALLOWED_HS_LIST = [...ALLOWED_HS_CODES].join(", ");
@@ -248,6 +253,10 @@ export async function classifyItem(
     reasoningUserContent += `\nUnit: ${options.unit}`;
   }
   reasoningUserContent += `\nExtracted features JSON: ${JSON.stringify(features)}\nGRI rule-engine candidate HS: ${gri.suggestedHsCodes.join(", ")}\nGRI rationale: ${gri.rationale}`;
+
+  if (options?.vddEvidenceText?.trim()) {
+    reasoningUserContent += `\n\n${options.vddEvidenceText.trim()}\nRules for VDD: use only as supporting evidence. Do NOT automatically copy an HS code from a VDD record. Do NOT choose a code because it has a lower duty. Historical data does not guarantee the current classification.`;
+  }
 
   const { list: allowedList, hasReferenceCandidates } =
     await buildAllowedListForItem(description, features, mode);

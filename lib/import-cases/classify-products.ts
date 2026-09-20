@@ -18,6 +18,9 @@ import { TARIFF_VERSION } from "./constants";
 import { AI_MODEL_NAME, PROMPT_VERSION } from "./extraction-schemas";
 import { lookupTariffForHsCode, parseDutyRate, dutyRateOtherCharges } from "./tariff-lookup";
 import { writeAuditLog } from "./queries";
+import { persistVddMatchesForProduct } from "@/lib/vdd/persist-product-matches";
+import type { VddScoredMatch } from "@/lib/vdd/score-match";
+import { vddProductMatches } from "@/db/schema";
 
 export type ClassifyResult = {
   classifiedCount: number;
@@ -25,6 +28,32 @@ export type ClassifyResult = {
   skippedCount: number;
   referencePopulated: boolean;
 };
+
+async function updateHsCodeMatchFlags(
+  productId: string,
+  suggestedHs: string,
+  matches: VddScoredMatch[],
+) {
+  const normalized = suggestedHs.replace(/\D/g, "");
+  for (const m of matches) {
+    const vddHs = m.record.hsCode.replace(/\D/g, "");
+    const hsCodeMatches =
+      normalized.length > 0 &&
+      vddHs.length > 0 &&
+      (normalized === vddHs ||
+        normalized.startsWith(vddHs) ||
+        vddHs.startsWith(normalized));
+    await db
+      .update(vddProductMatches)
+      .set({ hsCodeMatches })
+      .where(
+        and(
+          eq(vddProductMatches.productId, productId),
+          eq(vddProductMatches.vddReferenceRecordId, m.record.id),
+        ),
+      );
+  }
+}
 
 function confidenceLevel(score: number): string {
   if (score >= 0.85) return "high";
@@ -42,31 +71,56 @@ function mapSourceToClassificationSource(
 function buildReasoning(
   result: Awaited<ReturnType<typeof classifyProductDescription>>,
 ): string {
+  const vddNote =
+    result.vddEvidence && result.vddEvidence.similarRecordsUsed > 0
+      ? ` VDD: ${result.vddEvidence.similarRecordsUsed} similar record(s); ${
+          result.vddEvidence.hsCodeConsensus[0]
+            ? `historical consensus ${result.vddEvidence.hsCodeConsensus[0].hsCode} (${result.vddEvidence.hsCodeConsensus[0].count})`
+            : "no HS consensus"
+        }.`
+      : "";
+
   if (result.source === "reference_match") {
     const tariffNo = result.referenceMeta?.tariffNo;
     const score = result.referenceMeta?.score;
-    return `Tariff reference match${tariffNo ? ` (${tariffNo})` : ""}${score != null ? `, score ${score}` : ""}: ${result.cleanDescription}`;
+    return `Tariff reference match${tariffNo ? ` (${tariffNo})` : ""}${score != null ? `, score ${score}` : ""}: ${result.cleanDescription}.${vddNote}`;
   }
   if (result.source === "rule_fallback") {
-    return `Rule-based fallback (no reference match, AI unavailable): ${result.cleanDescription}`;
+    return `Rule-based fallback (no reference match, AI unavailable): ${result.cleanDescription}.${vddNote}`;
   }
-  return `AI classification: ${result.category}. ${result.cleanDescription}`;
+  return `AI classification: ${result.category}. ${result.cleanDescription}.${vddNote}`;
 }
 
 function buildClassificationEvidence(
   result: Awaited<ReturnType<typeof classifyProductDescription>>,
 ): Record<string, unknown> {
+  const vddBlock =
+    result.vddEvidence && result.vddEvidence.similarRecordsUsed > 0
+      ? {
+          vddComparison: {
+            similarRecordsUsed: result.vddEvidence.similarRecordsUsed,
+            matchingAttributes: result.vddEvidence.matchingAttributes,
+            differentAttributes: result.vddEvidence.differentAttributes,
+            hsCodeConsensus: result.vddEvidence.hsCodeConsensus,
+          },
+          disclaimer:
+            "VDD references support review only. They do not determine the final HS code or customs value.",
+        }
+      : {};
+
   if (result.source === "reference_match" && result.referenceMeta) {
     return {
       source: "reference_match",
       category: result.category,
       referenceMeta: result.referenceMeta,
+      ...vddBlock,
     };
   }
   return {
     source: result.source,
     category: result.category,
     aiRawResponse: result.aiRawResponse ?? null,
+    ...vddBlock,
   };
 }
 
@@ -239,11 +293,20 @@ export async function classifyImportCaseProducts(
       continue;
     }
 
+    const vddResult = await persistVddMatchesForProduct(tenantId, product);
+    const vddMatches: VddScoredMatch[] = vddResult.matches.slice(0, 5);
+
     const result = await classifyProductDescription(description, {
       country: product.countryOfOriginCode ?? undefined,
       unit: product.unitOfMeasure ?? undefined,
       forceAi,
+      vddMatches,
     });
+
+    // Mark whether suggested HS aligns with any top VDD HS (informational only)
+    if (vddMatches.length > 0 && result.hsCode && !isExcludedHsCode(result.hsCode)) {
+      await updateHsCodeMatchFlags(product.id, result.hsCode, vddMatches);
+    }
 
     const outcome = await persistProductClassification(product, result);
     if (outcome.kind === "skipped") {
@@ -331,11 +394,19 @@ export async function classifySingleImportProduct(
 
   await clearProductClassificationData([product.id]);
 
+  const vddResult = await persistVddMatchesForProduct(tenantId, product);
+  const vddMatches: VddScoredMatch[] = vddResult.matches.slice(0, 5);
+
   const result = await classifyProductDescription(description, {
     country: product.countryOfOriginCode ?? undefined,
     unit: product.unitOfMeasure ?? undefined,
     forceAi,
+    vddMatches,
   });
+
+  if (vddMatches.length > 0 && result.hsCode && !isExcludedHsCode(result.hsCode)) {
+    await updateHsCodeMatchFlags(product.id, result.hsCode, vddMatches);
+  }
 
   const outcome = await persistProductClassification(product, result);
 

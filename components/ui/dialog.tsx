@@ -35,8 +35,10 @@ const DialogContent = React.forwardRef<
     <DialogPrimitive.Content
       ref={ref}
       className={cn(
-        "fixed left-[50%] top-[50%] z-50 grid w-full max-w-lg translate-x-[-50%] translate-y-[-50%] gap-4 border border-[var(--border)] bg-[var(--background-card)] p-6 shadow-lg rounded-xl",
-        className
+        "fixed left-[50%] top-[50%] z-50 grid w-full translate-x-[-50%] translate-y-[-50%] gap-4 border border-[var(--border)] bg-[var(--background-card)] p-6 shadow-lg rounded-xl",
+        // Default size; callers override with their own max-w / w classes
+        !className?.includes("max-w-") && "max-w-lg",
+        className,
       )}
       {...props}
     >

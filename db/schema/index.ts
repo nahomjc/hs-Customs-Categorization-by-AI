@@ -25,3 +25,6 @@ export * from "./tenantChannelSettings";
 export * from "./trackingStatusEvents";
 export * from "./notifications";
 export * from "./notificationLogs";
+export * from "./vddImportBatches";
+export * from "./vddReferenceRecords";
+export * from "./vddProductMatches";

@@ -239,303 +239,225 @@ export function ImportCaseWizard({
   }
 
   return (
-    <div className="grid lg:grid-cols-[minmax(0,1fr)_280px] gap-6 items-start">
-      {/* Sidebar navigation — right on desktop */}
-      <aside className="hidden lg:block lg:order-2 sticky top-[4.5rem] z-10">
-        <DashCard className="overflow-hidden">
-          <div className="border-b border-slate-100 px-5 py-4 bg-gradient-to-r from-slate-50 to-white">
-            <p className="text-xs font-bold uppercase tracking-wider text-slate-400">
-              Workflow
-            </p>
-            <p className="mt-1 text-sm font-semibold text-slate-800">
-              {completedCount} of {WIZARD_STEPS.length} steps complete
-            </p>
-            <div className="mt-3 h-1.5 rounded-full bg-slate-100 overflow-hidden">
-              <div
-                className="h-full rounded-full bg-[#007bff] transition-all duration-500"
+    <div className="min-w-0 space-y-5">
+      {/* Chevron workflow stepper — above Phase card */}
+      <nav
+        className="w-full overflow-x-auto"
+        aria-label="Workflow steps"
+      >
+        <ol className="relative flex w-full min-w-[640px] list-none sm:min-w-0">
+          {WIZARD_STEPS.map((step, index) => {
+            const status = stepStatus(step.id, index);
+            const unlocked = isStepUnlocked(step.id);
+            const segmentFirst = index === 0;
+            const segmentLast = index === WIZARD_STEPS.length - 1;
+            const isActive = status === "current";
+            const isComplete = status === "complete";
+            const tip = 14;
+
+            return (
+              <li
+                key={step.id}
+                className="relative min-w-0 flex-1"
                 style={{
-                  width: `${(completedCount / WIZARD_STEPS.length) * 100}%`,
+                  marginLeft: segmentFirst ? 0 : -tip + 2,
+                  zIndex: isActive
+                    ? WIZARD_STEPS.length + 1
+                    : WIZARD_STEPS.length - index,
                 }}
-              />
-            </div>
-          </div>
-
-          <nav className="p-2" aria-label="Workflow steps">
-            {WIZARD_STEPS.map((step, index) => {
-              const status = stepStatus(step.id, index);
-              const unlocked = isStepUnlocked(step.id);
-              const badge = stepBadge(step.id);
-
-              return (
-                <button
-                  key={step.id}
-                  type="button"
-                  disabled={!unlocked}
-                  onClick={() => unlocked && goToStep(step.id)}
-                  className={`w-full flex items-start gap-3 rounded-xl px-3 py-3 text-left transition-all mb-0.5 ${
-                    status === "current"
-                      ? "bg-indigo-50 shadow-sm ring-1 ring-indigo-100"
-                      : unlocked
-                        ? "hover:bg-slate-50"
-                        : "opacity-50 cursor-not-allowed"
-                  }`}
-                >
-                  <StepIcon status={status} index={index} stepId={step.id} />
-                  <div className="min-w-0 flex-1">
-                    <p
-                      className={`text-sm font-semibold leading-tight ${
-                        status === "current"
-                          ? "text-indigo-900"
-                          : status === "complete"
-                            ? "text-emerald-800"
-                            : "text-slate-700"
-                      }`}
-                    >
-                      {step.label}
-                    </p>
-                    {badge ? (
-                      <p className="mt-0.5 text-[11px] text-slate-400 truncate">
-                        {badge}
-                      </p>
-                    ) : (
-                      <p className="mt-0.5 text-[11px] text-slate-400 line-clamp-1">
-                        {step.description}
-                      </p>
-                    )}
-                  </div>
-                </button>
-              );
-            })}
-          </nav>
-        </DashCard>
-      </aside>
-
-      {/* Main content */}
-      <div className="min-w-0 space-y-5 lg:order-1">
-        {/* Mobile progress */}
-        <div className="lg:hidden rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-          <div className="flex items-center justify-between gap-3 mb-3">
-            <p className="text-sm font-semibold text-slate-800">
-              Step {currentIndex + 1}: {currentMeta?.label}
-            </p>
-            <span className="text-xs font-medium text-indigo-600 tabular-nums">
-              {completedCount}/{WIZARD_STEPS.length}
-            </span>
-          </div>
-          <div className="flex gap-1">
-            {WIZARD_STEPS.map((step, index) => {
-              const status = stepStatus(step.id, index);
-              const unlocked = isStepUnlocked(step.id);
-              return (
-                <button
-                  key={step.id}
-                  type="button"
-                  disabled={!unlocked}
-                  onClick={() => unlocked && goToStep(step.id)}
-                  className={`h-1.5 flex-1 rounded-full transition-all ${
-                    status === "current"
-                      ? "bg-indigo-600"
-                      : status === "complete"
-                        ? "bg-emerald-400"
-                        : status === "locked"
-                          ? "bg-slate-100"
-                          : "bg-slate-200"
-                  }`}
-                  aria-label={step.label}
-                />
-              );
-            })}
-          </div>
-        </div>
-
-        {/* Step header */}
-        <div className="rounded-2xl border border-slate-200/80 bg-white px-5 py-5 sm:px-6 shadow-sm">
-          <div className="flex items-start gap-4">
-            <div className="hidden sm:flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-[#007bff] text-white shadow-sm">
-              <svg
-                className="h-6 w-6"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-                aria-hidden
               >
-                <title>{currentMeta?.label}</title>
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={1.75}
-                  d={STEP_ICONS[currentStep]}
-                />
-              </svg>
-            </div>
-            <div className="min-w-0">
+                <button
+                  type="button"
+                  disabled={!unlocked}
+                  onClick={() => unlocked && goToStep(step.id)}
+                  aria-current={isActive ? "step" : undefined}
+                  title={
+                    stepBadge(step.id)
+                      ? `${step.label} — ${stepBadge(step.id)}`
+                      : step.description
+                  }
+                  className={`relative flex h-10 w-full items-center justify-center px-3 text-center text-[11px] font-semibold leading-tight transition-colors sm:h-11 sm:px-4 sm:text-xs ${
+                    isActive
+                      ? "bg-[#2563eb] text-white shadow-sm"
+                      : isComplete
+                        ? "bg-emerald-100 text-emerald-800 hover:bg-emerald-200"
+                        : unlocked
+                          ? "bg-slate-100 text-slate-600 hover:bg-slate-200/90"
+                          : "cursor-not-allowed bg-slate-50 text-slate-300"
+                  }`}
+                  style={{
+                    clipPath: chevronClipPath(segmentFirst, segmentLast, tip),
+                    WebkitClipPath: chevronClipPath(
+                      segmentFirst,
+                      segmentLast,
+                      tip,
+                    ),
+                  }}
+                >
+                  <span className="relative z-10 line-clamp-2 max-w-full px-1">
+                    <span className="sm:hidden">{step.shortLabel}</span>
+                    <span className="hidden sm:inline">{step.label}</span>
+                  </span>
+                </button>
+              </li>
+            );
+          })}
+        </ol>
+      </nav>
+
+      {/* Phase card */}
+      <div className="rounded-2xl border border-slate-200/80 bg-white px-5 py-5 sm:px-6 shadow-sm">
+        <div className="flex items-start gap-4">
+          <div className="hidden sm:flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-[#007bff] text-white shadow-sm">
+            <svg
+              className="h-6 w-6"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+              aria-hidden
+            >
+              <title>{currentMeta?.label}</title>
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={1.75}
+                d={STEP_ICONS[currentStep]}
+              />
+            </svg>
+          </div>
+          <div className="min-w-0 flex-1">
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
               <p className="text-xs font-bold uppercase tracking-wider text-indigo-500">
                 Phase {currentMeta?.phase} · Step {currentIndex + 1}
               </p>
-              <h2 className="mt-1 text-xl font-bold text-slate-900">
-                {currentMeta?.label}
-              </h2>
-              <p className="mt-1 text-sm text-slate-500 leading-relaxed">
-                {currentMeta?.description}
-              </p>
+              <span className="text-xs font-medium text-slate-400 tabular-nums">
+                {completedCount}/{WIZARD_STEPS.length} complete
+              </span>
             </div>
+            <h2 className="mt-1 text-xl font-bold text-slate-900">
+              {currentMeta?.label}
+            </h2>
+            <p className="mt-1 text-sm text-slate-500 leading-relaxed">
+              {currentMeta?.description}
+            </p>
           </div>
         </div>
-
-        {!isStepUnlocked(currentStep) ? (
-          <LockedStepPanel stepId={currentStep} />
-        ) : (
-          <>
-            <StepHint
-              stepId={currentStep}
-              documents={documents}
-              invoiceLines={invoiceLines}
-              packingLines={packingLines}
-              openCheckCount={openCheckCount}
-              products={products}
-              classifications={classifications}
-              groupings={groupings}
-            />
-
-            <div className="space-y-6">
-                {currentStep === "case-info" ? (
-                  <OverviewTab
-                    importCase={importCase}
-                    agents={agents}
-                    client={client}
-                  />
-                ) : null}
-                {currentStep === "documents" ? (
-                  <DocumentsTab
-                    caseId={importCase.id}
-                    initialDocuments={documents}
-                  />
-                ) : null}
-                {currentStep === "invoice-lines" ? (
-                  <InvoiceLinesTab
-                    caseId={importCase.id}
-                    invoiceDocuments={invoiceDocuments}
-                    initialLines={invoiceLines as never}
-                  />
-                ) : null}
-                {currentStep === "packing-lines" ? (
-                  <PackingListLinesTab
-                    caseId={importCase.id}
-                    packingDocuments={packingDocuments}
-                    initialLines={packingLines as never}
-                  />
-                ) : null}
-                {currentStep === "checks" ? (
-                  <ChecksTab caseId={importCase.id} checks={checks} />
-                ) : null}
-                {currentStep === "products" ? (
-                  <ProductsTab
-                    caseId={importCase.id}
-                    initialProducts={products}
-                  />
-                ) : null}
-                {currentStep === "classification" ? (
-                  <ClassificationTab
-                    caseId={importCase.id}
-                    initialClassifications={classifications}
-                    referencePopulated={referencePopulated}
-                  />
-                ) : null}
-                {currentStep === "grouping-export" ? (
-                  <>
-                    <GroupingExportTab
-                      caseId={importCase.id}
-                      caseNumber={importCase.caseNumber}
-                      initialGroupings={groupings}
-                    />
-                    <AuditLogTable
-                      entries={auditLogs}
-                      description="Who uploaded documents, ran extraction, classification, grouping, and other workflow steps on this case."
-                    />
-                  </>
-                ) : null}
-            </div>
-          </>
-        )}
-
-        {isStepUnlocked(currentStep) ? (
-          <div className="sticky bottom-4 z-20 dashboard-sticky-actions flex items-center justify-between gap-3 rounded-2xl border border-slate-200/80 bg-white/90 backdrop-blur-md px-4 py-3 shadow-lg shadow-slate-200/50">
-            <DashButton variant="secondary" onClick={goBack} disabled={isFirst}>
-              ← Back
-            </DashButton>
-            <div className="flex items-center gap-3">
-              {!isLastActive ? (
-                <DashButton variant="primary" onClick={goNext}>
-                  Continue →
-                </DashButton>
-              ) : (
-                <p className="text-sm text-emerald-700 font-medium px-2">
-                  Workflow complete — export your declaration CSV above.
-                </p>
-              )}
-            </div>
-          </div>
-        ) : null}
       </div>
+
+      {!isStepUnlocked(currentStep) ? (
+        <LockedStepPanel stepId={currentStep} />
+      ) : (
+        <>
+          <StepHint
+            stepId={currentStep}
+            documents={documents}
+            invoiceLines={invoiceLines}
+            packingLines={packingLines}
+            openCheckCount={openCheckCount}
+            products={products}
+            classifications={classifications}
+            groupings={groupings}
+          />
+
+          <div className="space-y-6">
+            {currentStep === "case-info" ? (
+              <OverviewTab
+                importCase={importCase}
+                agents={agents}
+                client={client}
+              />
+            ) : null}
+            {currentStep === "documents" ? (
+              <DocumentsTab
+                caseId={importCase.id}
+                initialDocuments={documents}
+              />
+            ) : null}
+            {currentStep === "invoice-lines" ? (
+              <InvoiceLinesTab
+                caseId={importCase.id}
+                invoiceDocuments={invoiceDocuments}
+                initialLines={invoiceLines as never}
+              />
+            ) : null}
+            {currentStep === "packing-lines" ? (
+              <PackingListLinesTab
+                caseId={importCase.id}
+                packingDocuments={packingDocuments}
+                initialLines={packingLines as never}
+              />
+            ) : null}
+            {currentStep === "checks" ? (
+              <ChecksTab caseId={importCase.id} checks={checks} />
+            ) : null}
+            {currentStep === "products" ? (
+              <ProductsTab
+                caseId={importCase.id}
+                initialProducts={products}
+              />
+            ) : null}
+            {currentStep === "classification" ? (
+              <ClassificationTab
+                caseId={importCase.id}
+                initialClassifications={classifications}
+                referencePopulated={referencePopulated}
+              />
+            ) : null}
+            {currentStep === "grouping-export" ? (
+              <>
+                <GroupingExportTab
+                  caseId={importCase.id}
+                  caseNumber={importCase.caseNumber}
+                  initialGroupings={groupings}
+                />
+                <AuditLogTable
+                  entries={auditLogs}
+                  description="Who uploaded documents, ran extraction, classification, grouping, and other workflow steps on this case."
+                />
+              </>
+            ) : null}
+          </div>
+        </>
+      )}
+
+      {isStepUnlocked(currentStep) ? (
+        <div className="sticky bottom-4 z-20 dashboard-sticky-actions flex items-center justify-between gap-3 rounded-2xl border border-slate-200/80 bg-white/90 backdrop-blur-md px-4 py-3 shadow-lg shadow-slate-200/50">
+          <DashButton variant="secondary" onClick={goBack} disabled={isFirst}>
+            ← Back
+          </DashButton>
+          <div className="flex items-center gap-3">
+            {!isLastActive ? (
+              <DashButton variant="primary" onClick={goNext}>
+                Continue →
+              </DashButton>
+            ) : (
+              <p className="text-sm text-emerald-700 font-medium px-2">
+                Workflow complete — export your declaration CSV above.
+              </p>
+            )}
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
 
-function StepIcon({
-  status,
-  index,
-  stepId,
-}: {
-  status: StepStatus;
-  index: number;
-  stepId: WizardStepId;
-}) {
-  const base =
-    "flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-xs font-bold transition-all";
-
-  if (status === "complete") {
-    return (
-      <span className={`${base} bg-emerald-100 text-emerald-700`}>
-        <CheckIcon className="h-4 w-4" />
-      </span>
-    );
+/** Interlocking chevron segments: pointed right, notched left (except ends). */
+function chevronClipPath(
+  isFirst: boolean,
+  isLast: boolean,
+  tip = 12,
+): string {
+  if (isFirst && isLast) {
+    return "polygon(0 0, 100% 0, 100% 100%, 0 100%)";
   }
-
-  if (status === "locked") {
-    return (
-      <span className={`${base} bg-slate-100 text-slate-300`}>
-        <LockIcon className="h-3.5 w-3.5" />
-      </span>
-    );
+  if (isFirst) {
+    return `polygon(0% 0%, calc(100% - ${tip}px) 0%, 100% 50%, calc(100% - ${tip}px) 100%, 0% 100%)`;
   }
-
-  if (status === "current") {
-    return (
-      <span
-        className={`${base} bg-[#007bff] text-white shadow-sm`}
-      >
-        <svg
-          className="h-4 w-4"
-          fill="none"
-          stroke="currentColor"
-          viewBox="0 0 24 24"
-          aria-hidden
-        >
-          <title>Step icon</title>
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeWidth={2}
-            d={STEP_ICONS[stepId]}
-          />
-        </svg>
-      </span>
-    );
+  if (isLast) {
+    return `polygon(0% 0%, 100% 0%, 100% 100%, 0% 100%, ${tip}px 50%)`;
   }
-
-  return (
-    <span className={`${base} bg-slate-100 text-slate-500`}>{index + 1}</span>
-  );
+  return `polygon(0% 0%, calc(100% - ${tip}px) 0%, 100% 50%, calc(100% - ${tip}px) 100%, 0% 100%, ${tip}px 50%)`;
 }
 
 function StepHint({
