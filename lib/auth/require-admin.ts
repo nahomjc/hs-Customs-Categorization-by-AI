@@ -53,3 +53,23 @@ export async function requireAdmin() {
   }
   return { ok: true as const, session };
 }
+
+/** Admin or assessor — for NLP HS search and similar decision-support tools. */
+export async function requireAdminOrAssessor() {
+  const session = await getSessionUserProfile();
+  if (!session) {
+    return { ok: false as const, status: 401 as const, error: "Unauthorized" };
+  }
+  if (!session.profile) {
+    return { ok: false as const, status: 403 as const, error: "Profile not found" };
+  }
+  const role = session.profile.role;
+  if (role !== "admin" && role !== "assessor") {
+    return {
+      ok: false as const,
+      status: 403 as const,
+      error: "Admin or assessor access required",
+    };
+  }
+  return { ok: true as const, session };
+}

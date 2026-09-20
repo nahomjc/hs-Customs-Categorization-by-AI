@@ -28,3 +28,4 @@ export * from "./notificationLogs";
 export * from "./vddImportBatches";
 export * from "./vddReferenceRecords";
 export * from "./vddProductMatches";
+export * from "./hsCodeSearchLogs";

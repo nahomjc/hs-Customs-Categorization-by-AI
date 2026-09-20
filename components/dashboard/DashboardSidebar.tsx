@@ -111,6 +111,15 @@ const icons = {
       />
     </NavIcon>
   ),
+  hsSearch: (
+    <NavIcon>
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M21 21l-4.35-4.35M11 18a7 7 0 1 1 0-14 7 7 0 0 1 0 14Z"
+      />
+    </NavIcon>
+  ),
   channels: (
     <NavIcon>
       <path
@@ -206,6 +215,13 @@ export const adminNavLink: NavLink = {
   icon: icons.hsReference,
 };
 
+export const hsCodeSearchNavLink: NavLink = {
+  href: "/dashboard/tools/hs-code-search",
+  label: "HS code search",
+  exact: false,
+  icon: icons.hsSearch,
+};
+
 export const channelsNavLink: NavLink = {
   href: "/dashboard/settings/channels",
   label: "Channels",
@@ -229,25 +245,33 @@ export const settingsLink: NavLink = {
 
 export function getDashboardNavLinks(options: {
   isAdmin?: boolean;
+  isAssessor?: boolean;
   isClient?: boolean;
 }) {
   if (options.isClient) {
     return [...clientNavLinks];
   }
-  return options.isAdmin
-    ? [...mainNavLinks, adminNavLink, channelsNavLink, vddNavLink]
-    : [...mainNavLinks];
+  const links = [...mainNavLinks];
+  if (options.isAdmin || options.isAssessor) {
+    links.push(hsCodeSearchNavLink);
+  }
+  if (options.isAdmin) {
+    links.push(adminNavLink, channelsNavLink, vddNavLink);
+  }
+  return links;
 }
 
 export function DashboardSidebar({
   isAdmin = false,
+  isAssessor = false,
   isClient = false,
 }: {
   isAdmin?: boolean;
+  isAssessor?: boolean;
   isClient?: boolean;
 }) {
   const pathname = usePathname();
-  const links = getDashboardNavLinks({ isAdmin, isClient });
+  const links = getDashboardNavLinks({ isAdmin, isAssessor, isClient });
 
   return (
     <aside className="hidden lg:flex w-[17rem] shrink-0 flex-col overflow-hidden rounded-3xl border border-slate-200/70 bg-white shadow-[0_4px_24px_-8px_rgba(15,23,42,0.08)] sticky top-[4.5rem] max-h-[calc(100vh-6rem)] lg:ml-3">
@@ -289,13 +313,15 @@ export function DashboardSidebar({
 
 export function DashboardMobileNav({
   isAdmin = false,
+  isAssessor = false,
   isClient = false,
 }: {
   isAdmin?: boolean;
+  isAssessor?: boolean;
   isClient?: boolean;
 }) {
   const pathname = usePathname();
-  const links = getDashboardNavLinks({ isAdmin, isClient });
+  const links = getDashboardNavLinks({ isAdmin, isAssessor, isClient });
 
   return (
     <nav
