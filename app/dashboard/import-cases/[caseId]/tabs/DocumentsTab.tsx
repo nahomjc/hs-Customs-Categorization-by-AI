@@ -55,6 +55,7 @@ export function DocumentsTab({
   const [uploadType, setUploadType] = useState<DocumentType>("commercial_invoice");
   const [loading, setLoading] = useState(false);
   const [extractingId, setExtractingId] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
   const [dragActive, setDragActive] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -144,6 +145,29 @@ export function DocumentsTab({
     }
   }
 
+  async function handleDelete(doc: ImportCaseDocumentRow) {
+    const confirmed = window.confirm(
+      `Delete “${doc.originalFileName}”? Extracted lines from this file will also be removed.`,
+    );
+    if (!confirmed) return;
+
+    setDeletingId(doc.id);
+    try {
+      const res = await fetch(
+        `/api/import-cases/${caseId}/documents/${doc.id}`,
+        { method: "DELETE" },
+      );
+      const data = (await res.json()) as { error?: string };
+      if (!res.ok) throw new Error(data.error ?? "Delete failed");
+      toast.success("Document deleted");
+      await refreshDocuments();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Delete failed");
+    } finally {
+      setDeletingId(null);
+    }
+  }
+
   function openUpload(type: DocumentType) {
     setUploadType(type);
     fileRef.current?.click();
@@ -185,16 +209,20 @@ export function DocumentsTab({
             documents={invoiceDocs}
             loading={loading && uploadType === "commercial_invoice"}
             extractingId={extractingId}
+            deletingId={deletingId}
             onUpload={() => openUpload("commercial_invoice")}
             onExtract={handleExtract}
+            onDelete={handleDelete}
           />
           <RequiredDocumentSlot
             type="packing_list"
             documents={packingDocs}
             loading={loading && uploadType === "packing_list"}
             extractingId={extractingId}
+            deletingId={deletingId}
             onUpload={() => openUpload("packing_list")}
             onExtract={handleExtract}
+            onDelete={handleDelete}
           />
         </div>
       </section>
@@ -305,7 +333,9 @@ export function DocumentsTab({
                   key={doc.id}
                   doc={doc}
                   extractingId={extractingId}
+                  deletingId={deletingId}
                   onExtract={handleExtract}
+                  onDelete={handleDelete}
                 />
               ))}
             </DashTbody>
@@ -321,15 +351,19 @@ function RequiredDocumentSlot({
   documents,
   loading,
   extractingId,
+  deletingId,
   onUpload,
   onExtract,
+  onDelete,
 }: {
   type: DocumentType;
   documents: ImportCaseDocumentRow[];
   loading: boolean;
   extractingId: string | null;
+  deletingId: string | null;
   onUpload: () => void;
   onExtract: (id: string) => void;
+  onDelete: (doc: ImportCaseDocumentRow) => void;
 }) {
   const latest = documents[0];
   const complete =
@@ -409,6 +443,17 @@ function RequiredDocumentSlot({
             {extractingId === latest.id ? "Extracting…" : "Extract now"}
           </DashButton>
         ) : null}
+        {latest ? (
+          <DashButton
+            type="button"
+            variant="ghost"
+            className="text-xs px-3 py-2 text-red-600 hover:bg-red-50 hover:text-red-700"
+            disabled={deletingId === latest.id}
+            onClick={() => onDelete(latest)}
+          >
+            {deletingId === latest.id ? "Deleting…" : "Delete"}
+          </DashButton>
+        ) : null}
       </div>
     </div>
   );
@@ -417,13 +462,18 @@ function RequiredDocumentSlot({
 function DocumentRow({
   doc,
   extractingId,
+  deletingId,
   onExtract,
+  onDelete,
 }: {
   doc: ImportCaseDocumentRow;
   extractingId: string | null;
+  deletingId: string | null;
   onExtract: (id: string) => void;
+  onDelete: (doc: ImportCaseDocumentRow) => void;
 }) {
   const type = doc.documentType as DocumentType;
+  const busy = extractingId === doc.id || deletingId === doc.id;
 
   return (
     <DashTr>
@@ -456,18 +506,29 @@ function DocumentRow({
         />
       </DashTd>
       <DashTd align="right">
-        {(doc.extractionStatus === "pending" ||
-          doc.extractionStatus === "failed") && (
+        <div className="flex items-center justify-end gap-1">
+          {(doc.extractionStatus === "pending" ||
+            doc.extractionStatus === "failed") && (
+            <DashButton
+              type="button"
+              variant="ghost"
+              className="px-3 py-1.5 text-xs"
+              disabled={busy}
+              onClick={() => onExtract(doc.id)}
+            >
+              {extractingId === doc.id ? "Extracting…" : "Extract"}
+            </DashButton>
+          )}
           <DashButton
             type="button"
             variant="ghost"
-            className="px-3 py-1.5 text-xs"
-            disabled={extractingId === doc.id}
-            onClick={() => onExtract(doc.id)}
+            className="px-3 py-1.5 text-xs text-red-600 hover:bg-red-50 hover:text-red-700"
+            disabled={busy}
+            onClick={() => onDelete(doc)}
           >
-            {extractingId === doc.id ? "Extracting…" : "Extract"}
+            {deletingId === doc.id ? "Deleting…" : "Delete"}
           </DashButton>
-        )}
+        </div>
       </DashTd>
     </DashTr>
   );

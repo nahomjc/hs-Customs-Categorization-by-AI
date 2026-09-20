@@ -3,6 +3,7 @@ const ACTION_LABELS: Record<string, string> = {
   import_case_updated: "Updated case details",
   document_uploaded: "Uploaded document",
   document_updated: "Updated document",
+  document_deleted: "Deleted document",
   document_extracted: "Extracted document data",
   document_extraction_failed: "Document extraction failed",
   invoice_line_created: "Added invoice line",

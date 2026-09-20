@@ -1,4 +1,5 @@
-import { NextRequest, NextResponse } from "next/server";
+import type { NextRequest } from "next/server";
+import { NextResponse } from "next/server";
 import { and, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { importCaseDocuments } from "@/db/schema";
@@ -14,6 +15,7 @@ import {
   getTenantId,
   writeAuditLog,
 } from "@/lib/import-cases/queries";
+import { removeObject } from "@/lib/storage/r2";
 import { updateDocumentSchema } from "@/lib/import-cases/validation";
 
 type RouteParams = {
@@ -33,6 +35,65 @@ export async function GET(_request: NextRequest, { params }: RouteParams) {
   if (!document) return notFoundResponse("Document not found");
 
   return NextResponse.json(document);
+}
+
+export async function DELETE(_request: NextRequest, { params }: RouteParams) {
+  const user = await getAuthUser();
+  if (!user?.id) return unauthorizedResponse();
+
+  const { caseId, documentId } = await params;
+  const tenantId = getTenantId();
+  const importCase = await getImportCaseById(caseId, tenantId);
+  if (!importCase) return notFoundResponse("Import case not found");
+
+  const existing = await getCaseDocument(caseId, documentId);
+  if (!existing) return notFoundResponse("Document not found");
+
+  const [deleted] = await db
+    .delete(importCaseDocuments)
+    .where(
+      and(
+        eq(importCaseDocuments.id, documentId),
+        eq(importCaseDocuments.importCaseId, caseId),
+      ),
+    )
+    .returning();
+
+  if (!deleted) {
+    return NextResponse.json(
+      { error: "Failed to delete document" },
+      { status: 500 },
+    );
+  }
+
+  // Best-effort R2 cleanup — DB row + cascaded lines are already gone
+  if (existing.storageKey) {
+    try {
+      await removeObject(existing.storageKey);
+    } catch (error) {
+      console.error(
+        "[import-cases] R2 delete failed for",
+        existing.storageKey,
+        error,
+      );
+    }
+  }
+
+  await writeAuditLog({
+    tenantId,
+    importCaseId: caseId,
+    userId: user.id,
+    entityType: "import_case_document",
+    entityId: documentId,
+    action: "document_deleted",
+    oldData: {
+      originalFileName: existing.originalFileName,
+      documentType: existing.documentType,
+      storageKey: existing.storageKey,
+    },
+  });
+
+  return NextResponse.json({ ok: true, id: documentId });
 }
 
 export async function PATCH(request: NextRequest, { params }: RouteParams) {
