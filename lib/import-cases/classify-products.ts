@@ -65,6 +65,7 @@ function mapSourceToClassificationSource(
   source: ProductClassifySource,
 ): ClassificationSource {
   if (source === "rule_fallback") return "expert_review";
+  if (source === "vdd_consensus") return "reference_match";
   return source;
 }
 
@@ -80,6 +81,9 @@ function buildReasoning(
         }.`
       : "";
 
+  if (result.source === "vdd_consensus") {
+    return `VDD brand/model consensus (review only): ${result.hsCode} — ${result.cleanDescription}.${vddNote}`;
+  }
   if (result.source === "reference_match") {
     const tariffNo = result.referenceMeta?.tariffNo;
     const score = result.referenceMeta?.score;
@@ -165,11 +169,13 @@ async function persistProductClassification(
     tariff.officialDescription || result.cleanDescription;
   const classificationSource = mapSourceToClassificationSource(result.source);
   const aiModelName =
-    result.source === "reference_match"
-      ? "reference_match"
-      : result.source === "rule_fallback"
-        ? "rule_fallback"
-        : AI_MODEL_NAME;
+    result.source === "vdd_consensus"
+      ? "vdd_consensus"
+      : result.source === "reference_match"
+        ? "reference_match"
+        : result.source === "rule_fallback"
+          ? "rule_fallback"
+          : AI_MODEL_NAME;
 
   const [candidate] = await db
     .insert(hsCodeCandidates)

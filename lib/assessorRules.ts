@@ -90,12 +90,15 @@ const FORCE_RULES: Array<{
     hsCode: "8413",
     category: "Pumps for liquids",
   },
-  // Lighting — lamps, pendants, LED track, spotlights (never chapter 15 oils, etc.)
+  // LED bulbs / replaceable LED light sources → 8539.50 (NOT luminaires 9405)
   {
-    match: (d) =>
-      /led|lamp|lights?|pendant|track\s*light|spotlight|chandelier|magnetic\s*track|luminaire|lighting|pendent\s*light|wall\s*light/i.test(
-        d,
-      ),
+    match: (d) => isLedLightSourceDescription(d),
+    hsCode: "8539.50",
+    category: "LED lamps / light sources",
+  },
+  // Luminaires & lighting fittings (fixtures) → 9405 — not bare "LED" / "bulb"
+  {
+    match: (d) => isLightingFixtureDescription(d),
     hsCode: "9405",
     category: "Lighting equipment",
   },
@@ -110,6 +113,29 @@ const FORCE_RULES: Array<{
   },
 ];
 
+/** Replaceable LED bulb / lamp (light source) — heading 8539. */
+export function isLedLightSourceDescription(d: string): boolean {
+  if (isLightingFixtureDescription(d) && !/\bbulb\b|\bglobe\b/i.test(d)) {
+    return false;
+  }
+  return (
+    /\b(led\s*bulb|bulb\s*led|led\s*lamp|lamp\s*bulb|light\s*bulb|led\s*light\s*source|led\s*tube|tube\s*light|led\s*driver)\b/i.test(
+      d,
+    ) ||
+    (/\bled\b/i.test(d) &&
+      /\b(bulb|watt|w\b|warm\s*white|cool\s*white|e27|e14|gu10|pcs\s*per\s*carton)\b/i.test(
+        d,
+      ) &&
+      !isLightingFixtureDescription(d))
+  );
+}
+
+/** Floor/pendant/track luminaires — heading 9405. */
+export function isLightingFixtureDescription(d: string): boolean {
+  return /pendant|track\s*light|spotlight|chandelier|magnetic\s*track|luminaire|floor\s*(standing\s*)?lamp|desk\s*lamp|table\s*lamp|wall\s*light|wall\s*lamp|ceiling\s*light|lighting\s*fitting|floor\s*standing/i.test(
+    d,
+  );
+}
 // ---- Vague descriptions: assessor would not classify; flag for "Need more info" ----
 const VAGUE_PATTERNS: Array<RegExp | ((d: string) => boolean)> = [
   /^decorative\s+item\s*$/i,
@@ -198,26 +224,32 @@ const FALLBACK_9999_RULES: Array<{
 ];
 
 /**
- * Apply assessor rules on top of AI result.
- * Order: 1) Force rules (keyword → correct HS), 2) Vague → NEED_INFO, 3) 9999 fallbacks.
+ * Apply assessor rules on top of AI/reference result.
+ * Order: 1) Force rules (optional), 2) Vague → NEED_INFO, 3) 9999 fallbacks.
+ *
+ * Import-case classification should pass `skipForceRules: true` so tariff book,
+ * AI, and VDD evidence are not overwritten by legacy furniture/lighting hardcodes.
  */
 export function applyAssessorRules(
   description: string,
-  result: ClassificationResult
+  result: ClassificationResult,
+  options?: { skipForceRules?: boolean },
 ): ClassificationResult {
   const raw = description.trim();
   const desc = result.cleanDescription?.trim() || raw;
   const combined = [raw, desc].filter(Boolean).join(" ");
 
-  // 1) Force rules: override wrong AI choices (e.g. sculpture→6702, wallpaper→9404)
-  for (const rule of FORCE_RULES) {
-    if (rule.match(combined)) {
-      return {
-        ...result,
-        hsCode: rule.hsCode,
-        category: rule.category,
-        cleanDescription: result.cleanDescription || description,
-      };
+  // 1) Force rules: override wrong AI choices (skip for import-case / VDD path)
+  if (!options?.skipForceRules) {
+    for (const rule of FORCE_RULES) {
+      if (rule.match(combined)) {
+        return {
+          ...result,
+          hsCode: rule.hsCode,
+          category: rule.category,
+          cleanDescription: result.cleanDescription || description,
+        };
+      }
     }
   }
 

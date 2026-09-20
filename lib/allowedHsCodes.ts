@@ -7,9 +7,12 @@ import { findInCacheSync, isReferencePopulated } from "./hsReferenceCache";
  * Based on common import categories: lighting, furniture, decor, HVAC, textile, hardware, ceramics, etc.
  */
 export const ALLOWED_HS_CODES = [
-  "9405", // Lighting (lamps, pendants, track lights)
+  "9405", // Luminaires / lighting fittings (fixtures)
   "9405.10",
   "9405.20",
+  "8539", // Electric filament/discharge lamps; LED light sources
+  "8539.50", // LED lamps (replaceable bulbs / light sources)
+  "85395000",
   "9401", // Chairs & seating
   "9401.61",
   "9401.71",

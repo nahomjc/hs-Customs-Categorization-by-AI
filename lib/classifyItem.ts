@@ -31,6 +31,8 @@ export interface ClassifyItemOptions {
    * Decision support only — must not auto-copy HS codes.
    */
   vddEvidenceText?: string;
+  /** When true, skip legacy FORCE_RULES inside applyAssessorRules. */
+  skipAssessorForceRules?: boolean;
 }
 
 const ALLOWED_HS_LIST = [...ALLOWED_HS_CODES].join(", ");
@@ -51,7 +53,7 @@ ${allowedList}
 Use format 9405 or 9405.10. For "Unclassified" real items use 9999. For non-items use EXCLUDE.
 
 Rules (HS rulebook — do not guess by "meaning"):
-- Lamps/lights → 9405. Chairs, sofas, stools → 9401. Tables, cabinets, shelves → 9403.
+- Lamps/lights (fixtures, pendants, floor lamps) → 9405. Replaceable LED bulbs / LED light sources → 8539.50 (not 9405). Chairs, sofas, stools → 9401. Tables, cabinets, shelves → 9403.
 - Artificial plants, flowers → 6702. Sculptures, statuary → 9703 (NOT 6702).
 - Wallpaper, wall coverings → 4814 (NOT 9404; 9404 is bedding/mattress).
 - Ceramic vases, decorative ceramics → 6913 (NOT 6702).
@@ -296,7 +298,9 @@ export async function classifyItem(
     parsed.hsCode = "9999";
 
   const inputDesc = description.trim();
-  const final = applyAssessorRules(inputDesc, parsed);
+  const final = applyAssessorRules(inputDesc, parsed, {
+    skipForceRules: options?.skipAssessorForceRules === true,
+  });
   if (final.hsCode !== parsed.hsCode) {
     console.log(
       "[HS classifyItem] assessor override:",

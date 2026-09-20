@@ -19,10 +19,23 @@ export function applyGriRuleEngine(features: HsFeatures): GriRuleResult {
     .join(" ")
     .toLowerCase();
 
-  if (/lamp|light|lighting|chandelier|pendant/.test(text)) {
+  if (
+    /led\s*bulb|bulb\s*led|light\s*bulb|led\s*lamp|led\s*tube|led\s*light\s*source|\bbulb\b/.test(
+      text,
+    )
+  ) {
     return {
-      suggestedHsCodes: ["9405", "9405.10", "9405.20", "9405.90"],
-      rationale: "GRI guidance: articles of lighting are classified in heading 9405.",
+      suggestedHsCodes: ["8539.50", "8539", "85395000", "9405"],
+      rationale:
+        "GRI guidance: replaceable LED bulbs / LED light sources are generally heading 8539 (often 8539.50); luminaires remain 9405.",
+    };
+  }
+
+  if (/lamp|light|lighting|chandelier|pendant|luminaire|spotlight|track\s*light/.test(text)) {
+    return {
+      suggestedHsCodes: ["9405", "9405.10", "9405.20", "9405.90", "8539.50", "8539"],
+      rationale:
+        "GRI guidance: lighting fittings/luminaires → 9405; if the item is only a replaceable LED bulb/light source → prefer 8539.50.",
     };
   }
 
