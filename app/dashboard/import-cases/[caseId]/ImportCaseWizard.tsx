@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter, useSearchParams } from "next/navigation";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { AuditLogTable } from "@/components/dashboard/AuditLogTable";
 import { DashButton, DashCard } from "@/components/dashboard/ui";
 import type { AuditLogView } from "@/lib/import-cases/audit-queries";
@@ -11,7 +11,10 @@ import type { ImportCaseDocumentRow } from "@/db/schema/importCaseDocuments";
 import type { ProductClassificationBundle } from "@/lib/import-cases/classification-queries";
 import type { GroupingWithProducts } from "@/lib/import-cases/grouping-queries";
 import type { CaseProductWithSources } from "@/lib/import-cases/product-queries";
-import { isWizardStepComplete } from "@/lib/import-cases/workflow-progress";
+import {
+  getCurrentWizardStep,
+  isWizardStepComplete,
+} from "@/lib/import-cases/workflow-progress";
 import {
   ACTIVE_WIZARD_STEPS,
   getWizardStepIndex,
@@ -126,15 +129,49 @@ export function ImportCaseWizard({
   const router = useRouter();
   const searchParams = useSearchParams();
   const stepParam = searchParams.get("step");
-  const initialStep: WizardStepId =
+
+  const completionCtx = useMemo(
+    () => ({
+      documents,
+      invoiceLines,
+      packingLines,
+      products,
+      classifications,
+      groupings,
+    }),
+    [documents, invoiceLines, packingLines, products, classifications, groupings],
+  );
+
+  const progressStep = useMemo(
+    () => getCurrentWizardStep(completionCtx),
+    [completionCtx],
+  );
+
+  const resolvedStep: WizardStepId =
     stepParam && isWizardStepId(stepParam) && isStepUnlocked(stepParam)
       ? stepParam
-      : "case-info";
+      : progressStep;
 
-  const [currentStep, setCurrentStep] = useState<WizardStepId>(initialStep);
+  const [currentStep, setCurrentStep] = useState<WizardStepId>(resolvedStep);
   const [visitedSteps, setVisitedSteps] = useState<Set<WizardStepId>>(
-    () => new Set([initialStep]),
+    () => new Set([resolvedStep]),
   );
+
+  // Open on the furthest incomplete step when URL has no valid ?step=
+  useEffect(() => {
+    if (stepParam && isWizardStepId(stepParam) && isStepUnlocked(stepParam)) {
+      setCurrentStep(stepParam);
+      setVisitedSteps((prev) => new Set(prev).add(stepParam));
+      return;
+    }
+    setCurrentStep(progressStep);
+    setVisitedSteps((prev) => new Set(prev).add(progressStep));
+    const params = new URLSearchParams(searchParams.toString());
+    if (params.get("step") !== progressStep) {
+      params.set("step", progressStep);
+      router.replace(`?${params.toString()}`, { scroll: false });
+    }
+  }, [stepParam, progressStep, router, searchParams]);
 
   const currentIndex = getWizardStepIndex(currentStep);
   const activeSteps = ACTIVE_WIZARD_STEPS;
@@ -156,18 +193,6 @@ export function ImportCaseWizard({
   const approvedClassificationCount = classifications.filter(
     (c) => c.product.humanVerified && c.classification?.isFinal,
   ).length;
-
-  const completionCtx = useMemo(
-    () => ({
-      documents,
-      invoiceLines,
-      packingLines,
-      products,
-      classifications,
-      groupings,
-    }),
-    [documents, invoiceLines, packingLines, products, classifications, groupings],
-  );
 
   const goToStep = useCallback(
     (stepId: WizardStepId) => {

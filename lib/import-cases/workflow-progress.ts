@@ -88,3 +88,23 @@ export function getWorkflowProgressPercent(ctx: {
   ).length;
   return Math.round((completed / WIZARD_STEPS.length) * 100);
 }
+
+/**
+ * First incomplete unlocked step — used when opening a case with no ?step=.
+ * If every step is complete, returns the last step (grouping-export).
+ */
+export function getCurrentWizardStep(ctx: {
+  documents: ImportCaseDocumentRow[];
+  invoiceLines: InvoiceLine[];
+  packingLines: PackingLine[];
+  products: CaseProductWithSources[];
+  classifications: ProductClassificationBundle[];
+  groupings: GroupingWithProducts[];
+}): WizardStepId {
+  for (const step of WIZARD_STEPS) {
+    if (!isWizardStepComplete(step.id, ctx)) {
+      return step.id;
+    }
+  }
+  return WIZARD_STEPS[WIZARD_STEPS.length - 1].id;
+}
