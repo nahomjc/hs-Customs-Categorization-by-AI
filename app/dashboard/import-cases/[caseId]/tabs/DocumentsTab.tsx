@@ -18,6 +18,14 @@ import {
   dashSelectClass,
 } from "@/components/dashboard/ui";
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
   DOCUMENT_TYPE_LABELS,
   DOCUMENT_TYPES,
   type DocumentType,
@@ -56,6 +64,8 @@ export function DocumentsTab({
   const [loading, setLoading] = useState(false);
   const [extractingId, setExtractingId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [docPendingDelete, setDocPendingDelete] =
+    useState<ImportCaseDocumentRow | null>(null);
   const [dragActive, setDragActive] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -68,6 +78,7 @@ export function DocumentsTab({
     [documents],
   );
   const requiredComplete = invoiceDocs.length > 0 && packingDocs.length > 0;
+  const deleteBusy = deletingId !== null;
 
   async function refreshDocuments() {
     const res = await fetch(`/api/import-cases/${caseId}/documents`);
@@ -145,12 +156,9 @@ export function DocumentsTab({
     }
   }
 
-  async function handleDelete(doc: ImportCaseDocumentRow) {
-    const confirmed = window.confirm(
-      `Delete “${doc.originalFileName}”? Extracted lines from this file will also be removed.`,
-    );
-    if (!confirmed) return;
-
+  async function confirmDelete() {
+    if (!docPendingDelete) return;
+    const doc = docPendingDelete;
     setDeletingId(doc.id);
     try {
       const res = await fetch(
@@ -160,6 +168,7 @@ export function DocumentsTab({
       const data = (await res.json()) as { error?: string };
       if (!res.ok) throw new Error(data.error ?? "Delete failed");
       toast.success("Document deleted");
+      setDocPendingDelete(null);
       await refreshDocuments();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Delete failed");
@@ -178,171 +187,219 @@ export function DocumentsTab({
   }
 
   return (
-    <DashCard>
-      <DashCardHeader
-        title="Case documents"
-        action={
-          <span
-            className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold ${
-              requiredComplete
-                ? "bg-emerald-50 text-emerald-700"
-                : "bg-amber-50 text-amber-700"
+    <>
+      <DashCard>
+        <DashCardHeader
+          title="Case documents"
+          action={
+            <span
+              className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold ${
+                requiredComplete
+                  ? "bg-emerald-50 text-emerald-700"
+                  : "bg-amber-50 text-amber-700"
+              }`}
+            >
+              {requiredComplete
+                ? "Required docs complete"
+                : "2 documents required"}
+            </span>
+          }
+        />
+
+        <section className="space-y-3 px-5 py-5">
+          <div>
+            <h3 className="text-sm font-semibold text-slate-900">
+              Required documents
+            </h3>
+            <p className="mt-0.5 text-xs text-slate-500">
+              Upload a commercial invoice and packing list to continue the
+              workflow.
+            </p>
+          </div>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <RequiredDocumentSlot
+              type="commercial_invoice"
+              documents={invoiceDocs}
+              loading={loading && uploadType === "commercial_invoice"}
+              extractingId={extractingId}
+              deletingId={deletingId}
+              onUpload={() => openUpload("commercial_invoice")}
+              onExtract={handleExtract}
+              onDelete={setDocPendingDelete}
+            />
+            <RequiredDocumentSlot
+              type="packing_list"
+              documents={packingDocs}
+              loading={loading && uploadType === "packing_list"}
+              extractingId={extractingId}
+              deletingId={deletingId}
+              onUpload={() => openUpload("packing_list")}
+              onExtract={handleExtract}
+              onDelete={setDocPendingDelete}
+            />
+          </div>
+        </section>
+
+        <section className="space-y-4 border-t border-slate-100 px-5 py-5">
+          <div>
+            <h3 className="text-sm font-semibold text-slate-900">Upload file</h3>
+            <p className="mt-0.5 text-xs text-slate-500">
+              Lines are extracted automatically after upload. Supported: PDF,
+              Word, Excel, CSV, and images.
+            </p>
+          </div>
+
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+            <label
+              htmlFor="document-type"
+              className="shrink-0 text-xs font-medium text-slate-600"
+            >
+              Document type
+            </label>
+            <select
+              id="document-type"
+              value={uploadType}
+              onChange={(e) => setUploadType(e.target.value as DocumentType)}
+              className={`w-full sm:max-w-xs ${dashSelectClass}`}
+            >
+              {DOCUMENT_TYPES.map((type) => (
+                <option key={type} value={type}>
+                  {DOCUMENT_TYPE_LABELS[type]}
+                  {REQUIRED_TYPES.includes(type) ? " *" : ""}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div
+            onDragOver={(e) => {
+              e.preventDefault();
+              setDragActive(true);
+            }}
+            onDragLeave={() => setDragActive(false)}
+            onDrop={(e) => {
+              e.preventDefault();
+              setDragActive(false);
+              onFileSelected(e.dataTransfer.files[0]);
+            }}
+            className={`rounded-2xl border-2 border-dashed transition-colors ${
+              dragActive
+                ? "border-indigo-400 bg-indigo-50/50"
+                : "border-slate-200 bg-slate-50/40 hover:border-slate-300"
             }`}
           >
-            {requiredComplete ? "Required docs complete" : "2 documents required"}
-          </span>
-        }
-      />
-
-      <section className="px-5 py-5 space-y-3">
-        <div>
-          <h3 className="text-sm font-semibold text-slate-900">
-            Required documents
-          </h3>
-          <p className="mt-0.5 text-xs text-slate-500">
-            Upload a commercial invoice and packing list to continue the workflow.
-          </p>
-        </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <RequiredDocumentSlot
-            type="commercial_invoice"
-            documents={invoiceDocs}
-            loading={loading && uploadType === "commercial_invoice"}
-            extractingId={extractingId}
-            deletingId={deletingId}
-            onUpload={() => openUpload("commercial_invoice")}
-            onExtract={handleExtract}
-            onDelete={handleDelete}
-          />
-          <RequiredDocumentSlot
-            type="packing_list"
-            documents={packingDocs}
-            loading={loading && uploadType === "packing_list"}
-            extractingId={extractingId}
-            deletingId={deletingId}
-            onUpload={() => openUpload("packing_list")}
-            onExtract={handleExtract}
-            onDelete={handleDelete}
-          />
-        </div>
-      </section>
-
-      <section className="border-t border-slate-100 px-5 py-5 space-y-4">
-        <div>
-          <h3 className="text-sm font-semibold text-slate-900">Upload file</h3>
-          <p className="mt-0.5 text-xs text-slate-500">
-            Lines are extracted automatically after upload. Supported: PDF, Word,
-            Excel, CSV, and images.
-          </p>
-        </div>
-
-        <div className="flex flex-col sm:flex-row sm:items-center gap-3">
-          <label htmlFor="document-type" className="text-xs font-medium text-slate-600 shrink-0">
-            Document type
-          </label>
-          <select
-            id="document-type"
-            value={uploadType}
-            onChange={(e) => setUploadType(e.target.value as DocumentType)}
-            className={`w-full sm:max-w-xs ${dashSelectClass}`}
-          >
-            {DOCUMENT_TYPES.map((type) => (
-              <option key={type} value={type}>
-                {DOCUMENT_TYPE_LABELS[type]}
-                {REQUIRED_TYPES.includes(type) ? " *" : ""}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        <div
-          onDragOver={(e) => {
-            e.preventDefault();
-            setDragActive(true);
-          }}
-          onDragLeave={() => setDragActive(false)}
-          onDrop={(e) => {
-            e.preventDefault();
-            setDragActive(false);
-            onFileSelected(e.dataTransfer.files[0]);
-          }}
-          className={`rounded-2xl border-2 border-dashed transition-colors ${
-            dragActive
-              ? "border-indigo-400 bg-indigo-50/50"
-              : "border-slate-200 bg-slate-50/40 hover:border-slate-300"
-          }`}
-        >
-          <div className="flex flex-col items-center justify-center px-6 py-8 text-center">
-            <div className="mb-3 flex h-11 w-11 items-center justify-center rounded-xl bg-white text-indigo-600 shadow-sm">
-              <UploadIcon />
+            <div className="flex flex-col items-center justify-center px-6 py-8 text-center">
+              <div className="mb-3 flex h-11 w-11 items-center justify-center rounded-xl bg-white text-indigo-600 shadow-sm">
+                <UploadIcon />
+              </div>
+              <p className="text-sm font-medium text-slate-800">
+                {dragActive ? "Drop file to upload" : "Drag and drop a file here"}
+              </p>
+              <p className="mt-1 text-xs text-slate-500">
+                Uploading as{" "}
+                <span className="font-medium text-slate-700">
+                  {DOCUMENT_TYPE_LABELS[uploadType]}
+                </span>
+              </p>
+              <DashButton
+                type="button"
+                variant="secondary"
+                className="mt-4"
+                disabled={loading}
+                onClick={() => fileRef.current?.click()}
+              >
+                {loading ? "Uploading…" : "Browse files"}
+              </DashButton>
             </div>
-            <p className="text-sm font-medium text-slate-800">
-              {dragActive ? "Drop file to upload" : "Drag and drop a file here"}
-            </p>
-            <p className="mt-1 text-xs text-slate-500">
-              Uploading as{" "}
-              <span className="font-medium text-slate-700">
-                {DOCUMENT_TYPE_LABELS[uploadType]}
-              </span>
-            </p>
+          </div>
+
+          <input
+            ref={fileRef}
+            type="file"
+            className="hidden"
+            accept={ACCEPTED_FILES}
+            onChange={(e) => onFileSelected(e.target.files?.[0])}
+          />
+        </section>
+
+        {documents.length > 0 ? (
+          <section className="border-t border-slate-100">
+            <div className="border-b border-slate-100 px-5 py-4">
+              <h3 className="text-sm font-semibold text-slate-900">
+                Uploaded files
+              </h3>
+              <p className="mt-0.5 text-xs text-slate-500">
+                {documents.length} document{documents.length === 1 ? "" : "s"} on
+                this case
+              </p>
+            </div>
+            <DashTable tableClassName="min-w-[640px]">
+              <DashTableHead>
+                <DashTableHeaderRow>
+                  <DashTh>File</DashTh>
+                  <DashTh>Type</DashTh>
+                  <DashTh>Status</DashTh>
+                  <DashTh>Extraction</DashTh>
+                  <DashTh align="right">Actions</DashTh>
+                </DashTableHeaderRow>
+              </DashTableHead>
+              <DashTbody>
+                {documents.map((doc) => (
+                  <DocumentRow
+                    key={doc.id}
+                    doc={doc}
+                    extractingId={extractingId}
+                    deletingId={deletingId}
+                    onExtract={handleExtract}
+                    onDelete={setDocPendingDelete}
+                  />
+                ))}
+              </DashTbody>
+            </DashTable>
+          </section>
+        ) : null}
+      </DashCard>
+
+      <Dialog
+        open={docPendingDelete !== null}
+        onOpenChange={(open) => {
+          if (!open && !deleteBusy) setDocPendingDelete(null);
+        }}
+      >
+        <DialogContent showClose={!deleteBusy}>
+          <DialogHeader>
+            <DialogTitle>Delete document?</DialogTitle>
+            <DialogDescription>
+              This permanently removes{" "}
+              <span className="font-semibold text-slate-800">
+                {docPendingDelete?.originalFileName}
+              </span>{" "}
+              from the case. Any extracted invoice or packing list lines from
+              this file will also be deleted.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2 sm:gap-0">
             <DashButton
               type="button"
               variant="secondary"
-              className="mt-4"
-              disabled={loading}
-              onClick={() => fileRef.current?.click()}
+              disabled={deleteBusy}
+              onClick={() => setDocPendingDelete(null)}
             >
-              {loading ? "Uploading…" : "Browse files"}
+              Cancel
             </DashButton>
-          </div>
-        </div>
-
-        <input
-          ref={fileRef}
-          type="file"
-          className="hidden"
-          accept={ACCEPTED_FILES}
-          onChange={(e) => onFileSelected(e.target.files?.[0])}
-        />
-      </section>
-
-      {documents.length > 0 ? (
-        <section className="border-t border-slate-100">
-          <div className="px-5 py-4 border-b border-slate-100">
-            <h3 className="text-sm font-semibold text-slate-900">
-              Uploaded files
-            </h3>
-            <p className="mt-0.5 text-xs text-slate-500">
-              {documents.length} document{documents.length === 1 ? "" : "s"} on
-              this case
-            </p>
-          </div>
-          <DashTable tableClassName="min-w-[640px]">
-            <DashTableHead>
-              <DashTableHeaderRow>
-                <DashTh>File</DashTh>
-                <DashTh>Type</DashTh>
-                <DashTh>Status</DashTh>
-                <DashTh>Extraction</DashTh>
-                <DashTh align="right">Actions</DashTh>
-              </DashTableHeaderRow>
-            </DashTableHead>
-            <DashTbody>
-              {documents.map((doc) => (
-                <DocumentRow
-                  key={doc.id}
-                  doc={doc}
-                  extractingId={extractingId}
-                  deletingId={deletingId}
-                  onExtract={handleExtract}
-                  onDelete={handleDelete}
-                />
-              ))}
-            </DashTbody>
-          </DashTable>
-        </section>
-      ) : null}
-    </DashCard>
+            <DashButton
+              type="button"
+              variant="primary"
+              className="!bg-red-600 !text-white hover:!bg-red-700"
+              disabled={deleteBusy}
+              onClick={() => void confirmDelete()}
+            >
+              {deleteBusy ? "Deleting…" : "Delete document"}
+            </DashButton>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
 
@@ -404,7 +461,11 @@ function RequiredDocumentSlot({
               </p>
               <div className="mt-2 flex flex-wrap items-center gap-1.5">
                 <StatusBadge
-                  label={EXTRACTION_LABELS[latest.extractionStatus ?? "pending"] ?? latest.extractionStatus ?? "Pending"}
+                  label={
+                    EXTRACTION_LABELS[latest.extractionStatus ?? "pending"] ??
+                    latest.extractionStatus ??
+                    "Pending"
+                  }
                   status={latest.extractionStatus ?? "pending"}
                 />
                 {documents.length > 1 ? (
@@ -424,7 +485,7 @@ function RequiredDocumentSlot({
         <DashButton
           type="button"
           variant={latest ? "secondary" : "primary"}
-          className="text-xs px-3 py-2"
+          className="px-3 py-2 text-xs"
           disabled={loading}
           onClick={onUpload}
         >
@@ -436,7 +497,7 @@ function RequiredDocumentSlot({
           <DashButton
             type="button"
             variant="ghost"
-            className="text-xs px-3 py-2"
+            className="px-3 py-2 text-xs"
             disabled={extractingId === latest.id}
             onClick={() => onExtract(latest.id)}
           >
@@ -447,7 +508,7 @@ function RequiredDocumentSlot({
           <DashButton
             type="button"
             variant="ghost"
-            className="text-xs px-3 py-2 text-red-600 hover:bg-red-50 hover:text-red-700"
+            className="px-3 py-2 text-xs text-red-600 hover:bg-red-50 hover:text-red-700"
             disabled={deletingId === latest.id}
             onClick={() => onDelete(latest)}
           >
@@ -497,11 +558,18 @@ function DocumentRow({
         {DOCUMENT_TYPE_LABELS[type] ?? doc.documentType}
       </DashTd>
       <DashTd>
-        <StatusBadge label={doc.status ?? "uploaded"} status={doc.status ?? "uploaded"} />
+        <StatusBadge
+          label={doc.status ?? "uploaded"}
+          status={doc.status ?? "uploaded"}
+        />
       </DashTd>
       <DashTd>
         <StatusBadge
-          label={EXTRACTION_LABELS[doc.extractionStatus ?? "pending"] ?? doc.extractionStatus ?? "Pending"}
+          label={
+            EXTRACTION_LABELS[doc.extractionStatus ?? "pending"] ??
+            doc.extractionStatus ??
+            "Pending"
+          }
           status={doc.extractionStatus ?? "pending"}
         />
       </DashTd>
@@ -537,16 +605,38 @@ function DocumentRow({
 function DocumentTypeIcon({ type }: { type: DocumentType }) {
   if (type === "packing_list") {
     return (
-      <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
+      <svg
+        className="h-5 w-5"
+        fill="none"
+        stroke="currentColor"
+        viewBox="0 0 24 24"
+        aria-hidden
+      >
         <title>Packing list</title>
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+        <path
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          strokeWidth={1.75}
+          d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"
+        />
       </svg>
     );
   }
   return (
-    <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
+    <svg
+      className="h-5 w-5"
+      fill="none"
+      stroke="currentColor"
+      viewBox="0 0 24 24"
+      aria-hidden
+    >
       <title>Commercial invoice</title>
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth={1.75}
+        d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+      />
     </svg>
   );
 }
@@ -555,34 +645,78 @@ function FileIcon({ fileName }: { fileName: string }) {
   const ext = fileName.split(".").pop()?.toLowerCase();
   if (ext === "pdf") {
     return (
-      <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
+      <svg
+        className="h-4 w-4"
+        fill="none"
+        stroke="currentColor"
+        viewBox="0 0 24 24"
+        aria-hidden
+      >
         <title>PDF file</title>
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+        <path
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          strokeWidth={1.75}
+          d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"
+        />
       </svg>
     );
   }
   return (
-    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
+    <svg
+      className="h-4 w-4"
+      fill="none"
+      stroke="currentColor"
+      viewBox="0 0 24 24"
+      aria-hidden
+    >
       <title>Document file</title>
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75} d="M4 7v10c0 2 1 3 3 3h10c2 0 3-1 3-3V7M4 7h16M4 7l2-4h12l2 4" />
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth={1.75}
+        d="M4 7v10c0 2 1 3 3 3h10c2 0 3-1 3-3V7M4 7h16M4 7l2-4h12l2 4"
+      />
     </svg>
   );
 }
 
 function UploadIcon() {
   return (
-    <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
+    <svg
+      className="h-5 w-5"
+      fill="none"
+      stroke="currentColor"
+      viewBox="0 0 24 24"
+      aria-hidden
+    >
       <title>Upload</title>
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth={1.75}
+        d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"
+      />
     </svg>
   );
 }
 
 function CheckIcon() {
   return (
-    <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
+    <svg
+      className="h-5 w-5"
+      fill="none"
+      stroke="currentColor"
+      viewBox="0 0 24 24"
+      aria-hidden
+    >
       <title>Complete</title>
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth={2}
+        d="M5 13l4 4L19 7"
+      />
     </svg>
   );
 }
