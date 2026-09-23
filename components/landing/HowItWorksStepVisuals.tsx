@@ -31,13 +31,13 @@ function BrowserChrome({
           {title}
         </div>
       </div>
-      <div className="flex min-h-[300px] sm:min-h-[340px] lg:min-h-[380px]">
+      <div className="flex min-h-[240px] sm:min-h-[300px] lg:min-h-[380px]">
         {sidebar ? (
-          <aside className="hidden sm:flex w-[132px] shrink-0 flex-col gap-0.5 border-r border-gray-100 bg-gray-50/60 p-2.5">
+          <aside className="hidden md:flex w-[120px] lg:w-[132px] shrink-0 flex-col gap-0.5 border-r border-gray-100 bg-gray-50/60 p-2.5">
             {sidebar}
           </aside>
         ) : null}
-        <div className="min-w-0 flex-1 p-3 sm:p-4">{children}</div>
+        <div className="min-w-0 flex-1 overflow-hidden p-3 sm:p-4">{children}</div>
       </div>
     </div>
   );
