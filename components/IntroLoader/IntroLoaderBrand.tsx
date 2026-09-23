@@ -1,13 +1,6 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { Orbitron } from "next/font/google";
-
-const orbitron = Orbitron({
-  subsets: ["latin"],
-  weight: ["500", "700"],
-  display: "swap",
-});
 
 const easeOut = [0.22, 1, 0.36, 1] as const;
 const TITLE = "IMPACT";
@@ -32,15 +25,13 @@ export function IntroLoaderBrand({
   const animateLetters = !reducedMotion && !exiting;
 
   return (
-    <div className={`intro-loader__brand ${orbitron.className}`}>
+    <div className="intro-loader__brand">
       <motion.div
         className="intro-loader__brand-rule"
         aria-hidden
         initial={animateLetters ? { scaleX: 0, opacity: 0 } : false}
         animate={
-          exiting
-            ? { scaleX: 0, opacity: 0 }
-            : { scaleX: 1, opacity: 1 }
+          exiting ? { scaleX: 0, opacity: 0 } : { scaleX: 1, opacity: 1 }
         }
         transition={{ duration: 0.55, delay: 0.2, ease: easeOut }}
       />
@@ -73,20 +64,18 @@ export function IntroLoaderBrand({
 
       <motion.p
         className="intro-loader__subtitle"
-        initial={animateLetters ? { opacity: 0, letterSpacing: "0.6em" } : false}
+        initial={
+          animateLetters ? { opacity: 0, letterSpacing: "0.6em" } : false
+        }
         animate={
-          exiting
-            ? { opacity: 0 }
-            : { opacity: 1, letterSpacing: "0.42em" }
+          exiting ? { opacity: 0 } : { opacity: 1, letterSpacing: "0.42em" }
         }
         transition={{ duration: 0.65, delay: 0.72, ease: easeOut }}
       >
         LOGISTICS
       </motion.p>
 
-      {motionOn && (
-        <div className="intro-loader__brand-scan" aria-hidden />
-      )}
+      {motionOn && <div className="intro-loader__brand-scan" aria-hidden />}
     </div>
   );
 }

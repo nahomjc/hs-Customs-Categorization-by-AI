@@ -405,6 +405,7 @@ body {
 	align-items: center;
 	text-align: center;
 	padding-top: 0.25rem;
+	font-family: var(--font-orbitron), ui-sans-serif, system-ui, sans-serif;
 }
 
 .intro-loader__brand-rule {

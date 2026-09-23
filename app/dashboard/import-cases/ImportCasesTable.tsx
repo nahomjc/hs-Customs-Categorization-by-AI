@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   DashButton,
   DashCard,
@@ -51,18 +51,14 @@ export function ImportCasesTable({
   const [items, setItems] = useState(initialItems);
   const [total, setTotal] = useState(initialTotal);
   const [loading, setLoading] = useState(false);
+  const skipNextFetch = useRef(true);
 
-  const filtered = useMemo(() => {
-    if (!search && !status) return items;
-    return items;
-  }, [items, search, status]);
-
-  async function applyFilters() {
+  const applyFilters = useCallback(async (nextSearch: string, nextStatus: ImportCaseStatus | "") => {
     setLoading(true);
     try {
       const params = new URLSearchParams();
-      if (search.trim()) params.set("search", search.trim());
-      if (status) params.set("status", status);
+      if (nextSearch.trim()) params.set("search", nextSearch.trim());
+      if (nextStatus) params.set("status", nextStatus);
       const res = await fetch(`/api/import-cases?${params.toString()}`);
       if (!res.ok) throw new Error("Failed to load cases");
       const data = (await res.json()) as {
@@ -76,7 +72,34 @@ export function ImportCasesTable({
     } finally {
       setLoading(false);
     }
-  }
+  }, []);
+
+  useEffect(() => {
+    if (skipNextFetch.current) {
+      skipNextFetch.current = false;
+      return;
+    }
+    const timer = window.setTimeout(() => {
+      void applyFilters(search, status);
+    }, 300);
+    return () => window.clearTimeout(timer);
+  }, [search, status, applyFilters]);
+
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return items.filter((item) => {
+      if (status && (item.status ?? "draft") !== status) return false;
+      if (!q) return true;
+      return (
+        item.caseNumber.toLowerCase().includes(q) ||
+        (item.importerName ?? "").toLowerCase().includes(q) ||
+        (item.supplierName ?? "").toLowerCase().includes(q) ||
+        (item.shipmentReference ?? "").toLowerCase().includes(q) ||
+        (item.assignedAgentName ?? "").toLowerCase().includes(q) ||
+        (item.assignedAgentEmail ?? "").toLowerCase().includes(q)
+      );
+    });
+  }, [items, search, status]);
 
   return (
     <DashCard>
@@ -87,7 +110,14 @@ export function ImportCasesTable({
             placeholder="Search case number, importer, supplier..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                void applyFilters(search, status);
+              }
+            }}
             className={dashInputClass}
+            aria-label="Search import cases"
           />
           <select
             value={status}
@@ -95,6 +125,7 @@ export function ImportCasesTable({
               setStatus(e.target.value as ImportCaseStatus | "")
             }
             className={dashSelectClass}
+            aria-label="Filter by status"
           >
             <option value="">All statuses</option>
             {IMPORT_CASE_STATUSES.map((s) => (
@@ -103,11 +134,18 @@ export function ImportCasesTable({
               </option>
             ))}
           </select>
-          <DashButton onClick={applyFilters} disabled={loading}>
+          <DashButton
+            onClick={() => void applyFilters(search, status)}
+            disabled={loading}
+          >
             {loading ? "Loading..." : "Filter"}
           </DashButton>
         </div>
-        <p className="text-xs text-gray-500">{total} import case(s)</p>
+        <p className="text-xs text-gray-500">
+          {loading
+            ? "Searching…"
+            : `${total} import case(s)`}
+        </p>
       </DashTableToolbar>
 
       <DashTable>

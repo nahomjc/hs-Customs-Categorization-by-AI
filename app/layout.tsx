@@ -1,8 +1,16 @@
 import type { Metadata } from "next";
+import { Orbitron } from "next/font/google";
 import { IntroLoader } from "@/components/IntroLoader";
 import { NavigationProgress } from "@/components/NavigationProgress";
 import { Toaster } from "sonner";
 import "./globals.css";
+
+const orbitron = Orbitron({
+  subsets: ["latin"],
+  weight: "700",
+  display: "swap",
+  variable: "--font-orbitron",
+});
 
 export const metadata: Metadata = {
   title: "Impact Logistics — HS Code Categorization",
@@ -13,7 +21,7 @@ export default function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="en">
+    <html lang="en" className={orbitron.variable}>
       <body className="antialiased w-full min-w-0 bg-[var(--background)] text-[var(--foreground)]">
         <NavigationProgress />
         <IntroLoader />

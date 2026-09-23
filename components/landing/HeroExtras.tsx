@@ -47,14 +47,11 @@ export function AnimatedNumber({
 export function HeroBackground() {
   return (
     <div className="pointer-events-none absolute inset-0 overflow-hidden" aria-hidden="true">
-      <div className="hero-mesh-blob absolute -top-32 left-1/2 h-[520px] w-[900px] -translate-x-1/2 rounded-full bg-gradient-to-b from-[#007bff]/12 via-sky-300/10 to-transparent blur-3xl" />
-      <div className="hero-mesh-blob hero-mesh-blob--delay absolute -right-32 top-20 h-80 w-80 rounded-full bg-indigo-300/25 blur-3xl" />
-      <div className="hero-mesh-blob absolute -left-40 top-1/3 h-72 w-72 rounded-full bg-sky-200/30 blur-3xl" />
-      <div className="absolute inset-x-0 bottom-0 h-40 bg-gradient-to-t from-[var(--landing-bg)] via-[var(--landing-bg)]/80 to-transparent" />
-
-      {/* Decorative rings */}
-      <div className="absolute right-[8%] top-[18%] hidden lg:block h-64 w-64 rounded-full border border-[#007bff]/10" />
-      <div className="absolute right-[10%] top-[22%] hidden lg:block h-48 w-48 rounded-full border border-indigo-200/40" />
+      {/* Soft About-like wash — calm lavender-grey + brand blue */}
+      <div className="absolute inset-0 bg-gradient-to-br from-[#f4f6fb] via-[var(--landing-bg)] to-[#eef2f9]" />
+      <div className="hero-mesh-blob absolute -top-40 left-[20%] h-[480px] w-[720px] rounded-full bg-gradient-to-b from-[#007bff]/10 via-sky-200/15 to-transparent blur-3xl" />
+      <div className="hero-mesh-blob hero-mesh-blob--delay absolute -right-28 top-24 h-72 w-72 rounded-full bg-blue-200/20 blur-3xl" />
+      <div className="absolute inset-x-0 bottom-0 h-36 bg-gradient-to-t from-[var(--landing-bg)] via-[var(--landing-bg)]/70 to-transparent" />
     </div>
   );
 }

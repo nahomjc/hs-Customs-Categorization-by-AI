@@ -1,6 +1,5 @@
 import { Inter } from "next/font/google";
 import { CtaSection } from "@/components/landing/CtaSection";
-import { DashboardPreviewSection } from "@/components/landing/DashboardPreviewSection";
 import { FeaturesSection } from "@/components/landing/FeaturesSection";
 import { HeroSection } from "@/components/landing/HeroSection";
 import { HowItWorksSection } from "@/components/landing/HowItWorksSection";
@@ -25,10 +24,9 @@ export default async function HomePage() {
       <LandingNav user={user ? toUserMenuUser(user) : null} />
       <main className="w-full">
         <HeroSection />
-        <DashboardPreviewSection />
+        <HowItWorksSection />
         <FeaturesSection />
         <TelegramMonitoringSection />
-        <HowItWorksSection />
         <SolutionsSection />
         <PricingSection />
         <CtaSection />
