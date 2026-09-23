@@ -147,6 +147,13 @@ body {
 	padding-right: 1rem;
 }
 
+/* How it works — tall sticky scroll track on desktop only */
+@media (min-width: 1024px) {
+	.how-it-works-track {
+		min-height: calc(var(--how-steps, 4) * var(--how-step-vh, 75vh));
+	}
+}
+
 @media (min-width: 640px) {
 	.landing-wrap {
 		padding-left: 1.5rem;

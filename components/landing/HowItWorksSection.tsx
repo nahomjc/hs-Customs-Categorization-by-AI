@@ -25,7 +25,7 @@ const demoByIndex = [
 
 export function HowItWorksSection() {
   return (
-    <section id="how-it-works" className="landing-dot-grid py-8 sm:py-12 lg:py-14 overflow-x-hidden">
+    <section id="how-it-works" className="landing-dot-grid py-8 sm:py-12 lg:py-14">
       <LandingWrap className="min-w-0">
         <HowItWorksPhase
           eyebrow="How it works?"
