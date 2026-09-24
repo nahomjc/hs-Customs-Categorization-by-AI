@@ -1,0 +1,19 @@
+Commercial Invoice
+
+Invoice Number,INV-LIVESTOCK-2026-001
+Invoice Date,2026-09-20
+Supplier Name,Nairobi Livestock Export Ltd.
+Supplier Country,KE
+Buyer / Importer,Addis Agro Import PLC
+Buyer Country,ET
+Currency,USD
+Incoterm,CIF
+Country of Origin,KE
+
+Line,Description,SKU,Brand,Model,Quantity,Unit,Unit Price,Line Total
+1,Live sheep for breeding Dorper breed,LIV-SHEEP-DOR,AgroFarm,DOR-01,50,pcs,85.00,4250.00
+2,Live goats for breeding Boer breed,LIV-GOAT-BOER,AgroFarm,BOER-01,30,pcs,95.00,2850.00
+
+Invoice Total,,,,,,,,7100.00
+
+Notes,Payment terms: 50% deposit 50% on arrival. Shipment ref: SHP-KE-ET-2026-0920. Two distinct livestock lines — should stay separate after harmonize/group unless HS+origin+UOM match.

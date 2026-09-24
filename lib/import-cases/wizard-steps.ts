@@ -52,7 +52,14 @@ export const WIZARD_STEPS = [
     id: "grouping-export",
     label: "Grouping & export",
     shortLabel: "Export",
-    description: "Declaration grouping, export report, and full case history",
+    description: "Declaration grouping and CSV export report",
+    phase: 5,
+  },
+  {
+    id: "case-history",
+    label: "Case history",
+    shortLabel: "History",
+    description: "Full audit trail of who did what at each step",
     phase: 5,
   },
 ] as const;

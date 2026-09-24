@@ -205,7 +205,9 @@ export function HsReferencePanel() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Upload failed");
       toast.success(
-        `Upserted ${data.imported} rows (${data.inserted ?? data.imported} new, ${data.updated ?? 0} updated)`,
+        `Upserted ${data.imported} rows (${data.inserted ?? data.imported} new, ${data.updated ?? 0} updated)${
+          data.chapterRange ? ` · chapters ${data.chapterRange}` : ""
+        }`,
       );
       setFile(null);
       setUploadModalOpen(false);
@@ -240,7 +242,7 @@ export function HsReferencePanel() {
                 HS tariff reference
               </h1>
               <p className="mt-1.5 max-w-2xl text-sm text-slate-500">
-                Upload the Ethiopian combined tariff book. Classification uses these codes as the allowed reference list — rows merge by tariff number.
+                Upload the Ethiopian combined tariff book or an ESW tariff list Excel. Classification uses these codes as the allowed reference list — rows merge by tariff number.
               </p>
             </div>
             <div className="flex shrink-0 flex-col items-stretch gap-3 sm:items-end">
@@ -251,7 +253,7 @@ export function HsReferencePanel() {
                 <svg className="h-5 w-5 shrink-0 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
-                <span>Partial books only cover imported chapters. Upload the full book for 94xx furniture codes.</span>
+                <span>Partial books only cover imported chapters. Prefer a full ECC book or ESW tariff list (chs 01–97) for apparel, furniture, and lighting.</span>
               </div>
             </div>
           </div>
@@ -319,9 +321,10 @@ export function HsReferencePanel() {
           <DialogHeader className="border-b border-slate-100 px-6 py-5 text-left">
             <DialogTitle>Upload tariff book</DialogTitle>
             <DialogDescription>
-              Expected columns: Heading, H.S. Code, Tariff No., Description, Std.
-              Unit, Duty Rate. Existing tariff numbers are updated; new rows are
-              added without deleting other chapters.
+              Supports ECC combined books (Heading, H.S., Tariff No., Description,
+              Unit, Duty) and ESW exports (No, HS Code, HS Description, Unit(s),
+              DR…). Chapter is derived from the HS code. Existing tariff numbers
+              are updated; new rows are added without deleting other chapters.
             </DialogDescription>
           </DialogHeader>
 

@@ -911,6 +911,38 @@ export function VddImportPanel() {
           </DialogHeader>
 
           <div className="space-y-5">
+            <div className="rounded-xl border border-indigo-100 bg-indigo-50/60 px-4 py-3">
+              <p className="text-xs font-semibold text-indigo-900">
+                Sample template
+              </p>
+              <p className="mt-0.5 text-xs text-indigo-800/80">
+                Download a ready-to-import Excel with demo VDD rows (including an
+                extra column), then upload it here to try the workflow.
+              </p>
+              <a
+                href="/samples/VDD-SAMPLE-DEMO.xlsx"
+                download="VDD-SAMPLE-DEMO.xlsx"
+                className="mt-2 inline-flex items-center gap-1.5 text-xs font-semibold text-indigo-700 hover:text-indigo-900 hover:underline"
+              >
+                <svg
+                  className="h-3.5 w-3.5"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                  aria-hidden
+                >
+                  <title>Download</title>
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"
+                  />
+                </svg>
+                VDD sample template (Excel)
+              </a>
+            </div>
+
             <div
               className={`rounded-2xl border-2 border-dashed px-4 py-8 text-center transition ${
                 dragActive

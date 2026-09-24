@@ -105,6 +105,7 @@ export async function POST(req: Request) {
     updated,
     skipped: parsed.skipped,
     sheetCount: parsed.sheetCount,
+    format: parsed.format ?? null,
     chapters,
     chapterRange:
       chapters.length > 0

@@ -70,6 +70,10 @@ export function isWizardStepComplete(
     }
     case "grouping-export":
       return ctx.groupings.length > 0;
+    case "case-history":
+      // Available once grouping is done; always "complete" when reachable
+      // so progress can land here after export.
+      return ctx.groupings.length > 0;
     default:
       return false;
   }
@@ -91,7 +95,7 @@ export function getWorkflowProgressPercent(ctx: {
 
 /**
  * First incomplete unlocked step — used when opening a case with no ?step=.
- * If every step is complete, returns the last step (grouping-export).
+ * If every step is complete, returns the last step (case-history).
  */
 export function getCurrentWizardStep(ctx: {
   documents: ImportCaseDocumentRow[];

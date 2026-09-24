@@ -1,0 +1,20 @@
+Commercial Invoice
+
+Invoice Number,INV-2026-0847
+Invoice Date,2026-03-15
+Supplier Name,Shenzhen Bright LED Co. Ltd.
+Supplier Country,CN
+Buyer / Importer,ABC Trading PLC
+Buyer Country,ET
+Currency,USD
+Incoterm,FOB
+Country of Origin,CN
+
+Line,Description,SKU,Brand,Model,Quantity,Unit,Unit Price,Line Total
+1,LED light 9w,BLB-9W-WW,BrightLite,BL-9W,1000,pcs,1.25,1250.00
+2,LED tube 18w 120cm,TUB-18W-120,BrightLite,T18-120,500,pcs,2.80,1400.00
+3,LED driver 12V 5A,DRV-12V-5A,BrightLite,DRV-5A,200,pcs,4.50,900.00
+
+Invoice Total,,,,,,,,3550.00
+
+Notes,Payment terms: 30% deposit 70% before shipment. Shipment ref: SHP-CN-ET-2026-0312

@@ -11,6 +11,10 @@ import {
   setHsReferenceCache,
   type HsReferenceCacheRow,
 } from "./hsReferenceCache";
+import {
+  expectedChapters,
+  isChapterCompatible,
+} from "./hsProductChapter";
 import type {
   HsReferenceListParams,
   HsReferenceSortField,
@@ -100,11 +104,23 @@ function tokenize(text: string): string[] {
     .filter((t) => t.length >= 3);
 }
 
-function scoreRow(row: HsReferenceCacheRow, tokens: string[]): number {
+function scoreRow(
+  row: HsReferenceCacheRow,
+  tokens: string[],
+  query: string,
+): number {
   const desc = row.description.toLowerCase();
   let score = 0;
   for (const t of tokens) {
     if (desc.includes(t)) score += 1;
+  }
+  const expected = expectedChapters(query);
+  if (
+    expected &&
+    row.chapter &&
+    expected.includes(row.chapter.padStart(2, "0").slice(0, 2))
+  ) {
+    score += 3;
   }
   return score;
 }
@@ -121,7 +137,8 @@ export async function searchDescriptions(
   if (tokens.length === 0) return rows.slice(0, limit);
 
   const scored = rows
-    .map((row) => ({ row, score: scoreRow(row, tokens) }))
+    .filter((row) => isChapterCompatible(query, row.chapter))
+    .map((row) => ({ row, score: scoreRow(row, tokens, query) }))
     .filter((s) => s.score > 0)
     .sort((a, b) => b.score - a.score);
 

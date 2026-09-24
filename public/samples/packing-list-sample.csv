@@ -1,0 +1,16 @@
+Packing List
+
+Packing List Number,PL-2026-0847
+Related Invoice Number,INV-2026-0847
+Packing List Date,2026-03-18
+Supplier Name,Shenzhen Bright LED Co. Ltd.
+Shipment Reference,SHP-CN-ET-2026-0312
+
+Line,Description,SKU,Quantity,Unit,Cartons,Package Type,Pcs per Carton,Net Weight (kg),Gross Weight (kg),Package Marks,Country of Origin
+1,LED bulb 9W warm white 50 pcs per carton,BLB-9W-WW,1000,pcs,20,carton,50,45.000,52.000,BL-9W / MADE IN CHINA,CN
+2,LED tube 18W 120cm 25 pcs per carton,TUB-18W-120,500,pcs,20,carton,25,38.500,45.000,T18-120 / FRAGILE,CN
+3,LED driver 12V 5A 40 pcs per carton,DRV-12V-5A,200,pcs,5,carton,40,12.000,14.500,DRV-5A,CN
+
+Total Cartons,,,,,45,,,95.500,111.500,,
+
+Notes,Total gross weight includes pallet weight. Dimensions available on request.

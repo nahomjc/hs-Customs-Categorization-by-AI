@@ -54,6 +54,21 @@ const REQUIRED_TYPES: DocumentType[] = [
   "packing_list",
 ];
 
+const SAMPLE_TEMPLATES: Partial<
+  Record<DocumentType, { href: string; fileName: string; label: string }>
+> = {
+  commercial_invoice: {
+    href: "/samples/commercial-invoice-sample.csv",
+    fileName: "commercial-invoice-sample.csv",
+    label: "Commercial invoice sample (CSV)",
+  },
+  packing_list: {
+    href: "/samples/packing-list-sample.csv",
+    fileName: "packing-list-sample.csv",
+    label: "Packing list sample (CSV)",
+  },
+};
+
 export function DocumentsTab({
   caseId,
   initialDocuments,
@@ -61,6 +76,7 @@ export function DocumentsTab({
   const router = useRouter();
   const [documents, setDocuments] = useState(initialDocuments);
   const [uploadType, setUploadType] = useState<DocumentType>("commercial_invoice");
+  const [uploadOpen, setUploadOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [extractingId, setExtractingId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
@@ -68,6 +84,7 @@ export function DocumentsTab({
     useState<ImportCaseDocumentRow | null>(null);
   const [dragActive, setDragActive] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
+  const sampleTemplate = SAMPLE_TEMPLATES[uploadType];
 
   const invoiceDocs = useMemo(
     () => documents.filter((d) => d.documentType === "commercial_invoice"),
@@ -117,6 +134,7 @@ export function DocumentsTab({
       } else {
         toast.success("Document uploaded");
       }
+      setUploadOpen(false);
       await refreshDocuments();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Upload failed");
@@ -179,7 +197,7 @@ export function DocumentsTab({
 
   function openUpload(type: DocumentType) {
     setUploadType(type);
-    fileRef.current?.click();
+    setUploadOpen(true);
   }
 
   function onFileSelected(file: File | undefined) {
@@ -241,85 +259,23 @@ export function DocumentsTab({
         </section>
 
         <section className="space-y-4 border-t border-slate-100 px-5 py-5">
-          <div>
-            <h3 className="text-sm font-semibold text-slate-900">Upload file</h3>
-            <p className="mt-0.5 text-xs text-slate-500">
-              Lines are extracted automatically after upload. Supported: PDF,
-              Word, Excel, CSV, and images.
-            </p>
-          </div>
-
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-            <label
-              htmlFor="document-type"
-              className="shrink-0 text-xs font-medium text-slate-600"
-            >
-              Document type
-            </label>
-            <select
-              id="document-type"
-              value={uploadType}
-              onChange={(e) => setUploadType(e.target.value as DocumentType)}
-              className={`w-full sm:max-w-xs ${dashSelectClass}`}
-            >
-              {DOCUMENT_TYPES.map((type) => (
-                <option key={type} value={type}>
-                  {DOCUMENT_TYPE_LABELS[type]}
-                  {REQUIRED_TYPES.includes(type) ? " *" : ""}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div
-            onDragOver={(e) => {
-              e.preventDefault();
-              setDragActive(true);
-            }}
-            onDragLeave={() => setDragActive(false)}
-            onDrop={(e) => {
-              e.preventDefault();
-              setDragActive(false);
-              onFileSelected(e.dataTransfer.files[0]);
-            }}
-            className={`rounded-2xl border-2 border-dashed transition-colors ${
-              dragActive
-                ? "border-indigo-400 bg-indigo-50/50"
-                : "border-slate-200 bg-slate-50/40 hover:border-slate-300"
-            }`}
-          >
-            <div className="flex flex-col items-center justify-center px-6 py-8 text-center">
-              <div className="mb-3 flex h-11 w-11 items-center justify-center rounded-xl bg-white text-indigo-600 shadow-sm">
-                <UploadIcon />
-              </div>
-              <p className="text-sm font-medium text-slate-800">
-                {dragActive ? "Drop file to upload" : "Drag and drop a file here"}
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <h3 className="text-sm font-semibold text-slate-900">Upload file</h3>
+              <p className="mt-0.5 text-xs text-slate-500">
+                Lines are extracted automatically after upload. Supported: PDF,
+                Word, Excel, CSV, and images.
               </p>
-              <p className="mt-1 text-xs text-slate-500">
-                Uploading as{" "}
-                <span className="font-medium text-slate-700">
-                  {DOCUMENT_TYPE_LABELS[uploadType]}
-                </span>
-              </p>
-              <DashButton
-                type="button"
-                variant="secondary"
-                className="mt-4"
-                disabled={loading}
-                onClick={() => fileRef.current?.click()}
-              >
-                {loading ? "Uploading…" : "Browse files"}
-              </DashButton>
             </div>
+            <DashButton
+              type="button"
+              variant="primary"
+              disabled={loading}
+              onClick={() => openUpload(uploadType)}
+            >
+              {loading ? "Uploading…" : "Upload document"}
+            </DashButton>
           </div>
-
-          <input
-            ref={fileRef}
-            type="file"
-            className="hidden"
-            accept={ACCEPTED_FILES}
-            onChange={(e) => onFileSelected(e.target.files?.[0])}
-          />
         </section>
 
         {documents.length > 0 ? (
@@ -359,6 +315,144 @@ export function DocumentsTab({
           </section>
         ) : null}
       </DashCard>
+
+      <Dialog
+        open={uploadOpen}
+        onOpenChange={(open) => {
+          if (!loading) {
+            setUploadOpen(open);
+            setDragActive(false);
+          }
+        }}
+      >
+        <DialogContent
+          showClose={!loading}
+          className="max-w-lg"
+          onPointerDownOutside={(e) => {
+            if (loading) e.preventDefault();
+          }}
+          onEscapeKeyDown={(e) => {
+            if (loading) e.preventDefault();
+          }}
+        >
+          <DialogHeader>
+            <DialogTitle>Upload document</DialogTitle>
+            <DialogDescription>
+              Choose the document type, optionally download a sample template,
+              then drop or browse for your file.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <div className="space-y-1.5">
+              <label
+                htmlFor="upload-document-type"
+                className="text-xs font-medium text-slate-600"
+              >
+                Document type
+              </label>
+              <select
+                id="upload-document-type"
+                value={uploadType}
+                disabled={loading}
+                onChange={(e) => setUploadType(e.target.value as DocumentType)}
+                className={`w-full ${dashSelectClass}`}
+              >
+                {DOCUMENT_TYPES.map((type) => (
+                  <option key={type} value={type}>
+                    {DOCUMENT_TYPE_LABELS[type]}
+                    {REQUIRED_TYPES.includes(type) ? " *" : ""}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {sampleTemplate ? (
+              <div className="rounded-xl border border-indigo-100 bg-indigo-50/60 px-4 py-3">
+                <p className="text-xs font-semibold text-indigo-900">
+                  Sample template
+                </p>
+                <p className="mt-0.5 text-xs text-indigo-800/80">
+                  Download a ready-to-edit CSV for{" "}
+                  {DOCUMENT_TYPE_LABELS[uploadType].toLowerCase()}, then upload
+                  it here to try the workflow.
+                </p>
+                <a
+                  href={sampleTemplate.href}
+                  download={sampleTemplate.fileName}
+                  className="mt-2 inline-flex items-center gap-1.5 text-xs font-semibold text-indigo-700 hover:text-indigo-900 hover:underline"
+                >
+                  <DownloadIcon />
+                  {sampleTemplate.label}
+                </a>
+              </div>
+            ) : null}
+
+            <div
+              onDragOver={(e) => {
+                e.preventDefault();
+                if (!loading) setDragActive(true);
+              }}
+              onDragLeave={() => setDragActive(false)}
+              onDrop={(e) => {
+                e.preventDefault();
+                setDragActive(false);
+                if (!loading) onFileSelected(e.dataTransfer.files[0]);
+              }}
+              className={`rounded-2xl border-2 border-dashed transition-colors ${
+                dragActive
+                  ? "border-indigo-400 bg-indigo-50/50"
+                  : "border-slate-200 bg-slate-50/40"
+              }`}
+            >
+              <div className="flex flex-col items-center justify-center px-6 py-7 text-center">
+                <div className="mb-3 flex h-11 w-11 items-center justify-center rounded-xl bg-white text-indigo-600 shadow-sm">
+                  <UploadIcon />
+                </div>
+                <p className="text-sm font-medium text-slate-800">
+                  {dragActive
+                    ? "Drop file to upload"
+                    : "Drag and drop a file here"}
+                </p>
+                <p className="mt-1 text-xs text-slate-500">
+                  Uploading as{" "}
+                  <span className="font-medium text-slate-700">
+                    {DOCUMENT_TYPE_LABELS[uploadType]}
+                  </span>
+                </p>
+                <DashButton
+                  type="button"
+                  variant="secondary"
+                  className="mt-4"
+                  disabled={loading}
+                  onClick={() => fileRef.current?.click()}
+                >
+                  {loading ? "Uploading…" : "Browse files"}
+                </DashButton>
+              </div>
+            </div>
+
+            <input
+              ref={fileRef}
+              type="file"
+              className="hidden"
+              accept={ACCEPTED_FILES}
+              onChange={(e) => onFileSelected(e.target.files?.[0])}
+            />
+          </div>
+
+          <DialogFooter className="gap-2 sm:gap-0">
+            <DashButton
+              type="button"
+              variant="secondary"
+              disabled={loading}
+              onClick={() => setUploadOpen(false)}
+            >
+              Cancel
+            </DashButton>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog
         open={docPendingDelete !== null}
@@ -696,6 +790,26 @@ function UploadIcon() {
         strokeLinejoin="round"
         strokeWidth={1.75}
         d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"
+      />
+    </svg>
+  );
+}
+
+function DownloadIcon() {
+  return (
+    <svg
+      className="h-3.5 w-3.5"
+      fill="none"
+      stroke="currentColor"
+      viewBox="0 0 24 24"
+      aria-hidden
+    >
+      <title>Download</title>
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth={2}
+        d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"
       />
     </svg>
   );

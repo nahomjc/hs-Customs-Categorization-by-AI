@@ -119,8 +119,11 @@ export function impliedChapters(attributes: ProductAttributes): string[] {
   if (/motor|electric motor|workshop/.test(bag)) {
     chapters.add("85");
   }
+  // Finished apparel only — bare "cotton" must not pull ch 61/62 (fabric stays 52).
   if (
-    /t-?shirt|shirt|cotton|apparel|garment|clothing|men'?s|women'?s/.test(bag)
+    /t-?shirt|jeans?\b|trousers?|pants?\b|apparel|garment|clothing|hoodie|sweatshirt|jacket|blouse|skirt|dress\b|underwear|shorts?\b/.test(
+      bag,
+    )
   ) {
     chapters.add("61");
     chapters.add("62");

@@ -1,0 +1,15 @@
+Packing List
+
+Packing List Number,PL-LIVESTOCK-2026-001
+Related Invoice Number,INV-LIVESTOCK-2026-001
+Packing List Date,2026-09-22
+Supplier Name,Nairobi Livestock Export Ltd.
+Shipment Reference,SHP-KE-ET-2026-0920
+
+Line,Description,SKU,Quantity,Unit,Cartons,Package Type,Pcs per Carton,Net Weight (kg),Gross Weight (kg),Package Marks,Country of Origin
+1,Live sheep Dorper breed for breeding solid,LIV-SHEEP-DOR,50,pcs,5,crate,10,2250.000,2400.000,SHEEP-DOR / LIVE / KE,KE
+2,Live goats Boer breed for breeding solid,LIV-GOAT-BOER,30,pcs,3,crate,10,1350.000,1450.000,GOAT-BOER / LIVE / KE,KE
+
+Total Cartons,,,,,8,,,3600.000,3850.000,,
+
+Notes,Linked to INV-LIVESTOCK-2026-001. SKUs match invoice lines 1:1 (sheep then goat). Use to test that harmonization creates 2 products and declaration grouping keeps them separate when HS codes differ.

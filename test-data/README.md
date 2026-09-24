@@ -12,6 +12,10 @@ Use these files when testing Phase 1 document upload.
 | `packing-list-tariff-book-8items.csv` | Packing List | **Packing List** |
 | `commercial-invoice-vdd-demo.csv` | Commercial Invoice | **Commercial Invoice** |
 | `packing-list-vdd-demo.csv` | Packing List | **Packing List** |
+| `commercial-invoice-duplicate-names.csv` | Commercial Invoice | **Commercial Invoice** |
+| `packing-list-duplicate-names.csv` | Packing List | **Packing List** |
+| `commercial-invoice-sheep-goat.csv` | Commercial Invoice | **Commercial Invoice** |
+| `packing-list-sheep-goat.csv` | Packing List | **Packing List** |
 | `VDD-SAMPLE-DEMO.xlsx` | Settings → VDD | Excel import |
 
 ## Sample data (3-line LED shipment)
@@ -39,7 +43,28 @@ Invoice and packing list use slightly different descriptions per line (e.g. `Gre
 
 Upload the same **HS CODE BOOK BY EXCEL.xlsx** to **HS Reference** before classification so suggested HS codes match the reference table.
 
+## Sample data (duplicate names / same description on multiple rows)
+
+Tests how extract, harmonize, and declaration grouping behave when the **same product name and description** appear on separate invoice/packing-list rows (e.g. split batches).
+
+- **Invoice:** INV-DUP-2026-001
+- **Packing list:** PL-DUP-2026-001 (related invoice matches)
+- **Importer:** Impact Logistic PLC
+- **Supplier:** Guangzhou Sunfield Trading Co. Ltd. (CN)
+- **Products (5 lines, 2 unique names):**
+  1–3. `Cotton T-shirt plain white 180gsm` / SKU `CTN-TS-WHT` — identical Description, SKU, Brand, Model; quantities 500 + 300 + 200
+  4–5. `Denim jeans blue regular fit` / SKU `DNM-JN-BLU` — identical Description, SKU, Brand, Model; quantities 150 + 100
+- Packing list mirrors the same duplicates; package marks differ by batch (`BATCH-A/B/C`) so you can tell rows apart after extract
+
+### How to test
+
+1. Create an import case (importer: **Impact Logistic PLC**, supplier: **Guangzhou Sunfield Trading Co. Ltd.**, origin: **CN**)
+2. Upload `commercial-invoice-duplicate-names.csv` + `packing-list-duplicate-names.csv`
+3. Extract → check that all 5 lines appear on both Invoice Lines and Packing List Lines
+4. Harmonize → confirm whether same-name rows merge into 2 products or stay as 5
+
 ## Sample data (VDD + import-case demo)
+
 
 Linked invoice, packing list, and VDD Excel for end-to-end testing. Descriptions use the same brand/model/commercial wording as `VDD-SAMPLE-DEMO.xlsx` so harmonize can find exact VDD hits.
 
@@ -89,5 +114,7 @@ hs-project/test-data/commercial-invoice-tariff-book-8items.csv
 hs-project/test-data/packing-list-tariff-book-8items.csv
 hs-project/test-data/commercial-invoice-vdd-demo.csv
 hs-project/test-data/packing-list-vdd-demo.csv
+hs-project/test-data/commercial-invoice-duplicate-names.csv
+hs-project/test-data/packing-list-duplicate-names.csv
 hs-project/test-data/VDD-SAMPLE-DEMO.xlsx
 ```

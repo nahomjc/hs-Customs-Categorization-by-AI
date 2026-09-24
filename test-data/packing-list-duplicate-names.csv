@@ -1,0 +1,18 @@
+Packing List
+
+Packing List Number,PL-DUP-2026-001
+Related Invoice Number,INV-DUP-2026-001
+Packing List Date,2026-09-25
+Supplier Name,Guangzhou Sunfield Trading Co. Ltd.
+Shipment Reference,SHP-CN-ET-2026-0924
+
+Line,Description,SKU,Quantity,Unit,Cartons,Package Type,Pcs per Carton,Net Weight (kg),Gross Weight (kg),Package Marks,Country of Origin
+1,Cotton T-shirt plain white 180gsm,CTN-TS-WHT,500,pcs,10,carton,50,45.000,52.000,TS-WHT / BATCH-A / CN,CN
+2,Cotton T-shirt plain white 180gsm,CTN-TS-WHT,300,pcs,6,carton,50,27.000,31.200,TS-WHT / BATCH-B / CN,CN
+3,Cotton T-shirt plain white 180gsm,CTN-TS-WHT,200,pcs,4,carton,50,18.000,20.800,TS-WHT / BATCH-C / CN,CN
+4,Denim jeans blue regular fit,DNM-JN-BLU,150,pcs,5,carton,30,37.500,42.000,JN-BLU / BATCH-A / CN,CN
+5,Denim jeans blue regular fit,DNM-JN-BLU,100,pcs,4,carton,25,25.000,28.000,JN-BLU / BATCH-B / CN,CN
+
+Total Cartons,,,,,29,,,152.500,174.000,,
+
+Notes,Linked to INV-DUP-2026-001. Same duplicate pattern as invoice: lines 1-3 identical Description/SKU (different batches/marks); lines 4-5 identical Description/SKU. Use to test extract matching and whether harmonize merges same-name rows or keeps them separate.

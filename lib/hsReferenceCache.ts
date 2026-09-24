@@ -175,16 +175,140 @@ function tokenize(text: string): string[] {
     .filter((t) => t.length >= 3);
 }
 
-function scoreRow(row: HsReferenceCacheRow, tokens: string[], description: string): number {
-  const desc = row.description.toLowerCase();
-  let score = 0;
+/** Colors / size fluff that often match fabric rows incorrectly (e.g. "plain" → plain weave). */
+const SCORE_STOPWORDS = new Set([
+  "white",
+  "black",
+  "blue",
+  "red",
+  "green",
+  "yellow",
+  "plain",
+  "regular",
+  "fit",
+  "size",
+  "pcs",
+  "piece",
+  "pieces",
+  "pair",
+  "pairs",
+  "pack",
+  "new",
+  "item",
+  "product",
+  "gsm",
+]);
+
+/** Strong garment nouns — boost when present in both query and tariff row. */
+const APPAREL_TOKEN_RE =
+  /^(?:t-?shirts?|shirts?|jeans?|trousers?|pants?|shorts?|skirts?|dresses?|jackets?|coats?|hoodies?|sweaters?|garments?|apparel|clothing|underwear|socks?)$/;
+
+/** Expand query tokens so "jeans" can hit tariff "trousers / breeches". */
+const TOKEN_SYNONYMS: Record<string, string[]> = {
+  jeans: ["trousers", "breeches", "pants", "denim"],
+  jean: ["trousers", "breeches", "pants", "denim"],
+  pants: ["trousers", "breeches", "jeans"],
+  trousers: ["breeches", "pants", "jeans"],
+  shirt: ["shirts", "singlets"],
+  shirts: ["shirt", "singlets"],
+  "t-shirt": ["t-shirts", "singlets", "vests", "shirts"],
+  "t-shirts": ["t-shirt", "singlets", "vests", "shirts"],
+  tee: ["t-shirt", "t-shirts", "singlets"],
+  hoodie: ["sweatshirt", "pullover", "jersey"],
+  sweatshirt: ["hoodie", "pullover", "jersey"],
+};
+
+function expandTokens(tokens: string[]): string[] {
+  const out = new Set(tokens);
   for (const t of tokens) {
-    if (desc.includes(t)) score += 1;
+    for (const syn of TOKEN_SYNONYMS[t] ?? []) {
+      out.add(syn);
+    }
   }
+  return [...out];
+}
+
+function scoreRow(
+  row: HsReferenceCacheRow,
+  tokens: string[],
+  description: string,
+): number {
+  const desc = row.description.toLowerCase().replace(/^[-\s]+/, "").trim();
+  const expanded = expandTokens(tokens);
+
+  let tokenScore = 0;
+  for (const t of expanded) {
+    if (SCORE_STOPWORDS.has(t)) continue;
+    if (!desc.includes(t)) continue;
+    // Original query tokens that are apparel nouns count heavier than synonyms.
+    const isOriginal = tokens.includes(t);
+    if (APPAREL_TOKEN_RE.test(t) && isOriginal) tokenScore += 3;
+    else if (APPAREL_TOKEN_RE.test(t)) tokenScore += 2;
+    else tokenScore += isOriginal ? 1 : 0.5;
+  }
+
+  // Chapter bonus alone must not pick a random 61/62 row.
+  if (tokenScore <= 0) return 0;
+
+  let score = tokenScore;
   const expected = expectedChapters(description);
-  if (expected && row.chapter && expected.includes(row.chapter.padStart(2, "0").slice(0, 2))) {
+  if (
+    expected &&
+    row.chapter &&
+    expected.includes(row.chapter.padStart(2, "0").slice(0, 2))
+  ) {
     score += 2;
   }
+
+  // Ultra-short official text ("Other") is weak — but a one-word exact
+  // product label like "Denim" that appears in the query is a strong hit.
+  const meaningfulLen = desc.replace(/[^a-z0-9]/gi, "").length;
+  const labelKey = desc.replace(/[^a-z0-9]/gi, "");
+  const exactLabelHit = expanded.some(
+    (t) => !SCORE_STOPWORDS.has(t) && labelKey === t,
+  );
+  const weakExactLabels = new Set([
+    "unbleached",
+    "bleached",
+    "printed",
+    "dyed",
+    "yarn",
+    "plain",
+    "other",
+    "nes",
+    "cotton",
+    "wool",
+    "silk",
+  ]);
+  if (meaningfulLen > 0 && meaningfulLen < 12 && !exactLabelHit) {
+    score -= 2;
+  }
+  if (/^(?:other|nes|n\.?e\.?s\.?)$/i.test(desc)) {
+    score -= 3;
+  }
+  if (exactLabelHit && !weakExactLabels.has(labelKey)) {
+    score += 3;
+  }
+
+  const d = description.toLowerCase();
+  const ch = (row.chapter ?? "").padStart(2, "0").slice(0, 2);
+  // Jeans / denim trousers are almost always woven cotton → prefer ch 62 + cotton.
+  if (/\bjeans?\b|denim/.test(d) && !/knit|crochet/.test(d)) {
+    if (ch === "62") score += 2;
+    if (ch === "61") score -= 1;
+    if (/cotton/.test(desc)) score += 2;
+    if (/wool|animal\s*hair|synthetic/.test(desc)) score -= 2;
+  }
+  // Exact "denim" in tariff (fabric or apparel context) is a strong cue.
+  if (/\bdenim\b/.test(d) && /\bdenim\b/.test(desc)) {
+    score += 3;
+  }
+  // T-shirts are typically knitted → prefer ch 61.
+  if (/t-?\s*shirts?/.test(d) || /\btee\s*shirts?\b/.test(d)) {
+    if (ch === "61") score += 2;
+    if (ch === "62") score -= 1;
+  }
+
   return score;
 }
 

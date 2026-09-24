@@ -110,6 +110,8 @@ const STEP_ICONS: Record<WizardStepId, string> = {
     "M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z",
   "grouping-export":
     "M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z",
+  "case-history":
+    "M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z",
 };
 
 export function ImportCaseWizard({
@@ -270,7 +272,7 @@ export function ImportCaseWizard({
         className="w-full overflow-x-auto"
         aria-label="Workflow steps"
       >
-        <ol className="relative flex w-full min-w-[640px] list-none sm:min-w-0">
+        <ol className="relative flex w-full min-w-[720px] list-none sm:min-w-0">
           {WIZARD_STEPS.map((step, index) => {
             const status = stepStatus(step.id, index);
             const unlocked = isStepUnlocked(step.id);
@@ -279,6 +281,14 @@ export function ImportCaseWizard({
             const isActive = status === "current";
             const isComplete = status === "complete";
             const tip = 14;
+
+            const segmentClass = isActive
+              ? "bg-[#1e3a8a] text-white shadow-lg brightness-110"
+              : isComplete
+                ? "bg-emerald-500 text-white hover:bg-emerald-600"
+                : unlocked
+                  ? "bg-slate-100 text-slate-600 hover:bg-slate-200/90"
+                  : "cursor-not-allowed bg-slate-50 text-slate-300";
 
             return (
               <li
@@ -301,13 +311,7 @@ export function ImportCaseWizard({
                       ? `${step.label} — ${stepBadge(step.id)}`
                       : step.description
                   }
-                  className={`relative flex h-10 w-full items-center justify-center px-3 text-center text-[11px] font-semibold leading-tight transition-colors sm:h-11 sm:px-4 sm:text-xs ${
-                    isActive || isComplete
-                      ? "bg-[#2563eb] text-white shadow-sm"
-                      : unlocked
-                        ? "bg-slate-100 text-slate-600 hover:bg-slate-200/90"
-                        : "cursor-not-allowed bg-slate-50 text-slate-300"
-                  }`}
+                  className={`relative flex h-10 w-full items-center justify-center gap-1.5 px-3 text-center text-[11px] font-semibold leading-tight transition-all sm:h-11 sm:px-4 sm:text-xs ${segmentClass}`}
                   style={{
                     clipPath: chevronClipPath(segmentFirst, segmentLast, tip),
                     WebkitClipPath: chevronClipPath(
@@ -317,9 +321,19 @@ export function ImportCaseWizard({
                     ),
                   }}
                 >
-                  <span className="relative z-10 line-clamp-2 max-w-full px-1">
-                    <span className="sm:hidden">{step.shortLabel}</span>
-                    <span className="hidden sm:inline">{step.label}</span>
+                  <span className="relative z-10 flex max-w-full items-center justify-center gap-1 px-1">
+                    {isComplete ? (
+                      <CheckIcon className="hidden h-3 w-3 shrink-0 sm:block" />
+                    ) : isActive ? (
+                      <span
+                        className="hidden h-1.5 w-1.5 shrink-0 rounded-full bg-white sm:block"
+                        aria-hidden
+                      />
+                    ) : null}
+                    <span className="line-clamp-2">
+                      <span className="sm:hidden">{step.shortLabel}</span>
+                      <span className="hidden sm:inline">{step.label}</span>
+                    </span>
                   </span>
                 </button>
               </li>
@@ -327,6 +341,20 @@ export function ImportCaseWizard({
           })}
         </ol>
       </nav>
+      <div className="flex items-center gap-4 text-[11px] text-slate-500">
+        <span className="inline-flex items-center gap-1.5">
+          <span className="h-2.5 w-2.5 rounded-sm bg-[#1e3a8a]" aria-hidden />
+          Current
+        </span>
+        <span className="inline-flex items-center gap-1.5">
+          <span className="h-2.5 w-2.5 rounded-sm bg-emerald-500" aria-hidden />
+          Done
+        </span>
+        <span className="inline-flex items-center gap-1.5">
+          <span className="h-2.5 w-2.5 rounded-sm bg-slate-200" aria-hidden />
+          Upcoming
+        </span>
+      </div>
 
       {/* Phase card */}
       <div className="rounded-2xl border border-slate-200/80 bg-white px-5 py-5 sm:px-6 shadow-sm">
@@ -427,17 +455,17 @@ export function ImportCaseWizard({
               />
             ) : null}
             {currentStep === "grouping-export" ? (
-              <>
-                <GroupingExportTab
-                  caseId={importCase.id}
-                  caseNumber={importCase.caseNumber}
-                  initialGroupings={groupings}
-                />
-                <CaseHistoryPanel
-                  entries={auditLogs}
-                  caseNumber={importCase.caseNumber}
-                />
-              </>
+              <GroupingExportTab
+                caseId={importCase.id}
+                caseNumber={importCase.caseNumber}
+                initialGroupings={groupings}
+              />
+            ) : null}
+            {currentStep === "case-history" ? (
+              <CaseHistoryPanel
+                entries={auditLogs}
+                caseNumber={importCase.caseNumber}
+              />
             ) : null}
           </div>
         </>
@@ -455,7 +483,7 @@ export function ImportCaseWizard({
               </DashButton>
             ) : (
               <p className="text-sm text-emerald-700 font-medium px-2">
-                Workflow complete — export your declaration CSV above.
+                Workflow complete — review case history above.
               </p>
             )}
           </div>
@@ -550,8 +578,10 @@ function StepHint({
           : "All HS codes approved. Continue to declaration grouping.",
     "grouping-export":
       groupings.length === 0
-        ? "Run grouping to combine products into declaration lines, then download the CSV export. Case history below shows who did what at each step."
-        : "Declaration groups ready. Download the CSV export, then review the case history for approvals, notes, and timestamps.",
+        ? "Run grouping to combine products into declaration lines, then download the CSV export."
+        : "Declaration groups ready. Download the CSV export, then continue to case history.",
+    "case-history":
+      "Review the full audit trail — who approved, corrected, or exported at each step.",
   };
 
   const hint = hints[stepId];
@@ -569,17 +599,18 @@ function StepHint({
     (stepId === "checks" && openCheckCount > 0);
   const isSuccess =
     !isWarning &&
-    (stepId === "invoice-lines"
-      ? invoiceLines.length > 0 && unreviewedInvoiceCount === 0
-      : stepId === "packing-lines"
-        ? packingLines.length > 0 && unreviewedPackingCount === 0
-        : stepId === "products"
-          ? products.length > 0 && unverifiedCount === 0
-          : stepId === "classification"
-            ? classifications.length > 0 && unapprovedCount === 0
-            : stepId === "grouping-export"
-              ? groupings.length > 0
-              : false);
+    (stepId === "case-history" ||
+      (stepId === "invoice-lines"
+        ? invoiceLines.length > 0 && unreviewedInvoiceCount === 0
+        : stepId === "packing-lines"
+          ? packingLines.length > 0 && unreviewedPackingCount === 0
+          : stepId === "products"
+            ? products.length > 0 && unverifiedCount === 0
+            : stepId === "classification"
+              ? classifications.length > 0 && unapprovedCount === 0
+              : stepId === "grouping-export"
+                ? groupings.length > 0
+                : false));
 
   return (
     <div
