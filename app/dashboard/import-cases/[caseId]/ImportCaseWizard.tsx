@@ -498,39 +498,65 @@ export function ImportCaseWizard({
           </div>
 
           {/* End-of-step actions (scroll destination after finishing work) */}
-          <div className="flex items-center justify-between gap-3 border-t border-slate-200/80 pt-5">
+          <div className="flex flex-wrap items-center gap-3 border-t border-slate-200/80 pt-5">
             <DashButton
               variant="secondary"
               onClick={goBack}
               disabled={isFirst}
-              className="min-w-[6.5rem]"
+              className="min-w-26"
             >
+              <svg
+                className="h-4 w-4"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+                aria-hidden="true"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M15 19l-7-7 7-7"
+                />
+              </svg>
               Back
             </DashButton>
-            <div className="flex items-center gap-3">
-              {!isLastActive ? (
-                <span
-                  title={
-                    currentStepComplete
-                      ? undefined
-                      : "Finish this step before continuing"
-                  }
+            {!isLastActive ? (
+              <span
+                title={
+                  currentStepComplete
+                    ? undefined
+                    : "Finish this step before continuing"
+                }
+              >
+                <DashButton
+                  variant="primary"
+                  onClick={goNext}
+                  disabled={!currentStepComplete}
+                  className="min-w-30"
                 >
-                  <DashButton
-                    variant="primary"
-                    onClick={goNext}
-                    disabled={!currentStepComplete}
-                    className="min-w-[7.5rem]"
+                  Continue
+                  <svg
+                    className="h-4 w-4"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                    aria-hidden="true"
                   >
-                    Continue
-                  </DashButton>
-                </span>
-              ) : (
-                <p className="px-2 text-sm font-medium text-emerald-700">
-                  Workflow complete — review case history above.
-                </p>
-              )}
-            </div>
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M9 5l7 7-7 7"
+                    />
+                  </svg>
+                </DashButton>
+              </span>
+            ) : (
+              <p className="px-2 text-sm font-medium text-emerald-700">
+                Workflow complete — review case history above.
+              </p>
+            )}
           </div>
         </>
       )}
