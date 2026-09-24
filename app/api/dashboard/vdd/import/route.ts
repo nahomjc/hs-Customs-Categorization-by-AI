@@ -1,18 +1,18 @@
-import { createHash } from "crypto";
+import { createHash } from "node:crypto";
 import { NextResponse } from "next/server";
-import { eq } from "drizzle-orm";
+import { eq, asc } from "drizzle-orm";
 import { db } from "@/db";
-import { vddImportBatches, vddReferenceRecords } from "@/db/schema";
+import { vddCustomFields, vddImportBatches } from "@/db/schema";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { DEFAULT_TENANT_ID } from "@/lib/auth/constants";
 import { validationErrorResponse } from "@/lib/import-cases/api-helpers";
 import {
   parseVddWorkbookBuffer,
   serializeInvalidRowsForReport,
-  type VddParsedRecord,
 } from "@/lib/vdd/import-vdd-xlsx";
 import { type VddColumnMappings, VDD_FIELD_KEYS } from "@/lib/vdd/column-map";
 import { vddImportOptionsSchema } from "@/lib/vdd/validation";
+import { upsertVddParsedRecords } from "@/lib/vdd/upsert-records";
 
 export const runtime = "nodejs";
 
@@ -38,47 +38,27 @@ function parseColumnMappings(
   }
 }
 
-function toInsertRows(
-  records: VddParsedRecord[],
-  opts: {
-    tenantId: string;
-    batchId: string;
-    sourceFileName: string;
-  },
-) {
-  return records.map((r) => ({
-    tenantId: opts.tenantId,
-    importBatchId: opts.batchId,
-    sourceFileName: opts.sourceFileName,
-    sourceRowNumber: r.sourceRowNumber,
-    importerName: r.importerName,
-    declarationNumber: r.declarationNumber,
-    hsCode: r.hsCode,
-    unitOfQuantity: r.unitOfQuantity,
-    originCode: r.originCode,
-    countryName: r.countryName,
-    brandOrMake: r.brandOrMake,
-    model: r.model,
-    commonName: r.commonName,
-    condition: r.condition,
-    commercialDescription: r.commercialDescription,
-    appearance: r.appearance,
-    material: r.material,
-    size: r.size,
-    productType: r.productType,
-    diameter: r.diameter,
-    width: r.width,
-    length: r.length,
-    declaredUnitPrice: r.declaredUnitPrice,
-    netMass: r.netMass,
-    grossMass: r.grossMass,
-    currencyCode: r.currencyCode,
-    normalizedText: r.normalizedText,
-    normalizedData: r.normalizedData,
-    rawRow: r.rawRow,
-    extraAttributes: r.extraAttributes,
-    dataQualityFlags: r.dataQualityFlags,
-  }));
+function parseCustomFieldMappings(
+  raw: FormDataEntryValue | null,
+): Record<string, string> | undefined {
+  if (typeof raw !== "string" || !raw.trim()) return undefined;
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+      return undefined;
+    }
+    const result: Record<string, string> = {};
+    for (const [key, value] of Object.entries(
+      parsed as Record<string, unknown>,
+    )) {
+      if (typeof value === "string" && value.trim()) {
+        result[key] = value.trim();
+      }
+    }
+    return Object.keys(result).length > 0 ? result : undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 export async function POST(req: Request) {
@@ -115,9 +95,22 @@ export async function POST(req: Request) {
   const buffer = Buffer.from(await file.arrayBuffer());
   const fileHash = createHash("sha256").update(buffer).digest("hex");
 
+  const customFields = await db
+    .select({
+      fieldKey: vddCustomFields.fieldKey,
+      label: vddCustomFields.label,
+    })
+    .from(vddCustomFields)
+    .where(eq(vddCustomFields.tenantId, tenantId))
+    .orderBy(asc(vddCustomFields.createdAt));
+
   const parsed = parseVddWorkbookBuffer(buffer, {
     sheetName: optionsParsed.data.sheetName,
     columnMappings: optionsParsed.data.columnMappings,
+    customFieldMappings: parseCustomFieldMappings(
+      form.get("customFieldMappings"),
+    ),
+    customFields,
   });
 
   if (!parsed.sheetName) {
@@ -151,43 +144,44 @@ export async function POST(req: Request) {
       invalidRowCount: parsed.invalidRows.length,
       status: "processing",
       importedByUserId: userId,
-      columnMappings: parsed.effectiveMappings,
-      extraColumns: parsed.extraHeaders,
+      columnMappings: {
+        ...parsed.effectiveMappings,
+        __custom: parsed.customFieldMappings,
+      },
+      extraColumns: [
+        ...parsed.extraHeaders,
+        ...Object.keys(parsed.customFieldMappings),
+      ],
       errorReport: null,
     })
     .returning();
 
   try {
-    const chunkSize = 200;
-    const inserts = toInsertRows(parsed.validRows, {
+    const upsertStats = await upsertVddParsedRecords({
       tenantId,
       batchId: batch.id,
       sourceFileName: file.name,
+      records: parsed.validRows,
     });
 
-    await db.transaction(async (tx) => {
-      for (let i = 0; i < inserts.length; i += chunkSize) {
-        const chunk = inserts.slice(i, i + chunkSize);
-        await tx.insert(vddReferenceRecords).values(chunk);
-      }
-
-      await tx
-        .update(vddImportBatches)
-        .set({
-          status: "completed",
-          completedAt: new Date(),
-          errorReport: {
-            invalidRows: serializeInvalidRowsForReport(parsed.invalidRows),
-            invalidRowCount: parsed.invalidRows.length,
-            qualityFlaggedCount: parsed.validRows.filter(
-              (r) => r.dataQualityFlags.length > 0,
-            ).length,
-            extraColumnCount: parsed.extraHeaders.length,
-            extraColumns: parsed.extraHeaders,
-          },
-        })
-        .where(eq(vddImportBatches.id, batch.id));
-    });
+    await db
+      .update(vddImportBatches)
+      .set({
+        status: "completed",
+        completedAt: new Date(),
+        errorReport: {
+          invalidRows: serializeInvalidRowsForReport(parsed.invalidRows),
+          invalidRowCount: parsed.invalidRows.length,
+          qualityFlaggedCount: parsed.validRows.filter(
+            (r) => r.dataQualityFlags.length > 0,
+          ).length,
+          extraColumnCount: parsed.extraHeaders.length,
+          extraColumns: parsed.extraHeaders,
+          customFieldMappings: parsed.customFieldMappings,
+          upsert: upsertStats,
+        },
+      })
+      .where(eq(vddImportBatches.id, batch.id));
 
     return NextResponse.json({
       ok: true,
@@ -197,11 +191,15 @@ export async function POST(req: Request) {
       totalRows: parsed.totalDataRows,
       validRows: parsed.validRows.length,
       invalidRows: parsed.invalidRows.length,
+      inserted: upsertStats.inserted,
+      updated: upsertStats.updated,
+      skippedDuplicates: upsertStats.skipped,
       qualityFlaggedCount: parsed.validRows.filter(
         (r) => r.dataQualityFlags.length > 0,
       ).length,
       extraHeaders: parsed.extraHeaders,
       extraColumnCount: parsed.extraHeaders.length,
+      customFieldMappings: parsed.customFieldMappings,
       disclaimer:
         "VDD references support review only. They do not determine the final HS code or customs value.",
     });

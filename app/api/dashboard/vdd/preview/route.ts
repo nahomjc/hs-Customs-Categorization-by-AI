@@ -1,5 +1,8 @@
-import { createHash } from "crypto";
+import { createHash } from "node:crypto";
 import { NextResponse } from "next/server";
+import { asc, eq } from "drizzle-orm";
+import { db } from "@/db";
+import { vddCustomFields } from "@/db/schema";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { DEFAULT_TENANT_ID } from "@/lib/auth/constants";
 import { validationErrorResponse } from "@/lib/import-cases/api-helpers";
@@ -35,11 +38,36 @@ function parseColumnMappings(
   }
 }
 
+function parseCustomFieldMappings(
+  raw: FormDataEntryValue | null,
+): Record<string, string> | undefined {
+  if (typeof raw !== "string" || !raw.trim()) return undefined;
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+      return undefined;
+    }
+    const result: Record<string, string> = {};
+    for (const [key, value] of Object.entries(
+      parsed as Record<string, unknown>,
+    )) {
+      if (typeof value === "string" && value.trim()) {
+        result[key] = value.trim();
+      }
+    }
+    return Object.keys(result).length > 0 ? result : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 export async function POST(req: Request) {
   const admin = await requireAdmin();
   if (!admin.ok) {
     return NextResponse.json({ error: admin.error }, { status: admin.status });
   }
+
+  const tenantId = admin.session.profile.tenantId ?? DEFAULT_TENANT_ID;
 
   const form = await req.formData();
   const file = form.get("file");
@@ -67,9 +95,22 @@ export async function POST(req: Request) {
   const buffer = Buffer.from(await file.arrayBuffer());
   const fileHash = createHash("sha256").update(buffer).digest("hex");
 
+  const customFields = await db
+    .select({
+      fieldKey: vddCustomFields.fieldKey,
+      label: vddCustomFields.label,
+    })
+    .from(vddCustomFields)
+    .where(eq(vddCustomFields.tenantId, tenantId))
+    .orderBy(asc(vddCustomFields.createdAt));
+
   const parsed = parseVddWorkbookBuffer(buffer, {
     sheetName: optionsParsed.data.sheetName,
     columnMappings: optionsParsed.data.columnMappings,
+    customFieldMappings: parseCustomFieldMappings(
+      form.get("customFieldMappings"),
+    ),
+    customFields,
     previewLimit: optionsParsed.data.previewLimit ?? 20,
   });
 
@@ -93,12 +134,14 @@ export async function POST(req: Request) {
     ok: true,
     fileName: file.name,
     fileHash,
-    tenantId: admin.session.profile.tenantId ?? DEFAULT_TENANT_ID,
+    tenantId,
     sheetNames: parsed.sheetNames,
     sheetName: parsed.sheetName,
     headers: parsed.headers,
     detectedMappings: parsed.detectedMappings,
     effectiveMappings: parsed.effectiveMappings,
+    customFieldMappings: parsed.customFieldMappings,
+    customFields,
     fieldKeys: VDD_FIELD_KEYS,
     fieldLabels: VDD_FIELD_LABELS,
     totalDataRows: parsed.totalDataRows,

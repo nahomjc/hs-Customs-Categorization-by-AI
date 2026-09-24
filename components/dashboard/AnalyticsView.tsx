@@ -18,9 +18,9 @@ import {
   DashTr,
   StatusBadge,
 } from "@/components/dashboard/ui";
+import type { ClientsAnalyticsData } from "@/lib/clients-analytics";
 import {
   buildDateRangeUploadSeries,
-  type AnalyticsData,
   formatRangeLabel,
 } from "@/lib/dashboard-analytics-utils";
 import {
@@ -28,40 +28,6 @@ import {
   type ImportCaseStatus,
 } from "@/lib/import-cases/constants";
 import type { ImportCasesAnalyticsData } from "@/lib/import-cases-analytics";
-
-const STATUS_LABELS: Record<string, string> = {
-  uploaded: "Uploaded",
-  parsed: "Parsed",
-  ai_processed: "AI processing",
-  grouped: "Grouped",
-  completed: "Completed",
-  failed: "Failed",
-};
-
-const FILE_TYPE_LABELS: Record<string, string> = {
-  pdf: "PDF",
-  docx: "Word",
-  xlsx: "Excel",
-  csv: "CSV",
-};
-
-const FILE_TYPE_COLORS: Record<string, string> = {
-  pdf: "#f43f5e",
-  docx: "#3b82f6",
-  xlsx: "#10b981",
-  csv: "#6366f1",
-};
-
-const FILE_TYPE_BADGE: Record<string, string> = {
-  pdf: "bg-rose-50 text-rose-700 border-rose-200/80",
-  docx: "bg-blue-50 text-blue-700 border-blue-200/80",
-  xlsx: "bg-emerald-50 text-emerald-700 border-emerald-200/80",
-  csv: "bg-indigo-50 text-indigo-700 border-indigo-200/80",
-};
-
-function formatStatus(status: string | null): string {
-  return STATUS_LABELS[status ?? "uploaded"] ?? status ?? "Uploaded";
-}
 
 function formatDocDate(d: Date | null): string {
   if (!d) return "—";
@@ -77,57 +43,106 @@ function formatImportCaseStatus(status: string | null): string {
   return IMPORT_CASE_STATUS_LABELS[key] ?? status ?? "Draft";
 }
 
+function formatMoney(value: number): string {
+  if (!value) return "—";
+  if (value >= 1_000_000) {
+    return `${(value / 1_000_000).toFixed(1)}M`;
+  }
+  if (value >= 1_000) {
+    return `${(value / 1_000).toFixed(1)}K`;
+  }
+  return value.toLocaleString("en-US", {
+    maximumFractionDigits: 0,
+  });
+}
+
+function clientDisplayName(fullName: string | null, email: string): string {
+  return fullName?.trim() || email;
+}
+
+const CLIENT_BAR_COLORS = [
+  "#7c3aed",
+  "#4f46e5",
+  "#0ea5e9",
+  "#10b981",
+  "#f59e0b",
+  "#f43f5e",
+  "#6366f1",
+  "#14b8a6",
+];
+
 type AnalyticsViewProps = {
   fromKey: string;
   toKey: string;
-  data: AnalyticsData;
   importCasesData: ImportCasesAnalyticsData;
+  clientsData: ClientsAnalyticsData;
 };
 
 export function AnalyticsView({
   fromKey,
   toKey,
-  data,
   importCasesData,
+  clientsData,
 }: AnalyticsViewProps) {
-  const uploadSeries = buildDateRangeUploadSeries(
-    data.uploadsByDay,
-    new Date(`${fromKey}T00:00:00`),
-    new Date(`${toKey}T00:00:00`),
-  );
   const importCaseSeries = buildDateRangeUploadSeries(
     importCasesData.casesByDay,
     new Date(`${fromKey}T00:00:00`),
     new Date(`${toKey}T00:00:00`),
   );
-  const periodTotal = uploadSeries.reduce((s, d) => s + d.count, 0);
+  const clientsSeries = buildDateRangeUploadSeries(
+    clientsData.clientsByDay,
+    new Date(`${fromKey}T00:00:00`),
+    new Date(`${toKey}T00:00:00`),
+  );
   const importCasePeriodTotal = importCaseSeries.reduce(
     (s, d) => s + d.count,
     0,
   );
-  const completionRate =
-    data.totalCount > 0
-      ? Math.round((data.completedCount / data.totalCount) * 100)
-      : 0;
   const importCaseCompletionRate =
     importCasesData.totalCount > 0
       ? Math.round(
           (importCasesData.completedCount / importCasesData.totalCount) * 100,
         )
       : 0;
+  const clientAdoptionRate =
+    clientsData.totalClients > 0
+      ? Math.round(
+          (clientsData.activeClientsInRange / clientsData.totalClients) * 100,
+        )
+      : 0;
   const rangeLabel = formatRangeLabel(fromKey, toKey);
 
-  const fileTypeRows = data.fileTypeBreakdown.map((r) => ({
-    label: FILE_TYPE_LABELS[r.fileType] ?? r.fileType.toUpperCase(),
-    count: r.count,
-    color: FILE_TYPE_COLORS[r.fileType] ?? "#94a3b8",
+  const topClientRows = clientsData.topClients.map((c, i) => ({
+    label: clientDisplayName(c.fullName, c.email),
+    count: c.casesInRange,
+    color: CLIENT_BAR_COLORS[i % CLIENT_BAR_COLORS.length],
   }));
 
-  const modeRows = data.modeBreakdown.map((r) => ({
-    label: r.mode === "pre_coded" ? "Pre-coded HS" : "AI classification",
-    count: r.count,
-    color: r.mode === "pre_coded" ? "#0ea5e9" : "#6366f1",
-  }));
+  const engagementRows = [
+    {
+      label: "Active this period",
+      count: clientsData.activeClientsInRange,
+      color: "#7c3aed",
+    },
+    {
+      label: "No cases in range",
+      count: clientsData.clientsWithoutCases,
+      color: "#94a3b8",
+    },
+  ].filter((r) => r.count > 0);
+
+  const caseCoverageRows = [
+    {
+      label: "Linked to a client",
+      count: clientsData.casesWithClient,
+      color: "#4f46e5",
+    },
+    {
+      label: "Unassigned",
+      count: clientsData.casesWithoutClient,
+      color: "#f59e0b",
+    },
+  ].filter((r) => r.count > 0);
 
   return (
     <div className="w-full min-w-0 space-y-6">
@@ -145,11 +160,11 @@ export function AnalyticsView({
             Analytics
           </h1>
           <p className="mt-1.5 text-sm text-slate-500">
-            {rangeLabel} — import cases, uploads, classification outcomes, and
-            file breakdowns.
+            {rangeLabel} — import case volume, client usage, and operational
+            impact across Impact Logistics.
           </p>
 
-          <div className="mt-5 grid grid-cols-2 gap-3 sm:max-w-2xl sm:grid-cols-4">
+          <div className="mt-5 grid grid-cols-2 gap-3 sm:max-w-3xl sm:grid-cols-4">
             <div className="rounded-2xl border border-slate-200/60 bg-white/80 px-4 py-3">
               <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
                 Import cases
@@ -168,18 +183,18 @@ export function AnalyticsView({
             </div>
             <div className="rounded-2xl border border-slate-200/60 bg-white/80 px-4 py-3">
               <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                Doc uploads
+                Clients
               </p>
               <p className="mt-0.5 text-xl font-bold tabular-nums text-indigo-700">
-                {periodTotal}
+                {clientsData.totalClients}
               </p>
             </div>
             <div className="rounded-2xl border border-slate-200/60 bg-white/80 px-4 py-3">
               <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                Doc completion
+                Client adoption
               </p>
               <p className="mt-0.5 text-xl font-bold tabular-nums text-emerald-700">
-                {completionRate}%
+                {clientAdoptionRate}%
               </p>
             </div>
           </div>
@@ -188,6 +203,7 @@ export function AnalyticsView({
 
       <AnalyticsDateFilter from={fromKey} to={toKey} />
 
+      {/* Import cases */}
       <div>
         <div className="mb-4 flex items-center justify-between gap-3">
           <div>
@@ -309,7 +325,8 @@ export function AnalyticsView({
               <DashTableEmpty colSpan={6} className="p-0">
                 <div className="flex flex-col items-center justify-center px-6 py-14 text-center">
                   <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-100 text-slate-400">
-                    <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
+                    <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                      <title>No import cases</title>
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
                     </svg>
                   </div>
@@ -339,7 +356,8 @@ export function AnalyticsView({
                   <DashTd align="right">
                     <DashTableAction href={`/dashboard/import-cases/${item.id}`}>
                       Open
-                      <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
+                      <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                        <title>Open case</title>
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                       </svg>
                     </DashTableAction>
@@ -351,110 +369,122 @@ export function AnalyticsView({
         </DashTable>
       </DashCard>
 
+      {/* Clients */}
       <div className="pt-2">
-        <div className="mb-4">
-          <h2 className="text-lg font-bold text-slate-900">Packing list uploads</h2>
-          <p className="text-sm text-slate-500">
-            Standalone document classification in the selected range
-          </p>
+        <div className="mb-4 flex items-center justify-between gap-3">
+          <div>
+            <h2 className="text-lg font-bold text-slate-900">
+              Client usage &amp; import impact
+            </h2>
+            <p className="text-sm text-slate-500">
+              Clients in the system and how they drive import case volume
+            </p>
+          </div>
+          {clientsData.totalClients > 0 ? (
+            <DashLink href="/dashboard/users">Manage clients →</DashLink>
+          ) : null}
         </div>
-      </div>
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <DashboardStatCard
-          label="Documents in range"
-          value={data.totalCount}
-          hint={`${periodTotal} uploads in chart`}
-          accent="blue"
-          icon={
-            <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
-              <title>Total</title>
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-            </svg>
-          }
-        />
-        <DashboardStatCard
-          label="Completed"
-          value={data.completedCount}
-          hint={`${completionRate}% completion rate`}
-          accent="green"
-          icon={
-            <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
-              <title>Completed</title>
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-          }
-        />
-        <DashboardStatCard
-          label="In progress"
-          value={data.inProgressCount}
-          hint="Still processing"
-          accent="violet"
-          icon={
-            <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
-              <title>In progress</title>
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-          }
-        />
-        <DashboardStatCard
-          label="Failed"
-          value={data.failedCount}
-          hint={data.failedCount > 0 ? "Review required" : "No failures"}
-          accent={data.failedCount > 0 ? "red" : "default"}
-          icon={
-            <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
-              <title>Failed</title>
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-          }
-        />
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          <DashboardStatCard
+            label="Clients in system"
+            value={clientsData.totalClients}
+            hint={`${clientsData.newClientsInRange} new in range`}
+            accent="violet"
+            icon={
+              <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
+                <title>Clients</title>
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17 20h5v-2a4 4 0 00-4-4h-1m-4 6v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2h5m4 0H9m4-10a4 4 0 11-8 0 4 4 0 018 0zm10 0a4 4 0 11-8 0 4 4 0 018 0z" />
+              </svg>
+            }
+          />
+          <DashboardStatCard
+            label="Active clients"
+            value={clientsData.activeClientsInRange}
+            hint={`${clientAdoptionRate}% of all clients`}
+            accent="green"
+            icon={
+              <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
+                <title>Active</title>
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+              </svg>
+            }
+          />
+          <DashboardStatCard
+            label="Avg cases / client"
+            value={clientsData.avgCasesPerActiveClient}
+            hint={`${clientsData.casesWithClient} linked cases`}
+            accent="blue"
+            icon={
+              <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
+                <title>Average</title>
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z" />
+              </svg>
+            }
+          />
+          <DashboardStatCard
+            label="Invoice value"
+            value={formatMoney(clientsData.totalInvoiceValue)}
+            hint="From client-linked cases"
+            accent="amber"
+            icon={
+              <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
+                <title>Invoice</title>
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+            }
+          />
+        </div>
       </div>
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-5">
         <DashCard className="lg:col-span-3">
           <DashCardHeader
-            title="Upload volume"
+            title="New clients over time"
             action={
               <span className="rounded-full bg-indigo-50 px-2.5 py-1 text-xs font-semibold text-indigo-700">
-                {uploadSeries.length > 14 ? "Weekly" : "Daily"}
+                {clientsSeries.length > 14 ? "Weekly" : "Daily"}
               </span>
             }
           />
           <div className="overflow-x-auto px-5 py-5 sm:px-6 sm:pb-6">
             <DashboardUploadsChart
-              data={uploadSeries}
-              granularity={uploadSeries.length > 14 ? "weekly" : "daily"}
+              data={clientsSeries}
+              granularity={clientsSeries.length > 14 ? "weekly" : "daily"}
             />
           </div>
         </DashCard>
 
         <DashCard className="lg:col-span-2">
-          <DashCardHeader title="Status breakdown" />
+          <DashCardHeader title="Client engagement" />
           <div className="px-5 py-5 sm:px-6 sm:pb-6">
-            <DashboardStatusChart items={data.statusBreakdown} />
+            <AnalyticsBreakdownBars
+              title="Who is using imports"
+              rows={engagementRows}
+              emptyMessage="No clients in the system yet."
+            />
           </div>
         </DashCard>
       </div>
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
         <DashCard>
-          <DashCardHeader title="File types" />
+          <DashCardHeader title="Top clients by import cases" />
           <div className="px-5 py-5 sm:px-6 sm:pb-6">
             <AnalyticsBreakdownBars
-              title="By format"
-              rows={fileTypeRows}
-              emptyMessage="No uploads in this date range."
+              title="Cases in range"
+              rows={topClientRows}
+              emptyMessage="No client-linked import cases in this range."
             />
           </div>
         </DashCard>
         <DashCard>
-          <DashCardHeader title="Classification mode" />
+          <DashCardHeader title="Case ↔ client coverage" />
           <div className="px-5 py-5 sm:px-6 sm:pb-6">
             <AnalyticsBreakdownBars
-              title="By mode"
-              rows={modeRows}
-              emptyMessage="No classification data in this range."
+              title="Assignment"
+              rows={caseCoverageRows}
+              emptyMessage="No import cases in this range."
             />
           </div>
         </DashCard>
@@ -462,82 +492,113 @@ export function AnalyticsView({
 
       <DashCard>
         <DashCardHeader
-          title="Documents in selected range"
+          title="Clients driving import volume"
           action={
-            data.recentInRange.length > 0 ? (
-              <DashLink href="/dashboard/history">Full history →</DashLink>
+            clientsData.topClients.length > 0 ? (
+              <DashLink href="/dashboard/import-cases">View cases →</DashLink>
             ) : undefined
           }
         />
         <DashTable>
           <DashTableHead>
             <DashTableHeaderRow>
-              <DashTh>File</DashTh>
-              <DashTh className="w-24">Type</DashTh>
-              <DashTh className="w-28">Date</DashTh>
-              <DashTh className="w-32">Status</DashTh>
-              <DashTh align="right" className="w-20">
-                Action
-              </DashTh>
+              <DashTh>Client</DashTh>
+              <DashTh>Email</DashTh>
+              <DashTh className="w-24">Cases</DashTh>
+              <DashTh className="w-28">Completed</DashTh>
+              <DashTh className="w-28">In progress</DashTh>
+              <DashTh className="w-28">Invoice Σ</DashTh>
+              <DashTh className="w-28">Last case</DashTh>
             </DashTableHeaderRow>
           </DashTableHead>
           <DashTbody>
-            {data.recentInRange.length === 0 ? (
-              <DashTableEmpty colSpan={5} className="p-0">
+            {clientsData.topClients.length === 0 ? (
+              <DashTableEmpty colSpan={7} className="p-0">
                 <div className="flex flex-col items-center justify-center px-6 py-14 text-center">
                   <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-100 text-slate-400">
-                    <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                    <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                      <title>No active clients</title>
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17 20h5v-2a4 4 0 00-4-4h-1m-4 6v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2h5m4 0H9m4-10a4 4 0 11-8 0 4 4 0 018 0zm10 0a4 4 0 11-8 0 4 4 0 018 0z" />
                     </svg>
                   </div>
-                  <p className="font-semibold text-slate-800">No documents in this range</p>
+                  <p className="font-semibold text-slate-800">
+                    No active clients in this range
+                  </p>
                   <p className="mt-1 text-sm text-slate-500">
-                    Try expanding the date filter or upload a new packing list.
+                    Invite clients and link them to import cases to see usage
+                    impact here.
                   </p>
                 </div>
               </DashTableEmpty>
             ) : (
-              data.recentInRange.map((doc) => {
-                const ft = doc.fileType ?? "";
-                const typeBadge =
-                  FILE_TYPE_BADGE[ft] ??
-                  "bg-slate-50 text-slate-600 border-slate-200/80";
-                return (
-                  <DashTr key={doc.id}>
-                    <DashTd className="max-w-[200px] truncate font-semibold text-gray-900 sm:max-w-md">
-                      {doc.originalFileName ?? "—"}
-                    </DashTd>
-                    <DashTd>
-                      <span
-                        className={`inline-flex rounded-lg border px-2 py-0.5 text-[11px] font-bold uppercase tracking-wide ${typeBadge}`}
-                      >
-                        {FILE_TYPE_LABELS[ft] ?? ft ?? "—"}
-                      </span>
-                    </DashTd>
-                    <DashTd muted nowrap>
-                      {formatDocDate(doc.createdAt)}
-                    </DashTd>
-                    <DashTd>
-                      <StatusBadge
-                        status={doc.status}
-                        label={formatStatus(doc.status)}
-                      />
-                    </DashTd>
-                    <DashTd align="right">
-                      <DashTableAction href={`/dashboard/documents/${doc.id}`}>
-                        View
-                        <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                        </svg>
-                      </DashTableAction>
-                    </DashTd>
-                  </DashTr>
-                );
-              })
+              clientsData.topClients.map((client) => (
+                <DashTr key={client.id}>
+                  <DashTd className="max-w-[180px] truncate font-semibold text-gray-900 sm:max-w-xs">
+                    {clientDisplayName(client.fullName, client.email)}
+                  </DashTd>
+                  <DashTd muted className="max-w-[200px] truncate">
+                    {client.email}
+                  </DashTd>
+                  <DashTd className="tabular-nums font-semibold text-slate-900">
+                    {client.casesInRange}
+                  </DashTd>
+                  <DashTd className="tabular-nums text-emerald-700">
+                    {client.completedCases}
+                  </DashTd>
+                  <DashTd className="tabular-nums text-indigo-700">
+                    {client.inProgressCases}
+                  </DashTd>
+                  <DashTd className="tabular-nums">
+                    {formatMoney(client.invoiceTotalSum)}
+                  </DashTd>
+                  <DashTd muted nowrap>
+                    {formatDocDate(client.lastCaseAt)}
+                  </DashTd>
+                </DashTr>
+              ))
             )}
           </DashTbody>
         </DashTable>
       </DashCard>
+
+      {clientsData.totalClients > 0 && clientsData.topClients.length === 0 ? (
+        <DashCard>
+          <DashCardHeader title="All clients in system" />
+          <DashTable>
+            <DashTableHead>
+              <DashTableHeaderRow>
+                <DashTh>Client</DashTh>
+                <DashTh>Email</DashTh>
+                <DashTh className="w-28">Joined</DashTh>
+                <DashTh className="w-28">Status</DashTh>
+                <DashTh className="w-24">Cases</DashTh>
+              </DashTableHeaderRow>
+            </DashTableHead>
+            <DashTbody>
+              {clientsData.recentClients.map((client) => (
+                <DashTr key={client.id}>
+                  <DashTd className="font-semibold text-gray-900">
+                    {clientDisplayName(client.fullName, client.email)}
+                  </DashTd>
+                  <DashTd muted>{client.email}</DashTd>
+                  <DashTd muted nowrap>
+                    {formatDocDate(client.createdAt)}
+                  </DashTd>
+                  <DashTd>
+                    <StatusBadge
+                      status={client.status}
+                      label={
+                        client.status === "active" ? "Active" : client.status
+                      }
+                    />
+                  </DashTd>
+                  <DashTd className="tabular-nums">{client.casesInRange}</DashTd>
+                </DashTr>
+              ))}
+            </DashTbody>
+          </DashTable>
+        </DashCard>
+      ) : null}
     </div>
   );
 }

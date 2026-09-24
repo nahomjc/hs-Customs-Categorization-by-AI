@@ -1,7 +1,7 @@
 import { AnalyticsView } from "@/components/dashboard/AnalyticsView";
 import { clampPreferencesForRole } from "@/lib/auth/settings-meta";
 import { getSessionUserProfile } from "@/lib/auth/require-admin";
-import { fetchAnalytics } from "@/lib/dashboard-analytics";
+import { fetchClientsAnalytics } from "@/lib/clients-analytics";
 import { parseAnalyticsRange } from "@/lib/dashboard-analytics-utils";
 import { fetchImportCasesAnalytics } from "@/lib/import-cases-analytics";
 import { getTenantId } from "@/lib/import-cases/queries";
@@ -28,17 +28,17 @@ export default async function AnalyticsPage({
     defaultPreset,
   });
   const tenantId = getTenantId();
-  const [data, importCasesData] = await Promise.all([
-    fetchAnalytics(from, to),
+  const [importCasesData, clientsData] = await Promise.all([
     fetchImportCasesAnalytics(tenantId, from, to),
+    fetchClientsAnalytics(tenantId, from, to),
   ]);
 
   return (
     <AnalyticsView
       fromKey={fromKey}
       toKey={toKey}
-      data={data}
       importCasesData={importCasesData}
+      clientsData={clientsData}
     />
   );
 }

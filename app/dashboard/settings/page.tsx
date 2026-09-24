@@ -32,7 +32,7 @@ export default async function SettingsPage() {
   );
 
   return (
-    <div className="mx-auto w-full max-w-3xl space-y-8">
+    <div className="w-full min-w-0 space-y-8">
       <PageHeader
         title="Settings"
         description={

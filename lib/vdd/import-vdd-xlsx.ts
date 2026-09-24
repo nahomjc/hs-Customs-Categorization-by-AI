@@ -59,6 +59,8 @@ export type VddParseResult = {
   headers: string[];
   detectedMappings: VddColumnMappings;
   effectiveMappings: VddColumnMappings;
+  /** Custom field key → Excel header used for this parse. */
+  customFieldMappings: Record<string, string>;
   extraHeaders: string[];
   totalDataRows: number;
   validRows: VddParsedRecord[];
@@ -173,6 +175,7 @@ function emptyParseResult(
     headers: [],
     detectedMappings: {},
     effectiveMappings: {},
+    customFieldMappings: {},
     extraHeaders: [],
     totalDataRows: 0,
     validRows: [],
@@ -180,6 +183,50 @@ function emptyParseResult(
     previewRows: [],
     ...partial,
   };
+}
+
+function detectCustomFieldMappings(
+  headers: string[],
+  customFields: Array<{ fieldKey: string; label: string }>,
+  overrides?: Record<string, string>,
+): Record<string, string> {
+  const result: Record<string, string> = { ...(overrides ?? {}) };
+  const headerByNorm = new Map(
+    headers.filter(Boolean).map((h) => [h.trim().toLowerCase(), h]),
+  );
+
+  for (const field of customFields) {
+    if (result[field.fieldKey] && headers.includes(result[field.fieldKey])) {
+      continue;
+    }
+    const byLabel = headerByNorm.get(field.label.trim().toLowerCase());
+    const byKey = headerByNorm.get(field.fieldKey.trim().toLowerCase());
+    const hit = byLabel ?? byKey;
+    if (hit) result[field.fieldKey] = hit;
+  }
+
+  // Drop mappings pointing at missing headers
+  for (const [key, header] of Object.entries(result)) {
+    if (!header || !headers.includes(header)) delete result[key];
+  }
+  return result;
+}
+
+function applyCustomFieldAttributes(
+  rawRow: Record<string, string>,
+  extras: Record<string, string>,
+  customFieldMappings: Record<string, string>,
+): Record<string, string> {
+  const out = { ...extras };
+  for (const [fieldKey, header] of Object.entries(customFieldMappings)) {
+    const value = (rawRow[header] ?? "").trim();
+    if (value) out[fieldKey] = value;
+    // Prefer canonical key over raw Excel header when both exist
+    if (header !== fieldKey && out[header] !== undefined && out[fieldKey]) {
+      delete out[header];
+    }
+  }
+  return out;
 }
 
 function parseDataRow(
@@ -360,6 +407,13 @@ function parseDataRow(
 export type ParseVddWorkbookOptions = {
   sheetName?: string;
   columnMappings?: VddColumnMappings;
+  /**
+   * Map tenant custom field keys → Excel header names.
+   * Values are stored under extraAttributes[fieldKey].
+   */
+  customFieldMappings?: Record<string, string>;
+  /** Optional labels for auto-detecting custom fields by header name. */
+  customFields?: Array<{ fieldKey: string; label: string }>;
   previewLimit?: number;
 };
 
@@ -412,7 +466,16 @@ export function parseVddWorkbookBuffer(
   }
 
   const nonEmptyHeaders = headers.filter(Boolean);
-  const extraHeaders = computeExtraHeaders(nonEmptyHeaders, effectiveMappings);
+  const customFieldMappings = detectCustomFieldMappings(
+    nonEmptyHeaders,
+    options.customFields ?? [],
+    options.customFieldMappings,
+  );
+  const mappedCustomHeaders = new Set(Object.values(customFieldMappings));
+  const extraHeaders = computeExtraHeaders(
+    nonEmptyHeaders,
+    effectiveMappings,
+  ).filter((h) => !mappedCustomHeaders.has(h));
 
   const validRows: VddParsedRecord[] = [];
   const invalidRows: VddInvalidRow[] = [];
@@ -436,6 +499,11 @@ export function parseVddWorkbookBuffer(
     );
 
     if (valid) {
+      valid.extraAttributes = applyCustomFieldAttributes(
+        rawRow,
+        valid.extraAttributes,
+        customFieldMappings,
+      );
       validRows.push(valid);
       if (previewRows.length < previewLimit) {
         previewRows.push({
@@ -482,7 +550,11 @@ export function parseVddWorkbookBuffer(
                 "commercial_description",
               ) || null,
           },
-          extraAttributes: buildExtraAttributes(rawRow, extraHeaders),
+          extraAttributes: applyCustomFieldAttributes(
+            rawRow,
+            buildExtraAttributes(rawRow, extraHeaders),
+            customFieldMappings,
+          ),
           dataQualityFlags: [],
         });
       }
@@ -495,6 +567,7 @@ export function parseVddWorkbookBuffer(
     headers: nonEmptyHeaders,
     detectedMappings,
     effectiveMappings,
+    customFieldMappings,
     extraHeaders,
     totalDataRows: validRows.length + invalidRows.length,
     validRows,

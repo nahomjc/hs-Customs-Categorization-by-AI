@@ -1,12 +1,24 @@
-import type { DocumentCheckRow } from "@/db/schema/documentChecks";
 import type { ImportCaseDocumentRow } from "@/db/schema/importCaseDocuments";
 import type { ProductClassificationBundle } from "./classification-queries";
 import type { GroupingWithProducts } from "./grouping-queries";
 import type { CaseProductWithSources } from "./product-queries";
-import { WIZARD_STEPS, type WizardStepId } from "./wizard-steps";
+import {
+  getWizardStepIndex,
+  WIZARD_STEPS,
+  type WizardStepId,
+} from "./wizard-steps";
 
 type InvoiceLine = { line: { id: string; isReviewed: boolean } };
 type PackingLine = { line: { id: string; isReviewed: boolean } };
+
+export type WizardCompletionContext = {
+  documents: ImportCaseDocumentRow[];
+  invoiceLines: InvoiceLine[];
+  packingLines: PackingLine[];
+  products: CaseProductWithSources[];
+  classifications: ProductClassificationBundle[];
+  groupings: GroupingWithProducts[];
+};
 
 function allInvoiceLinesReviewed(lines: InvoiceLine[]): boolean {
   return lines.length > 0 && lines.every((row) => row.line.isReviewed);
@@ -18,14 +30,7 @@ function allPackingLinesReviewed(lines: PackingLine[]): boolean {
 
 export function isWizardStepComplete(
   stepId: WizardStepId,
-  ctx: {
-    documents: ImportCaseDocumentRow[];
-    invoiceLines: InvoiceLine[];
-    packingLines: PackingLine[];
-    products: CaseProductWithSources[];
-    classifications: ProductClassificationBundle[];
-    groupings: GroupingWithProducts[];
-  },
+  ctx: WizardCompletionContext,
 ): boolean {
   const hasInvoice = ctx.documents.some(
     (d) =>
@@ -79,14 +84,27 @@ export function isWizardStepComplete(
   }
 }
 
-export function getWorkflowProgressPercent(ctx: {
-  documents: ImportCaseDocumentRow[];
-  invoiceLines: InvoiceLine[];
-  packingLines: PackingLine[];
-  products: CaseProductWithSources[];
-  classifications: ProductClassificationBundle[];
-  groupings: GroupingWithProducts[];
-}): number {
+/**
+ * A step is unlocked when every prior step is complete.
+ * The first incomplete step is always reachable; later ones stay locked.
+ */
+export function isWizardStepUnlocked(
+  stepId: WizardStepId,
+  ctx: WizardCompletionContext,
+): boolean {
+  const index = getWizardStepIndex(stepId);
+  if (index < 0) return false;
+  for (let i = 0; i < index; i++) {
+    if (!isWizardStepComplete(WIZARD_STEPS[i].id, ctx)) {
+      return false;
+    }
+  }
+  return true;
+}
+
+export function getWorkflowProgressPercent(
+  ctx: WizardCompletionContext,
+): number {
   const completed = WIZARD_STEPS.filter((step) =>
     isWizardStepComplete(step.id, ctx),
   ).length;
@@ -97,14 +115,9 @@ export function getWorkflowProgressPercent(ctx: {
  * First incomplete unlocked step — used when opening a case with no ?step=.
  * If every step is complete, returns the last step (case-history).
  */
-export function getCurrentWizardStep(ctx: {
-  documents: ImportCaseDocumentRow[];
-  invoiceLines: InvoiceLine[];
-  packingLines: PackingLine[];
-  products: CaseProductWithSources[];
-  classifications: ProductClassificationBundle[];
-  groupings: GroupingWithProducts[];
-}): WizardStepId {
+export function getCurrentWizardStep(
+  ctx: WizardCompletionContext,
+): WizardStepId {
   for (const step of WIZARD_STEPS) {
     if (!isWizardStepComplete(step.id, ctx)) {
       return step.id;

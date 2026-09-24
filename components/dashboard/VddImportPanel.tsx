@@ -22,6 +22,7 @@ import {
   Dialog,
   DialogContent,
   DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
@@ -52,6 +53,8 @@ type PreviewResponse = {
   qualityFlaggedCount: number;
   extraHeaders?: string[];
   extraColumnCount?: number;
+  customFieldMappings?: Record<string, string>;
+  customFields?: Array<{ fieldKey: string; label: string }>;
   previewRows: PreviewRow[];
   invalidSample: Array<{ sourceRowNumber: number; reasons: string[] }>;
   disclaimer: string;
@@ -78,6 +81,17 @@ type ImportSummary = {
   validRows: number;
   invalidRows: number;
   qualityFlaggedCount: number;
+  inserted?: number;
+  updated?: number;
+  skippedDuplicates?: number;
+};
+
+type CustomField = {
+  id: string;
+  fieldKey: string;
+  label: string;
+  valueType: string;
+  createdAt: string;
 };
 
 type StoredRecord = {
@@ -134,9 +148,9 @@ function SortMark({
   active: boolean;
   order: "asc" | "desc";
 }) {
-  if (!active) return <span className="ml-1 text-slate-300">â†•</span>;
+  if (!active) return <span className="ml-1 text-slate-300">↕</span>;
   return (
-    <span className="ml-1 text-indigo-600">{order === "asc" ? "â†‘" : "â†“"}</span>
+    <span className="ml-1 text-indigo-600">{order === "asc" ? "↑" : "↓"}</span>
   );
 }
 
@@ -160,11 +174,13 @@ function RecordsTableBody({
   rows,
   showFileColumn,
   emptyColSpan,
+  customFields = [],
 }: {
   loading: boolean;
   rows: StoredRecord[];
   showFileColumn: boolean;
   emptyColSpan: number;
+  customFields?: CustomField[];
 }) {
   if (!loading && rows.length === 0) {
     return (
@@ -178,12 +194,15 @@ function RecordsTableBody({
     <>
       {rows.map((row) => {
         const extras = row.extraAttributes ?? {};
-        const extraCount = Object.keys(extras).length;
+        const knownKeys = new Set(customFields.map((f) => f.fieldKey));
+        const leftoverEntries = Object.entries(extras).filter(
+          ([k]) => !knownKeys.has(k),
+        );
         return (
           <DashTr key={row.id}>
             {showFileColumn && (
               <DashTd>
-                <span className="line-clamp-2 max-w-[10rem] text-xs text-slate-600">
+                <span className="line-clamp-2 max-w-40 text-xs text-slate-600">
                   {row.sourceFileName ?? "—"}
                 </span>
               </DashTd>
@@ -193,7 +212,7 @@ function RecordsTableBody({
               <span className="font-mono text-sm">{row.hsCode}</span>
             </DashTd>
             <DashTd>
-              <span className="line-clamp-2 max-w-[14rem]">
+              <span className="line-clamp-2 max-w-56">
                 {row.commonName ?? row.commercialDescription ?? "—"}
               </span>
             </DashTd>
@@ -202,21 +221,32 @@ function RecordsTableBody({
             <DashTd>{row.originCode ?? row.countryName ?? "—"}</DashTd>
             <DashTd>{row.declaredUnitPrice ?? "—"}</DashTd>
             <DashTd>{row.currencyCode}</DashTd>
+            {customFields.map((f) => (
+              <DashTd key={f.fieldKey}>
+                <span className="line-clamp-2 max-w-40 text-xs text-slate-700">
+                  {extras[f.fieldKey]?.trim() || "—"}
+                </span>
+              </DashTd>
+            ))}
             <DashTd>
-              {extraCount === 0 ? (
+              {leftoverEntries.length === 0 ? (
                 <span className="text-slate-400">—</span>
               ) : (
                 <span
-                  className="line-clamp-2 max-w-[16rem] text-xs text-slate-700"
-                  title={formatExtraAttributes(extras)}
+                  className="line-clamp-2 max-w-56 text-xs text-slate-700"
+                  title={formatExtraAttributes(
+                    Object.fromEntries(leftoverEntries),
+                  )}
                 >
                   <span className="mr-1 inline-flex rounded-full bg-indigo-50 px-1.5 py-0.5 text-[10px] font-semibold text-indigo-700">
-                    +{extraCount}
+                    +{leftoverEntries.length}
                   </span>
-                  {formatExtraAttributes(extras)}
+                  {formatExtraAttributes(Object.fromEntries(leftoverEntries))}
                 </span>
               )}
             </DashTd>
+            {/* Spacer cell under the header "+" add-column control */}
+            <DashTd />
           </DashTr>
         );
       })}
@@ -243,6 +273,13 @@ export function VddImportPanel() {
   const [sheetNames, setSheetNames] = useState<string[]>([]);
   const [headers, setHeaders] = useState<string[]>([]);
   const [mappings, setMappings] = useState<VddColumnMappings>({});
+  const [customFieldMappings, setCustomFieldMappings] = useState<
+    Record<string, string>
+  >({});
+  const [customFields, setCustomFields] = useState<CustomField[]>([]);
+  const [newColumnLabel, setNewColumnLabel] = useState("");
+  const [addingColumn, setAddingColumn] = useState(false);
+  const [addColumnModalOpen, setAddColumnModalOpen] = useState(false);
   const [preview, setPreview] = useState<PreviewResponse | null>(null);
   const [batches, setBatches] = useState<BatchRow[]>([]);
   const [previewing, setPreviewing] = useState(false);
@@ -294,9 +331,23 @@ export function VddImportPanel() {
     }
   }, []);
 
+  const loadCustomFields = useCallback(async () => {
+    try {
+      const res = await fetch("/api/dashboard/vdd/custom-fields");
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Failed to load custom columns");
+      setCustomFields(data.fields ?? []);
+    } catch (e) {
+      toast.error(
+        e instanceof Error ? e.message : "Failed to load custom columns",
+      );
+    }
+  }, []);
+
   useEffect(() => {
     void loadBatches();
-  }, [loadBatches]);
+    void loadCustomFields();
+  }, [loadBatches, loadCustomFields]);
 
   useEffect(() => {
     const t = window.setTimeout(() => {
@@ -415,6 +466,7 @@ export function VddImportPanel() {
     setSheetNames([]);
     setHeaders([]);
     setMappings({});
+    setCustomFieldMappings({});
     setDragActive(false);
   };
 
@@ -443,6 +495,7 @@ export function VddImportPanel() {
     setSheetNames([]);
     setHeaders([]);
     setMappings({});
+    setCustomFieldMappings({});
   };
 
   const buildFormData = () => {
@@ -458,7 +511,73 @@ export function VddImportPanel() {
     if (Object.keys(cleaned).length > 0) {
       form.append("columnMappings", JSON.stringify(cleaned));
     }
+    const cleanedCustom: Record<string, string> = {};
+    for (const field of customFields) {
+      const header = customFieldMappings[field.fieldKey];
+      if (header) cleanedCustom[field.fieldKey] = header;
+    }
+    if (Object.keys(cleanedCustom).length > 0) {
+      form.append("customFieldMappings", JSON.stringify(cleanedCustom));
+    }
     return form;
+  };
+
+  const addCustomColumn = async () => {
+    const label = newColumnLabel.trim();
+    if (!label) {
+      toast.error("Enter a column label");
+      return;
+    }
+    setAddingColumn(true);
+    try {
+      const res = await fetch("/api/dashboard/vdd/custom-fields", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ label }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Failed to add column");
+      setNewColumnLabel("");
+      setAddColumnModalOpen(false);
+      await loadCustomFields();
+      toast.success(`Added column “${data.field?.label ?? label}”`);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Failed to add column");
+    } finally {
+      setAddingColumn(false);
+    }
+  };
+
+  const openAddColumnModal = () => {
+    setNewColumnLabel("");
+    setAddColumnModalOpen(true);
+  };
+
+  const closeAddColumnModal = () => {
+    if (addingColumn) return;
+    setAddColumnModalOpen(false);
+    setNewColumnLabel("");
+  };
+
+  const deleteCustomColumn = async (id: string, label: string) => {
+    try {
+      const res = await fetch(
+        `/api/dashboard/vdd/custom-fields?id=${encodeURIComponent(id)}`,
+        { method: "DELETE" },
+      );
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Failed to delete column");
+      setCustomFieldMappings((prev) => {
+        const next = { ...prev };
+        const field = customFields.find((f) => f.id === id);
+        if (field) delete next[field.fieldKey];
+        return next;
+      });
+      await loadCustomFields();
+      toast.success(`Removed column “${label}”`);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Failed to delete column");
+    }
   };
 
   const runPreview = async () => {
@@ -480,6 +599,7 @@ export function VddImportPanel() {
       setSheetName(data.sheetName);
       setHeaders(data.headers);
       setMappings(data.effectiveMappings);
+      setCustomFieldMappings(data.customFieldMappings ?? {});
       toast.success(
         `Preview ready: ${data.validRowCount} valid / ${data.invalidRowCount} invalid`,
       );
@@ -530,8 +650,13 @@ export function VddImportPanel() {
         validRows: data.validRows,
         invalidRows: data.invalidRows,
         qualityFlaggedCount: data.qualityFlaggedCount ?? 0,
+        inserted: data.inserted,
+        updated: data.updated,
+        skippedDuplicates: data.skippedDuplicates,
       });
-      toast.success(`Imported ${data.validRows} VDD rows`);
+      toast.success(
+        `Import done: ${data.inserted ?? 0} new, ${data.updated ?? 0} enriched, ${data.skippedDuplicates ?? 0} skipped`,
+      );
       await loadBatches();
       setAllPage(1);
       await loadAllRecords();
@@ -554,6 +679,16 @@ export function VddImportPanel() {
     [mappings],
   );
 
+  const customMappingRows = useMemo(
+    () =>
+      customFields.map((f) => ({
+        key: f.fieldKey,
+        label: f.label,
+        value: customFieldMappings[f.fieldKey] ?? "",
+      })),
+    [customFields, customFieldMappings],
+  );
+
   const completedBatches = useMemo(
     () => batches.filter((b) => b.status === "completed"),
     [batches],
@@ -569,8 +704,68 @@ export function VddImportPanel() {
 
       <div className="rounded-2xl border border-amber-200/80 bg-amber-50/80 px-4 py-3 text-sm text-amber-950">
         VDD references support review only. They do not determine the final HS
-        code or customs value.
+        code or customs value. Re-imports skip exact duplicates and fill empty
+        fields on matching rows (same declaration/HS/brand/model — not “same HS
+        only”).
       </div>
+
+      <Dialog
+        open={addColumnModalOpen}
+        onOpenChange={(open) => {
+          if (open) openAddColumnModal();
+          else closeAddColumnModal();
+        }}
+      >
+        <DialogContent className="max-w-md gap-0 overflow-hidden p-0 sm:max-w-md">
+          <DialogHeader className="border-b border-slate-100 px-6 py-5 text-left">
+            <DialogTitle>Add custom column</DialogTitle>
+            <DialogDescription>
+              Register a new VDD field (for example from an expanded ECC
+              export). It will show up in import column mapping.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 px-6 py-5">
+            <label className="block text-sm">
+              <span className="mb-1 block font-medium text-slate-700">
+                Column label
+              </span>
+              <input
+                className={`${dashInputClass} w-full`}
+                placeholder="e.g. New Customs Flag"
+                value={newColumnLabel}
+                onChange={(e) => setNewColumnLabel(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    void addCustomColumn();
+                  }
+                }}
+              />
+            </label>
+            <p className="text-xs text-slate-500">
+              A machine key is generated from the label (e.g.{" "}
+              <span className="font-mono">new_customs_flag</span>).
+            </p>
+          </div>
+          <DialogFooter className="border-t border-slate-100 bg-slate-50/60 px-6 py-4">
+            <DashButton
+              type="button"
+              variant="secondary"
+              onClick={closeAddColumnModal}
+              disabled={addingColumn}
+            >
+              Cancel
+            </DashButton>
+            <DashButton
+              type="button"
+              onClick={() => void addCustomColumn()}
+              disabled={addingColumn || !newColumnLabel.trim()}
+            >
+              {addingColumn ? "Adding…" : "Add column"}
+            </DashButton>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <DashCard>
         <DashCardHeader
@@ -769,7 +964,62 @@ export function VddImportPanel() {
                         </button>
                       </DashTh>
                       <DashTh>Currency</DashTh>
+                      {customFields.map((f) => (
+                        <DashTh key={f.id}>
+                          <span className="inline-flex items-center gap-1.5">
+                            <span>{f.label}</span>
+                            <button
+                              type="button"
+                              onClick={() =>
+                                void deleteCustomColumn(f.id, f.label)
+                              }
+                              className="inline-flex h-5 w-5 items-center justify-center rounded text-slate-400 transition hover:bg-red-50 hover:text-red-600"
+                              aria-label={`Remove column ${f.label}`}
+                              title={`Remove ${f.label}`}
+                            >
+                              <svg
+                                className="h-3.5 w-3.5"
+                                fill="none"
+                                stroke="currentColor"
+                                viewBox="0 0 24 24"
+                                aria-hidden="true"
+                              >
+                                <path
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                  strokeWidth={2}
+                                  d="M6 18L18 6M6 6l12 12"
+                                />
+                              </svg>
+                            </button>
+                          </span>
+                        </DashTh>
+                      ))}
                       <DashTh>Extra</DashTh>
+                      <DashTh align="right">
+                        <button
+                          type="button"
+                          onClick={openAddColumnModal}
+                          className="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-700 transition hover:border-indigo-300 hover:bg-indigo-50 hover:text-indigo-700"
+                          aria-label="Add custom column"
+                          title="Add custom column"
+                        >
+                          <svg
+                            className="h-4 w-4"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                            aria-hidden="true"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M12 4v16m8-8H4"
+                            />
+                          </svg>
+                        </button>
+                      </DashTh>
                     </DashTableHeaderRow>
                   </DashTableHead>
                   <DashTbody>
@@ -777,7 +1027,8 @@ export function VddImportPanel() {
                       loading={loadingAll}
                       rows={allRows}
                       showFileColumn
-                      emptyColSpan={10}
+                      customFields={customFields}
+                      emptyColSpan={11 + customFields.length}
                     />
                   </DashTbody>
                 </DashTable>
@@ -1070,6 +1321,48 @@ export function VddImportPanel() {
                       </label>
                     ))}
                   </div>
+                  {customMappingRows.length > 0 && (
+                    <div className="mt-5">
+                      <h4 className="mb-2 text-sm font-semibold text-slate-900">
+                        Custom column mappings
+                      </h4>
+                      <p className="mb-3 text-sm text-slate-500">
+                        Map Excel headers to columns you added under Custom
+                        columns.
+                      </p>
+                      <div className="grid max-h-40 gap-3 overflow-y-auto sm:grid-cols-2">
+                        {customMappingRows.map(({ key, label, value }) => (
+                          <label key={key} className="block text-sm">
+                            <span className="mb-1 block font-medium text-slate-700">
+                              {label}
+                            </span>
+                            <select
+                              className={dashSelectClass}
+                              value={value}
+                              onChange={(e) => {
+                                const next = e.target.value;
+                                setCustomFieldMappings((prev) => {
+                                  const copy = { ...prev };
+                                  if (!next) delete copy[key];
+                                  else copy[key] = next;
+                                  return copy;
+                                });
+                                setPreview(null);
+                                setSummary(null);
+                              }}
+                            >
+                              <option value="">— Not mapped —</option>
+                              {headers.map((h) => (
+                                <option key={h} value={h}>
+                                  {h}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                   <p className="mt-3 text-sm text-slate-600">
                     Detected {Object.keys(preview.detectedMappings).length}{" "}
                     columns · {preview.validRowCount} valid ·{" "}

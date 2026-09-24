@@ -53,6 +53,8 @@ export const vddReferenceRecords = pgTable(
     rawRow: jsonb("raw_row"),
     extraAttributes: jsonb("extra_attributes").default({}).notNull(),
     dataQualityFlags: jsonb("data_quality_flags").default([]).notNull(),
+    /** Stable fingerprint for upsert/dedupe within a tenant. */
+    dedupeKey: varchar("dedupe_key", { length: 512 }),
     createdAt: timestamp("created_at", { withTimezone: true })
       .defaultNow()
       .notNull(),
@@ -76,6 +78,10 @@ export const vddReferenceRecords = pgTable(
     ),
     idxVddRefTenant: index("idx_vdd_reference_records_tenant").on(
       table.tenantId,
+    ),
+    idxVddRefDedupe: index("idx_vdd_reference_records_dedupe").on(
+      table.tenantId,
+      table.dedupeKey,
     ),
   }),
 );

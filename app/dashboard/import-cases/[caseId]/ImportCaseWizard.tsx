@@ -14,11 +14,11 @@ import type { CaseProductWithSources } from "@/lib/import-cases/product-queries"
 import {
   getCurrentWizardStep,
   isWizardStepComplete,
+  isWizardStepUnlocked,
 } from "@/lib/import-cases/workflow-progress";
 import {
   ACTIVE_WIZARD_STEPS,
   getWizardStepIndex,
-  isStepUnlocked,
   isWizardStepId,
   WIZARD_STEPS,
   type WizardStepId,
@@ -149,8 +149,13 @@ export function ImportCaseWizard({
     [completionCtx],
   );
 
+  const stepUnlocked = useCallback(
+    (stepId: WizardStepId) => isWizardStepUnlocked(stepId, completionCtx),
+    [completionCtx],
+  );
+
   const resolvedStep: WizardStepId =
-    stepParam && isWizardStepId(stepParam) && isStepUnlocked(stepParam)
+    stepParam && isWizardStepId(stepParam) && stepUnlocked(stepParam)
       ? stepParam
       : progressStep;
 
@@ -161,7 +166,7 @@ export function ImportCaseWizard({
 
   // Open on the furthest incomplete step when URL has no valid ?step=
   useEffect(() => {
-    if (stepParam && isWizardStepId(stepParam) && isStepUnlocked(stepParam)) {
+    if (stepParam && isWizardStepId(stepParam) && stepUnlocked(stepParam)) {
       setCurrentStep(stepParam);
       setVisitedSteps((prev) => new Set(prev).add(stepParam));
       return;
@@ -173,7 +178,7 @@ export function ImportCaseWizard({
       params.set("step", progressStep);
       router.replace(`?${params.toString()}`, { scroll: false });
     }
-  }, [stepParam, progressStep, router, searchParams]);
+  }, [stepParam, progressStep, router, searchParams, stepUnlocked]);
 
   const currentIndex = getWizardStepIndex(currentStep);
   const activeSteps = ACTIVE_WIZARD_STEPS;
@@ -196,19 +201,22 @@ export function ImportCaseWizard({
     (c) => c.product.humanVerified && c.classification?.isFinal,
   ).length;
 
+  const currentStepComplete = isWizardStepComplete(currentStep, completionCtx);
+
   const goToStep = useCallback(
     (stepId: WizardStepId) => {
-      if (!isStepUnlocked(stepId)) return;
+      if (!stepUnlocked(stepId)) return;
       setCurrentStep(stepId);
       setVisitedSteps((prev) => new Set(prev).add(stepId));
       const params = new URLSearchParams(searchParams.toString());
       params.set("step", stepId);
       router.replace(`?${params.toString()}`, { scroll: false });
     },
-    [router, searchParams],
+    [router, searchParams, stepUnlocked],
   );
 
   function goNext() {
+    if (!currentStepComplete) return;
     const idx = activeSteps.findIndex((s) => s.id === currentStep);
     if (idx >= 0 && idx < activeSteps.length - 1) {
       goToStep(activeSteps[idx + 1].id);
@@ -230,7 +238,7 @@ export function ImportCaseWizard({
   ).length;
 
   function stepStatus(stepId: WizardStepId, index: number): StepStatus {
-    if (!isStepUnlocked(stepId)) return "locked";
+    if (!stepUnlocked(stepId)) return "locked";
     if (stepId === currentStep) return "current";
     if (isWizardStepComplete(stepId, completionCtx)) return "complete";
     if (visitedSteps.has(stepId) || index < currentIndex) return "upcoming";
@@ -275,11 +283,12 @@ export function ImportCaseWizard({
         <ol className="relative flex w-full min-w-[720px] list-none sm:min-w-0">
           {WIZARD_STEPS.map((step, index) => {
             const status = stepStatus(step.id, index);
-            const unlocked = isStepUnlocked(step.id);
+            const unlocked = stepUnlocked(step.id);
             const segmentFirst = index === 0;
             const segmentLast = index === WIZARD_STEPS.length - 1;
             const isActive = status === "current";
             const isComplete = status === "complete";
+            const isLocked = status === "locked";
             const tip = 14;
 
             const segmentClass = isActive
@@ -307,9 +316,11 @@ export function ImportCaseWizard({
                   onClick={() => unlocked && goToStep(step.id)}
                   aria-current={isActive ? "step" : undefined}
                   title={
-                    stepBadge(step.id)
-                      ? `${step.label} — ${stepBadge(step.id)}`
-                      : step.description
+                    isLocked
+                      ? `${step.label} — locked until previous steps are finished`
+                      : stepBadge(step.id)
+                        ? `${step.label} — ${stepBadge(step.id)}`
+                        : step.description
                   }
                   className={`relative flex h-10 w-full items-center justify-center gap-1.5 px-3 text-center text-[11px] font-semibold leading-tight transition-all sm:h-11 sm:px-4 sm:text-xs ${segmentClass}`}
                   style={{
@@ -324,6 +335,8 @@ export function ImportCaseWizard({
                   <span className="relative z-10 flex max-w-full items-center justify-center gap-1 px-1">
                     {isComplete ? (
                       <CheckIcon className="hidden h-3 w-3 shrink-0 sm:block" />
+                    ) : isLocked ? (
+                      <LockIcon className="hidden h-3 w-3 shrink-0 sm:block" />
                     ) : isActive ? (
                       <span
                         className="hidden h-1.5 w-1.5 shrink-0 rounded-full bg-white sm:block"
@@ -341,7 +354,7 @@ export function ImportCaseWizard({
           })}
         </ol>
       </nav>
-      <div className="flex items-center gap-4 text-[11px] text-slate-500">
+      <div className="flex flex-wrap items-center gap-4 text-[11px] text-slate-500">
         <span className="inline-flex items-center gap-1.5">
           <span className="h-2.5 w-2.5 rounded-sm bg-[#1e3a8a]" aria-hidden />
           Current
@@ -354,12 +367,16 @@ export function ImportCaseWizard({
           <span className="h-2.5 w-2.5 rounded-sm bg-slate-200" aria-hidden />
           Upcoming
         </span>
+        <span className="inline-flex items-center gap-1.5">
+          <span className="h-2.5 w-2.5 rounded-sm bg-slate-50 ring-1 ring-slate-200" aria-hidden />
+          Locked
+        </span>
       </div>
 
       {/* Phase card */}
-      <div className="rounded-2xl border border-slate-200/80 bg-white px-5 py-5 sm:px-6 shadow-sm">
-        <div className="flex items-start gap-4">
-          <div className="hidden sm:flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-[#007bff] text-white shadow-sm">
+      <div className="overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-sm">
+        <div className="flex items-start gap-4 px-5 py-5 sm:px-6">
+          <div className="hidden h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-[#007bff] text-white shadow-sm sm:flex">
             <svg
               className="h-6 w-6"
               fill="none"
@@ -381,21 +398,32 @@ export function ImportCaseWizard({
               <p className="text-xs font-bold uppercase tracking-wider text-indigo-500">
                 Phase {currentMeta?.phase} · Step {currentIndex + 1}
               </p>
-              <span className="text-xs font-medium text-slate-400 tabular-nums">
+              <span className="text-xs font-medium tabular-nums text-slate-400">
                 {completedCount}/{WIZARD_STEPS.length} complete
               </span>
             </div>
             <h2 className="mt-1 text-xl font-bold text-slate-900">
               {currentMeta?.label}
             </h2>
-            <p className="mt-1 text-sm text-slate-500 leading-relaxed">
+            <p className="mt-1 text-sm leading-relaxed text-slate-500">
               {currentMeta?.description}
             </p>
           </div>
         </div>
+
+        <div className="h-1 w-full bg-slate-100" aria-hidden>
+          <div
+            className="h-full bg-[#007bff] transition-[width] duration-300 ease-out"
+            style={{
+              width: `${Math.round(
+                (completedCount / Math.max(WIZARD_STEPS.length, 1)) * 100,
+              )}%`,
+            }}
+          />
+        </div>
       </div>
 
-      {!isStepUnlocked(currentStep) ? (
+      {!stepUnlocked(currentStep) ? (
         <LockedStepPanel stepId={currentStep} />
       ) : (
         <>
@@ -468,27 +496,44 @@ export function ImportCaseWizard({
               />
             ) : null}
           </div>
+
+          {/* End-of-step actions (scroll destination after finishing work) */}
+          <div className="flex items-center justify-between gap-3 border-t border-slate-200/80 pt-5">
+            <DashButton
+              variant="secondary"
+              onClick={goBack}
+              disabled={isFirst}
+              className="min-w-[6.5rem]"
+            >
+              Back
+            </DashButton>
+            <div className="flex items-center gap-3">
+              {!isLastActive ? (
+                <span
+                  title={
+                    currentStepComplete
+                      ? undefined
+                      : "Finish this step before continuing"
+                  }
+                >
+                  <DashButton
+                    variant="primary"
+                    onClick={goNext}
+                    disabled={!currentStepComplete}
+                    className="min-w-[7.5rem]"
+                  >
+                    Continue
+                  </DashButton>
+                </span>
+              ) : (
+                <p className="px-2 text-sm font-medium text-emerald-700">
+                  Workflow complete — review case history above.
+                </p>
+              )}
+            </div>
+          </div>
         </>
       )}
-
-      {isStepUnlocked(currentStep) ? (
-        <div className="sticky bottom-4 z-20 dashboard-sticky-actions flex items-center justify-between gap-3 rounded-2xl border border-slate-200/80 bg-white/90 backdrop-blur-md px-4 py-3 shadow-lg shadow-slate-200/50">
-          <DashButton variant="secondary" onClick={goBack} disabled={isFirst}>
-            ← Back
-          </DashButton>
-          <div className="flex items-center gap-3">
-            {!isLastActive ? (
-              <DashButton variant="primary" onClick={goNext}>
-                Continue →
-              </DashButton>
-            ) : (
-              <p className="text-sm text-emerald-700 font-medium px-2">
-                Workflow complete — review case history above.
-              </p>
-            )}
-          </div>
-        </div>
-      ) : null}
     </div>
   );
 }
@@ -651,7 +696,10 @@ function LockedStepPanel({ stepId }: { stepId: WizardStepId }) {
           <LockIcon className="h-6 w-6 text-slate-400" />
         </div>
         <p className="font-semibold text-slate-800 text-lg">{step?.label}</p>
-        <p className="mt-2 text-sm max-w-md mx-auto">{step?.description}</p>
+        <p className="mt-2 text-sm max-w-md mx-auto">
+          This step is locked. Finish the previous steps first, then continue
+          here.
+        </p>
       </div>
     </DashCard>
   );

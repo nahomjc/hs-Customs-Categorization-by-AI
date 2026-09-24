@@ -28,4 +28,5 @@ export * from "./notificationLogs";
 export * from "./vddImportBatches";
 export * from "./vddReferenceRecords";
 export * from "./vddProductMatches";
+export * from "./vddCustomFields";
 export * from "./hsCodeSearchLogs";

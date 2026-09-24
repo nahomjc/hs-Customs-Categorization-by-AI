@@ -76,7 +76,3 @@ export function isWizardStepId(value: string): value is WizardStepId {
 export function getWizardStepIndex(stepId: WizardStepId): number {
   return WIZARD_STEPS.findIndex((s) => s.id === stepId);
 }
-
-export function isStepUnlocked(stepId: WizardStepId): boolean {
-  return WIZARD_STEPS.some((s) => s.id === stepId);
-}

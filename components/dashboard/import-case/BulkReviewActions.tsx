@@ -142,7 +142,8 @@ export function ConfirmBulkActionModal({
 
   const canConfirm =
     !loading &&
-    (!requireOverrideValue || overrideValue.trim().length > 0);
+    (!(showOverrideField && requireOverrideValue) ||
+      overrideValue.trim().length > 0);
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
@@ -285,7 +286,9 @@ export function BulkReviewToolbar({
           showOverrideField={action === "override" && Boolean(overrideField)}
           overrideLabel={overrideField?.label}
           overridePlaceholder={overrideField?.placeholder}
-          requireOverrideValue={overrideField?.required}
+          requireOverrideValue={
+            action === "override" && Boolean(overrideField?.required)
+          }
           onConfirm={onConfirm}
         />
       ) : null}
