@@ -703,7 +703,7 @@ export function HeroGlobeVisual({ reduced }: { reduced?: boolean }) {
       dpr = Math.min(1.75, window.devicePixelRatio || 1);
       // Slightly smaller icons on phones so they don't dominate the globe
       vehicleBoost =
-        rect.width < 480 ? 0.78 : rect.width < 768 ? 0.88 : 1;
+        rect.width < 480 ? 0.62 : rect.width < 768 ? 0.74 : 1;
       canvas.width = Math.max(1, Math.floor(rect.width * dpr));
       canvas.height = Math.max(1, Math.floor(rect.height * dpr));
       canvas.style.width = `${rect.width}px`;
