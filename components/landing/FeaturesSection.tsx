@@ -1,11 +1,7 @@
 "use client";
 
 import { useCallback, useState } from "react";
-import {
-  AnimatePresence,
-  motion,
-  useReducedMotion,
-} from "framer-motion";
+import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { LandingWrap } from "./LandingWrap";
 import { FadeInView, MotionSection, easeOut, fadeUp } from "./motion";
 
@@ -196,10 +192,13 @@ function FeatureCardStack() {
   const [activeIndex, setActiveIndex] = useState(0);
   const [direction, setDirection] = useState(0);
 
-  const goTo = useCallback((index: number) => {
-    setDirection(index > activeIndex ? 1 : -1);
-    setActiveIndex(index);
-  }, [activeIndex]);
+  const goTo = useCallback(
+    (index: number) => {
+      setDirection(index > activeIndex ? 1 : -1);
+      setActiveIndex(index);
+    },
+    [activeIndex],
+  );
 
   const goPrev = useCallback(() => {
     const next = (activeIndex - 1 + features.length) % features.length;
@@ -224,7 +223,9 @@ function FeatureCardStack() {
             Workflow capabilities
           </p>
           <p className="text-sm font-medium text-gray-500 tabular-nums">
-            <span className="text-gray-900">{String(activeIndex + 1).padStart(2, "0")}</span>
+            <span className="text-gray-900">
+              {String(activeIndex + 1).padStart(2, "0")}
+            </span>
             <span className="mx-1 text-gray-300">/</span>
             {String(features.length).padStart(2, "0")}
           </p>
@@ -266,7 +267,9 @@ function FeatureCardStack() {
                       >
                         {feature.title}
                       </p>
-                      <p className="text-xs text-gray-400 mt-0.5">{feature.tag}</p>
+                      <p className="text-xs text-gray-400 mt-0.5">
+                        {feature.tag}
+                      </p>
                     </div>
                   </div>
                 </button>
@@ -302,7 +305,9 @@ function FeatureCardStack() {
                 <motion.article
                   key={feature.title}
                   className={`absolute inset-x-0 top-0 mx-auto w-full max-w-[420px] ${
-                    isTop ? "cursor-grab active:cursor-grabbing" : "pointer-events-none"
+                    isTop
+                      ? "cursor-grab active:cursor-grabbing"
+                      : "pointer-events-none"
                   }`}
                   style={{ zIndex: VISIBLE_DEPTH - distance }}
                   animate={{
@@ -321,12 +326,15 @@ function FeatureCardStack() {
                   dragElastic={0.12}
                   onDragEnd={(_, info) => {
                     if (info.offset.x < -80 || info.velocity.x < -400) goNext();
-                    else if (info.offset.x > 80 || info.velocity.x > 400) goPrev();
+                    else if (info.offset.x > 80 || info.velocity.x > 400)
+                      goPrev();
                   }}
                 >
                   <div
                     className={`landing-float-card relative overflow-hidden rounded-2xl bg-white p-7 sm:p-8 h-[300px] sm:h-[320px] flex flex-col ${
-                      isTop ? "border border-gray-100" : "border border-gray-100/80"
+                      isTop
+                        ? "border border-gray-100"
+                        : "border border-gray-100/80"
                     }`}
                   >
                     <div
@@ -455,7 +463,7 @@ export function FeaturesSection() {
             Everything you need for HS workflows
           </h2>
           <p className="mt-4 text-gray-500 leading-relaxed">
-            From upload to grouped export — designed for speed, accuracy, and
+            From upload to grouped export , designed for speed, accuracy, and
             customs compliance.
           </p>
         </FadeInView>

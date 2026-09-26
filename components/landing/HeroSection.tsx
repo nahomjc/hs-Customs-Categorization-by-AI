@@ -110,14 +110,12 @@ export function HeroSection() {
           </div>
         </div>
 
-        {/* Globe fills right half and bleeds off edges */}
+        {/* Globe — centered on mobile; bleeds right half on desktop */}
         <motion.div
-          className="relative z-10 w-full lg:absolute lg:inset-y-0 lg:right-0 lg:w-[58%] xl:w-[55%] pointer-events-auto bg-transparent"
-          initial={reduced ? false : { opacity: 0, scale: 0.9, x: 40 }}
+          className="relative z-10 w-full flex justify-center lg:absolute lg:inset-y-0 lg:right-0 lg:w-[58%] xl:w-[55%] lg:block pointer-events-auto bg-transparent"
+          initial={reduced ? false : { opacity: 0, scale: 0.92 }}
           animate={
-            play
-              ? { opacity: 1, scale: 1, x: 0 }
-              : { opacity: 0, scale: 0.9, x: 40 }
+            play ? { opacity: 1, scale: 1 } : { opacity: 0, scale: 0.92 }
           }
           transition={{
             delay: play && !reduced ? 0.18 : 0,
@@ -125,7 +123,7 @@ export function HeroSection() {
             ease: [0.16, 1, 0.3, 1],
           }}
         >
-          <div className="relative h-[360px] sm:h-[440px] lg:h-full lg:min-h-full -mx-4 sm:mx-0 lg:-mr-[8%] lg:ml-[-6%] bg-transparent">
+          <div className="relative mx-auto h-[360px] w-full max-w-[420px] sm:h-[440px] sm:max-w-[520px] lg:mx-0 lg:h-full lg:min-h-full lg:max-w-none lg:-mr-[8%] lg:ml-[-6%] bg-transparent">
             <HeroGlobeVisual reduced={reduced} />
           </div>
         </motion.div>
