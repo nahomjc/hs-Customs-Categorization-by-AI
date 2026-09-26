@@ -200,7 +200,7 @@ const VEHICLES: RouteVehicle[] = [
     fromLon: ETH_HUB_LON,
     toLat: (51.5 * Math.PI) / 180,
     toLon: (-0.1 * Math.PI) / 180,
-    speed: 0.00016,
+    speed: 0.00028,
     phase: 0,
     altitude: 1.14,
     scale: 1.12,
@@ -213,7 +213,7 @@ const VEHICLES: RouteVehicle[] = [
     fromLon: ETH_HUB_LON,
     toLat: (25.2 * Math.PI) / 180,
     toLon: (55.3 * Math.PI) / 180,
-    speed: 0.0002,
+    speed: 0.00034,
     phase: 0.35,
     altitude: 1.13,
     scale: 1.05,
@@ -226,7 +226,7 @@ const VEHICLES: RouteVehicle[] = [
     fromLon: ETH_HUB_LON,
     toLat: (31.2 * Math.PI) / 180,
     toLon: (121.5 * Math.PI) / 180,
-    speed: 0.00012,
+    speed: 0.00022,
     phase: 0.7,
     altitude: 1.15,
     scale: 1,
@@ -239,7 +239,7 @@ const VEHICLES: RouteVehicle[] = [
     fromLon: ETH_HUB_LON,
     toLat: (40.7 * Math.PI) / 180,
     toLon: (-74 * Math.PI) / 180,
-    speed: 0.00011,
+    speed: 0.0002,
     phase: 1.15,
     altitude: 1.16,
     scale: 1.08,
@@ -252,7 +252,7 @@ const VEHICLES: RouteVehicle[] = [
     fromLon: ETH_HUB_LON,
     toLat: (-26.2 * Math.PI) / 180,
     toLon: (28.0 * Math.PI) / 180, // Johannesburg
-    speed: 0.00015,
+    speed: 0.00026,
     phase: 1.55,
     altitude: 1.13,
     scale: 0.98,
@@ -317,6 +317,11 @@ function lerpAngle(from: number, to: number, t: number) {
   while (diff > Math.PI) diff -= Math.PI * 2;
   while (diff < -Math.PI) diff += Math.PI * 2;
   return from + diff * t;
+}
+
+/** Soft ease for plane route progress — slows at hubs, glides in the middle */
+function easeInOutCubic(t: number) {
+  return t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2;
 }
 
 function smoothToward(
@@ -511,6 +516,12 @@ function drawShip(ctx: CanvasRenderingContext2D, scale: number, alpha: number) {
   ctx.fillStyle = "#0f172a";
   ctx.fillRect(s * 0.2, -s * 0.28, s * 0.2, s * 0.32);
 
+  // Chimney / funnel
+  ctx.fillStyle = "#0f172a";
+  ctx.fillRect(s * 0.08, -s * 0.42, s * 0.1, s * 0.3);
+  ctx.fillStyle = "#007bff";
+  ctx.fillRect(s * 0.08, -s * 0.42, s * 0.1, s * 0.06);
+
   // Brand waterline
   ctx.strokeStyle = "#007bff";
   ctx.lineWidth = Math.max(1, s * 0.07);
@@ -523,6 +534,48 @@ function drawShip(ctx: CanvasRenderingContext2D, scale: number, alpha: number) {
   // Tiny bridge window
   ctx.fillStyle = "#38bdf8";
   ctx.fillRect(s * 0.24, -s * 0.22, s * 0.12, s * 0.06);
+
+  ctx.restore();
+}
+
+/** Soft chimney smoke — rises from the funnel and drifts aft */
+function drawShipSmoke(
+  ctx: CanvasRenderingContext2D,
+  scale: number,
+  alpha: number,
+  time: number,
+  phase: number,
+) {
+  const s = 12 * scale;
+  const chimneyX = s * 0.13;
+  const chimneyY = -s * 0.44;
+  const puffCount = 7;
+
+  ctx.save();
+  ctx.globalCompositeOperation = "source-over";
+
+  for (let i = 0; i < puffCount; i++) {
+    const cycle = (time * 0.00055 + phase * 0.37 + i * 0.14) % 1;
+    const rise = cycle;
+    // Drift aft (toward -X, opposite bow) and slightly sway
+    const sway =
+      Math.sin(time * 0.003 + phase * 4 + i * 1.7) * s * 0.08 * rise;
+    const x = chimneyX - rise * s * 0.55 + sway;
+    const y = chimneyY - rise * s * 0.95 - Math.sin(rise * Math.PI) * s * 0.06;
+    const r = s * (0.1 + rise * 0.38);
+    const a = alpha * (1 - rise) * (1 - rise) * 0.42;
+
+    if (a < 0.02) continue;
+
+    const g = ctx.createRadialGradient(x, y, 0, x, y, r);
+    g.addColorStop(0, `rgba(148,163,184,${a * 0.85})`);
+    g.addColorStop(0.45, `rgba(100,116,139,${a * 0.45})`);
+    g.addColorStop(1, `rgba(71,85,105,0)`);
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.arc(x, y, r, 0, Math.PI * 2);
+    ctx.fill();
+  }
 
   ctx.restore();
 }
@@ -563,6 +616,7 @@ export function HeroGlobeVisual({ reduced }: { reduced?: boolean }) {
     let raf = 0;
     let last = performance.now();
     let dpr = 1;
+    let vehicleBoost = 1;
     let inView = true;
     let pageVisible = document.visibilityState === "visible";
     let introLoading =
@@ -970,7 +1024,9 @@ export function HeroGlobeVisual({ reduced }: { reduced?: boolean }) {
         // Round trip: 0→1 outbound, 1→2 inbound
         const cycle = noMotion ? v.phase % 2 : (t * v.speed + v.phase) % 2;
         const outbound = cycle < 1;
-        const u = outbound ? cycle : 2 - cycle;
+        const rawU = outbound ? cycle : 2 - cycle;
+        // Planes ease at hubs so turnarounds don't snap
+        const u = v.type === "plane" ? easeInOutCubic(rawU) : rawU;
         const dir = outbound ? 1 : -1;
 
         const lat = v.fromLat + (v.toLat - v.fromLat) * u;
@@ -979,7 +1035,9 @@ export function HeroGlobeVisual({ reduced }: { reduced?: boolean }) {
         const altitude = v.altitude + altLift;
 
         const pos = project(lat, lon, rotYNow, rotXNow, radius * altitude);
-        const aheadT = Math.max(0, Math.min(1, u + dir * 0.04));
+        // Longer look-ahead on planes → steadier heading through curves
+        const lookAhead = v.type === "plane" ? 0.07 : 0.04;
+        const aheadT = Math.max(0, Math.min(1, u + dir * lookAhead));
         const ahead = project(
           v.fromLat + (v.toLat - v.fromLat) * aheadT,
           lerpLon(v.fromLon, v.toLon, aheadT),
@@ -1015,138 +1073,129 @@ export function HeroGlobeVisual({ reduced }: { reduced?: boolean }) {
             motion.angle = targetAngle;
             motion.initialized = true;
           } else {
+            // Planes track heading more responsively (less lag / wobble)
+            const turnRate = v.type === "plane" ? 0.055 : 0.02;
             motion.angle = lerpAngle(
               motion.angle,
               targetAngle,
-              1 - Math.exp(-0.02 * dt),
+              1 - Math.exp(-turnRate * dt),
             );
           }
         }
 
-        motion.alpha = smoothToward(motion.alpha, targetAlpha, dt, 0.012);
+        const fadeRate = v.type === "plane" ? 0.022 : 0.012;
+        motion.alpha = smoothToward(motion.alpha, targetAlpha, dt, fadeRate);
         if (motion.alpha < 0.02) continue;
 
-        // Colorful light line wake (planes) / soft dots (ships)
-        const trailSteps = v.type === "plane" ? 22 : 8;
-        const trailSpacing = v.type === "plane" ? 0.018 : 0.022;
-        let trailCount = 0;
-        for (let s = 0; s < trailSteps; s++) {
-          const tu = Math.max(0, Math.min(1, u - dir * s * trailSpacing));
-          const tLat = v.fromLat + (v.toLat - v.fromLat) * tu;
-          const tLon = lerpLon(v.fromLon, v.toLon, tu);
-          const tAlt =
-            v.altitude +
-            (v.type === "plane" ? Math.sin(tu * Math.PI) * 0.04 : 0);
-          const tp = project(tLat, tLon, rotYNow, rotXNow, radius * tAlt);
-          const slot = TRAIL_PTS[trailCount];
-          slot.x = tp.x;
-          slot.y = tp.y;
-          slot.z = tp.z;
-          trailCount++;
-        }
-
-        if (v.type === "plane" && trailCount >= 2) {
-          ctx.save();
-          ctx.globalCompositeOperation = "lighter";
-          ctx.lineCap = "round";
-          ctx.lineJoin = "round";
-
-          // Soft outer glow ribbon
-          ctx.beginPath();
-          let started = false;
-          for (let s = 0; s < trailCount; s++) {
-            const tp = TRAIL_PTS[s];
-            if (tp.z <= 0) {
-              started = false;
-              continue;
-            }
-            const px = cx + tp.x;
-            const py = cy - tp.y;
-            if (!started) {
-              ctx.moveTo(px, py);
-              started = true;
-            } else {
-              ctx.lineTo(px, py);
-            }
+        // Colorful light line wake for planes
+        if (v.type === "plane") {
+          const trailSteps = 24;
+          const trailSpacing = 0.014;
+          let trailCount = 0;
+          for (let s = 0; s < trailSteps; s++) {
+            const rawTu = Math.max(0, Math.min(1, rawU - dir * s * trailSpacing));
+            const tu = easeInOutCubic(rawTu);
+            const tLat = v.fromLat + (v.toLat - v.fromLat) * tu;
+            const tLon = lerpLon(v.fromLon, v.toLon, tu);
+            const tAlt = v.altitude + Math.sin(tu * Math.PI) * 0.04;
+            const tp = project(tLat, tLon, rotYNow, rotXNow, radius * tAlt);
+            const slot = TRAIL_PTS[trailCount];
+            slot.x = tp.x;
+            slot.y = tp.y;
+            slot.z = tp.z;
+            trailCount++;
           }
-          ctx.strokeStyle = `hsla(${v.trailHue}, 95%, 62%, ${motion.alpha * 0.22})`;
-          ctx.lineWidth = 7.5 * dpr;
-          ctx.stroke();
 
-          // Segmented colorful core — hue shifts along the wake
-          for (let s = 0; s < trailCount - 1; s++) {
-            const a = TRAIL_PTS[s];
-            const b = TRAIL_PTS[s + 1];
-            if (a.z <= 0 || b.z <= 0) continue;
-            const fade = (1 - s / trailCount) * motion.alpha;
-            const hue = (v.trailHue + s * 11) % 360;
+          if (trailCount >= 2) {
+            ctx.save();
+            ctx.globalCompositeOperation = "lighter";
+            ctx.lineCap = "round";
+            ctx.lineJoin = "round";
+
+            // Soft outer glow ribbon
             ctx.beginPath();
-            ctx.moveTo(cx + a.x, cy - a.y);
-            ctx.lineTo(cx + b.x, cy - b.y);
-            ctx.strokeStyle = `hsla(${hue}, 100%, 68%, ${fade * 0.85})`;
-            ctx.lineWidth = (2.8 - (s / trailCount) * 1.6) * dpr;
+            let started = false;
+            for (let s = 0; s < trailCount; s++) {
+              const tp = TRAIL_PTS[s];
+              if (tp.z <= 0) {
+                started = false;
+                continue;
+              }
+              const px = cx + tp.x;
+              const py = cy - tp.y;
+              if (!started) {
+                ctx.moveTo(px, py);
+                started = true;
+              } else {
+                ctx.lineTo(px, py);
+              }
+            }
+            ctx.strokeStyle = `hsla(${v.trailHue}, 95%, 62%, ${motion.alpha * 0.22})`;
+            ctx.lineWidth = 7.5 * dpr;
             ctx.stroke();
-            // Bright hot core near the plane
-            if (s < 5) {
-              ctx.strokeStyle = `hsla(${hue}, 100%, 88%, ${fade * 0.55})`;
-              ctx.lineWidth = (1.15 - s * 0.12) * dpr;
-              ctx.stroke();
-            }
-          }
 
-          // Spark at the tail tip
-          const tip = TRAIL_PTS[0];
-          if (tip.z > 0) {
-            const g = ctx.createRadialGradient(
-              cx + tip.x,
-              cy - tip.y,
-              0,
-              cx + tip.x,
-              cy - tip.y,
-              6 * dpr,
-            );
-            g.addColorStop(
-              0,
-              `hsla(${v.trailHue}, 100%, 92%, ${motion.alpha * 0.9})`,
-            );
-            g.addColorStop(
-              0.45,
-              `hsla(${(v.trailHue + 40) % 360}, 100%, 65%, ${motion.alpha * 0.45})`,
-            );
-            g.addColorStop(1, `hsla(${v.trailHue}, 100%, 60%, 0)`);
-            ctx.fillStyle = g;
-            ctx.beginPath();
-            ctx.arc(cx + tip.x, cy - tip.y, 6 * dpr, 0, Math.PI * 2);
-            ctx.fill();
+            // Segmented colorful core — hue shifts along the wake
+            for (let s = 0; s < trailCount - 1; s++) {
+              const a = TRAIL_PTS[s];
+              const b = TRAIL_PTS[s + 1];
+              if (a.z <= 0 || b.z <= 0) continue;
+              const fade = (1 - s / trailCount) * motion.alpha;
+              const hue = (v.trailHue + s * 11) % 360;
+              ctx.beginPath();
+              ctx.moveTo(cx + a.x, cy - a.y);
+              ctx.lineTo(cx + b.x, cy - b.y);
+              ctx.strokeStyle = `hsla(${hue}, 100%, 68%, ${fade * 0.85})`;
+              ctx.lineWidth = (2.8 - (s / trailCount) * 1.6) * dpr;
+              ctx.stroke();
+              // Bright hot core near the plane
+              if (s < 5) {
+                ctx.strokeStyle = `hsla(${hue}, 100%, 88%, ${fade * 0.55})`;
+                ctx.lineWidth = (1.15 - s * 0.12) * dpr;
+                ctx.stroke();
+              }
+            }
+
+            // Spark at the tip
+            const tip = TRAIL_PTS[0];
+            if (tip.z > 0) {
+              const g = ctx.createRadialGradient(
+                cx + tip.x,
+                cy - tip.y,
+                0,
+                cx + tip.x,
+                cy - tip.y,
+                6 * dpr,
+              );
+              g.addColorStop(
+                0,
+                `hsla(${v.trailHue}, 100%, 92%, ${motion.alpha * 0.9})`,
+              );
+              g.addColorStop(
+                0.45,
+                `hsla(${(v.trailHue + 40) % 360}, 100%, 65%, ${motion.alpha * 0.45})`,
+              );
+              g.addColorStop(1, `hsla(${v.trailHue}, 100%, 60%, 0)`);
+              ctx.fillStyle = g;
+              ctx.beginPath();
+              ctx.arc(cx + tip.x, cy - tip.y, 6 * dpr, 0, Math.PI * 2);
+              ctx.fill();
+            }
+            ctx.restore();
           }
-          ctx.restore();
-        } else {
-          ctx.save();
-          ctx.globalCompositeOperation = "lighter";
-          for (let s = 1; s < trailCount; s++) {
-            const tp = TRAIL_PTS[s];
-            if (tp.z <= 0) continue;
-            const fade = (1 - s / trailCount) * motion.alpha * 0.35;
-            ctx.fillStyle = `rgba(0,123,255,${fade})`;
-            ctx.beginPath();
-            ctx.arc(
-              cx + tp.x,
-              cy - tp.y,
-              (1.2 - s * 0.08) * dpr,
-              0,
-              Math.PI * 2,
-            );
-            ctx.fill();
-          }
-          ctx.restore();
         }
 
         const scale = v.scale * (0.9 + depth * 0.35);
         ctx.save();
         ctx.translate(cx + pos.x, cy - pos.y);
         ctx.rotate(motion.angle);
-        if (v.type === "plane") drawPlane(ctx, scale * dpr, motion.alpha);
-        else drawShip(ctx, scale * dpr, motion.alpha);
+        if (v.type === "plane") {
+          drawPlane(ctx, scale * dpr, motion.alpha);
+        } else {
+          drawShip(ctx, scale * dpr, motion.alpha);
+          if (!noMotion) {
+            drawShipSmoke(ctx, scale * dpr, motion.alpha, t, v.phase);
+          }
+        }
         ctx.restore();
       }
 
