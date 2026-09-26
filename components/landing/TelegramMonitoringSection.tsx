@@ -14,9 +14,20 @@ const capabilities = [
     description:
       "Know when uploads are parsed, classification starts, and exports are ready — without opening the dashboard.",
     icon: (
-      <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden>
+      <svg
+        className="w-5 h-5"
+        fill="none"
+        viewBox="0 0 24 24"
+        stroke="currentColor"
+        aria-hidden
+      >
         <title>Live status</title>
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M13 10V3L4 14h7v7l9-11h-7z" />
+        <path
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          strokeWidth={1.5}
+          d="M13 10V3L4 14h7v7l9-11h-7z"
+        />
       </svg>
     ),
   },
@@ -25,9 +36,20 @@ const capabilities = [
     description:
       "Follow line-item counts, HS group summaries, and completion percentages for every shipment in your channel.",
     icon: (
-      <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden>
+      <svg
+        className="w-5 h-5"
+        fill="none"
+        viewBox="0 0 24 24"
+        stroke="currentColor"
+        aria-hidden
+      >
         <title>Classification trail</title>
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+        <path
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          strokeWidth={1.5}
+          d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"
+        />
       </svg>
     ),
   },
@@ -36,9 +58,20 @@ const capabilities = [
     description:
       "Route alerts to broker, compliance, or ops channels so the right people see exceptions and approvals instantly.",
     icon: (
-      <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden>
+      <svg
+        className="w-5 h-5"
+        fill="none"
+        viewBox="0 0 24 24"
+        stroke="currentColor"
+        aria-hidden
+      >
         <title>Team visibility</title>
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
+        <path
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          strokeWidth={1.5}
+          d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"
+        />
       </svg>
     ),
   },
@@ -47,9 +80,20 @@ const capabilities = [
     description:
       "Timestamped events for uploads, re-classifications, and exports — a lightweight log for customs workflows.",
     icon: (
-      <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden>
+      <svg
+        className="w-5 h-5"
+        fill="none"
+        viewBox="0 0 24 24"
+        stroke="currentColor"
+        aria-hidden
+      >
         <title>Audit alerts</title>
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+        <path
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          strokeWidth={1.5}
+          d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"
+        />
       </svg>
     ),
   },
@@ -57,7 +101,12 @@ const capabilities = [
 
 function TelegramIcon({ className }: { className?: string }) {
   return (
-    <svg className={className} viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+    <svg
+      className={className}
+      viewBox="0 0 24 24"
+      fill="currentColor"
+      aria-hidden
+    >
       <title>Telegram</title>
       <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm4.64 6.8c-.15 1.58-.8 5.42-1.13 7.19-.14.75-.42 1-.68 1.03-.58.05-1.02-.38-1.58-.75-.88-.58-1.38-.94-2.23-1.5-.99-.65-.35-1.01.22-1.59.15-.15 2.71-2.48 2.76-2.69a.2.2 0 00-.05-.18c-.06-.05-.14-.03-.21-.02-.09.02-1.49.95-4.22 2.79-.4.27-.76.41-1.08.4-.36-.01-1.04-.2-1.55-.37-.63-.2-1.12-.31-1.08-.66.02-.18.27-.36.74-.55 2.92-1.27 4.86-2.11 5.83-2.51 2.78-1.16 3.35-1.36 3.73-1.36.08 0 .27.02.39.12.1.08.13.19.14.27-.01.06.01.24 0 .38z" />
     </svg>
@@ -78,7 +127,10 @@ export function TelegramMonitoringSection() {
             "linear-gradient(135deg, rgba(42, 171, 238, 0.06) 0%, rgba(0, 123, 255, 0.04) 50%, transparent 100%)",
         }}
       />
-      <div className="landing-dot-grid absolute inset-0 opacity-40 pointer-events-none" aria-hidden />
+      <div
+        className="landing-dot-grid absolute inset-0 opacity-40 pointer-events-none"
+        aria-hidden
+      />
 
       <LandingWrap className="relative">
         <div className="grid lg:grid-cols-2 gap-12 lg:gap-16 items-center">
@@ -86,14 +138,16 @@ export function TelegramMonitoringSection() {
             <FadeInView>
               <div className="inline-flex items-center gap-2 rounded-full border border-[#2AABEE]/30 bg-[#2AABEE]/8 px-3 py-1 mb-4">
                 <TelegramIcon className="w-4 h-4 text-[#2AABEE]" />
-                <span className="text-xs font-semibold text-[#1a8cd8]">Telegram integration</span>
+                <span className="text-xs font-semibold text-[#1a8cd8]">
+                  Telegram integration
+                </span>
               </div>
               <h2 className="text-3xl sm:text-4xl font-bold text-gray-900 tracking-tight leading-tight">
                 Monitor every HS classification from Telegram
               </h2>
               <p className="mt-4 text-gray-500 leading-relaxed max-w-lg">
                 Connect your operations channel and stay informed on uploads, AI
-                classification progress, exports, and exceptions — in real time,
+                classification progress, exports, and exceptions , in real time,
                 where your team already communicates.
               </p>
             </FadeInView>
@@ -118,7 +172,9 @@ export function TelegramMonitoringSection() {
                       {item.icon}
                     </div>
                     <div>
-                      <h3 className="text-sm font-semibold text-gray-900">{item.title}</h3>
+                      <h3 className="text-sm font-semibold text-gray-900">
+                        {item.title}
+                      </h3>
                       <p className="text-xs text-gray-500 mt-1 leading-relaxed">
                         {item.description}
                       </p>

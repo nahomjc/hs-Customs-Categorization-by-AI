@@ -54,7 +54,10 @@ export function HeroSection() {
               initial="hidden"
               animate={play ? "visible" : "hidden"}
             >
-              <motion.div variants={fadeUp} className="flex justify-center lg:justify-start">
+              <motion.div
+                variants={fadeUp}
+                className="flex justify-center lg:justify-start"
+              >
                 <span className="inline-flex items-center rounded-full bg-gray-100/90 px-3.5 py-1.5 text-xs font-medium text-gray-600 ring-1 ring-gray-200/80">
                   Impact Logistics
                 </span>
@@ -77,7 +80,7 @@ export function HeroSection() {
                 variants={fadeUp}
                 className="mt-6 text-base sm:text-lg text-gray-500 max-w-md mx-auto lg:mx-0 leading-relaxed"
               >
-                Upload packing lists and get HS-code grouped files — built for
+                Upload packing lists and get HS-code grouped files , built for
                 customs brokers and trade teams.
               </motion.p>
 
@@ -85,7 +88,10 @@ export function HeroSection() {
                 variants={fadeUp}
                 className="mt-9 flex justify-center lg:justify-start"
               >
-                <motion.div whileHover={{ scale: 1.03, y: -1 }} whileTap={{ scale: 0.98 }}>
+                <motion.div
+                  whileHover={{ scale: 1.03, y: -1 }}
+                  whileTap={{ scale: 0.98 }}
+                >
                   <Link
                     href="/demo?source=hero"
                     className="inline-flex items-center justify-center px-7 py-3.5 rounded-full bg-gradient-to-r from-[#007bff] to-indigo-600 text-white font-semibold text-sm shadow-lg shadow-blue-500/25 hover:brightness-105 transition-[filter]"
@@ -97,16 +103,17 @@ export function HeroSection() {
             </motion.div>
 
             {/* Spacer for grid on desktop — globe is absolute fill on right */}
-            <div className="hidden lg:block min-h-[560px] xl:min-h-[640px]" aria-hidden />
+            <div
+              className="hidden lg:block min-h-[560px] xl:min-h-[640px]"
+              aria-hidden
+            />
           </div>
         </div>
 
         {/* Globe fills right half and bleeds off edges */}
         <motion.div
           className="relative z-10 w-full lg:absolute lg:inset-y-0 lg:right-0 lg:w-[58%] xl:w-[55%] pointer-events-auto bg-transparent"
-          initial={
-            reduced ? false : { opacity: 0, scale: 0.9, x: 40 }
-          }
+          initial={reduced ? false : { opacity: 0, scale: 0.9, x: 40 }}
           animate={
             play
               ? { opacity: 1, scale: 1, x: 0 }
