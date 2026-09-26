@@ -186,6 +186,8 @@ type RouteVehicle = {
   phase: number;
   altitude: number;
   scale: number;
+  /** Trail hue in degrees — planes get a colorful light wake */
+  trailHue: number;
 };
 
 /** Planes & ships flowing in/out of Ethiopia */
@@ -202,6 +204,7 @@ const VEHICLES: RouteVehicle[] = [
     phase: 0,
     altitude: 1.14,
     scale: 1.12,
+    trailHue: 210,
   },
   {
     id: "plane-me",
@@ -214,6 +217,7 @@ const VEHICLES: RouteVehicle[] = [
     phase: 0.35,
     altitude: 1.13,
     scale: 1.05,
+    trailHue: 320,
   },
   {
     id: "plane-asia",
@@ -226,6 +230,7 @@ const VEHICLES: RouteVehicle[] = [
     phase: 0.7,
     altitude: 1.15,
     scale: 1,
+    trailHue: 175,
   },
   {
     id: "plane-us",
@@ -238,6 +243,7 @@ const VEHICLES: RouteVehicle[] = [
     phase: 1.15,
     altitude: 1.16,
     scale: 1.08,
+    trailHue: 45,
   },
   {
     id: "plane-sa",
@@ -250,6 +256,7 @@ const VEHICLES: RouteVehicle[] = [
     phase: 1.55,
     altitude: 1.13,
     scale: 0.98,
+    trailHue: 280,
   },
   // Ships — Djibouti ↔ ports
   {
@@ -263,6 +270,7 @@ const VEHICLES: RouteVehicle[] = [
     phase: 0.2,
     altitude: 1.02,
     scale: 1.02,
+    trailHue: 200,
   },
   {
     id: "ship-india",
@@ -275,6 +283,7 @@ const VEHICLES: RouteVehicle[] = [
     phase: 0.9,
     altitude: 1.02,
     scale: 0.95,
+    trailHue: 200,
   },
   {
     id: "ship-cape",
@@ -287,8 +296,15 @@ const VEHICLES: RouteVehicle[] = [
     phase: 1.4,
     altitude: 1.015,
     scale: 0.92,
+    trailHue: 200,
   },
 ];
+
+/** Reused trail point buffer — avoid allocs in the vehicle loop */
+const TRAIL_PTS: { x: number; y: number; z: number }[] = Array.from(
+  { length: 28 },
+  () => ({ x: 0, y: 0, z: 0 }),
+);
 
 type VehicleMotion = {
   angle: number;
@@ -1010,26 +1026,120 @@ export function HeroGlobeVisual({ reduced }: { reduced?: boolean }) {
         motion.alpha = smoothToward(motion.alpha, targetAlpha, dt, 0.012);
         if (motion.alpha < 0.02) continue;
 
-        // Trail behind travel direction
-        ctx.save();
-        ctx.globalCompositeOperation = "lighter";
-        const trailSteps = 10;
-        for (let s = 1; s <= trailSteps; s++) {
-          const tu = Math.max(0, Math.min(1, u - dir * s * 0.022));
+        // Colorful light line wake (planes) / soft dots (ships)
+        const trailSteps = v.type === "plane" ? 22 : 8;
+        const trailSpacing = v.type === "plane" ? 0.018 : 0.022;
+        let trailCount = 0;
+        for (let s = 0; s < trailSteps; s++) {
+          const tu = Math.max(0, Math.min(1, u - dir * s * trailSpacing));
           const tLat = v.fromLat + (v.toLat - v.fromLat) * tu;
           const tLon = lerpLon(v.fromLon, v.toLon, tu);
           const tAlt =
             v.altitude +
             (v.type === "plane" ? Math.sin(tu * Math.PI) * 0.04 : 0);
           const tp = project(tLat, tLon, rotYNow, rotXNow, radius * tAlt);
-          if (tp.z <= 0) continue;
-          const fade = (1 - s / trailSteps) * motion.alpha * 0.4;
-          ctx.fillStyle = `rgba(0,123,255,${fade})`;
-          ctx.beginPath();
-          ctx.arc(cx + tp.x, cy - tp.y, (1.2 - s * 0.07) * dpr, 0, Math.PI * 2);
-          ctx.fill();
+          const slot = TRAIL_PTS[trailCount];
+          slot.x = tp.x;
+          slot.y = tp.y;
+          slot.z = tp.z;
+          trailCount++;
         }
-        ctx.restore();
+
+        if (v.type === "plane" && trailCount >= 2) {
+          ctx.save();
+          ctx.globalCompositeOperation = "lighter";
+          ctx.lineCap = "round";
+          ctx.lineJoin = "round";
+
+          // Soft outer glow ribbon
+          ctx.beginPath();
+          let started = false;
+          for (let s = 0; s < trailCount; s++) {
+            const tp = TRAIL_PTS[s];
+            if (tp.z <= 0) {
+              started = false;
+              continue;
+            }
+            const px = cx + tp.x;
+            const py = cy - tp.y;
+            if (!started) {
+              ctx.moveTo(px, py);
+              started = true;
+            } else {
+              ctx.lineTo(px, py);
+            }
+          }
+          ctx.strokeStyle = `hsla(${v.trailHue}, 95%, 62%, ${motion.alpha * 0.22})`;
+          ctx.lineWidth = 7.5 * dpr;
+          ctx.stroke();
+
+          // Segmented colorful core — hue shifts along the wake
+          for (let s = 0; s < trailCount - 1; s++) {
+            const a = TRAIL_PTS[s];
+            const b = TRAIL_PTS[s + 1];
+            if (a.z <= 0 || b.z <= 0) continue;
+            const fade = (1 - s / trailCount) * motion.alpha;
+            const hue = (v.trailHue + s * 11) % 360;
+            ctx.beginPath();
+            ctx.moveTo(cx + a.x, cy - a.y);
+            ctx.lineTo(cx + b.x, cy - b.y);
+            ctx.strokeStyle = `hsla(${hue}, 100%, 68%, ${fade * 0.85})`;
+            ctx.lineWidth = (2.8 - (s / trailCount) * 1.6) * dpr;
+            ctx.stroke();
+            // Bright hot core near the plane
+            if (s < 5) {
+              ctx.strokeStyle = `hsla(${hue}, 100%, 88%, ${fade * 0.55})`;
+              ctx.lineWidth = (1.15 - s * 0.12) * dpr;
+              ctx.stroke();
+            }
+          }
+
+          // Spark at the tail tip
+          const tip = TRAIL_PTS[0];
+          if (tip.z > 0) {
+            const g = ctx.createRadialGradient(
+              cx + tip.x,
+              cy - tip.y,
+              0,
+              cx + tip.x,
+              cy - tip.y,
+              6 * dpr,
+            );
+            g.addColorStop(
+              0,
+              `hsla(${v.trailHue}, 100%, 92%, ${motion.alpha * 0.9})`,
+            );
+            g.addColorStop(
+              0.45,
+              `hsla(${(v.trailHue + 40) % 360}, 100%, 65%, ${motion.alpha * 0.45})`,
+            );
+            g.addColorStop(1, `hsla(${v.trailHue}, 100%, 60%, 0)`);
+            ctx.fillStyle = g;
+            ctx.beginPath();
+            ctx.arc(cx + tip.x, cy - tip.y, 6 * dpr, 0, Math.PI * 2);
+            ctx.fill();
+          }
+          ctx.restore();
+        } else {
+          ctx.save();
+          ctx.globalCompositeOperation = "lighter";
+          for (let s = 1; s < trailCount; s++) {
+            const tp = TRAIL_PTS[s];
+            if (tp.z <= 0) continue;
+            const fade = (1 - s / trailCount) * motion.alpha * 0.35;
+            ctx.fillStyle = `rgba(0,123,255,${fade})`;
+            ctx.beginPath();
+            ctx.arc(
+              cx + tp.x,
+              cy - tp.y,
+              (1.2 - s * 0.08) * dpr,
+              0,
+              Math.PI * 2,
+            );
+            ctx.fill();
+          }
+          ctx.restore();
+        }
 
         const scale = v.scale * (0.9 + depth * 0.35);
         ctx.save();
