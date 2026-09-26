@@ -608,10 +608,12 @@ export function HeroGlobeVisual({ reduced }: { reduced?: boolean }) {
     const wrap = wrapRef.current;
     if (!canvas || !wrap) return;
 
-    const ctx =
-      canvas.getContext("2d", { alpha: true, desynchronized: true }) ??
-      canvas.getContext("2d", { alpha: true });
+    const ctx = canvas.getContext("2d", { alpha: true });
     if (!ctx) return;
+
+    // Avoid opaque black fallback on mobile WebViews
+    canvas.style.backgroundColor = "transparent";
+    canvas.style.background = "transparent";
 
     let raf = 0;
     let last = performance.now();
@@ -699,14 +701,17 @@ export function HeroGlobeVisual({ reduced }: { reduced?: boolean }) {
     const resize = () => {
       const rect = wrap.getBoundingClientRect();
       dpr = Math.min(1.75, window.devicePixelRatio || 1);
-      // Planes/ships read small on phones — bump icon size a bit
+      // Slightly smaller icons on phones so they don't dominate the globe
       vehicleBoost =
-        rect.width < 480 ? 1.38 : rect.width < 768 ? 1.22 : 1;
+        rect.width < 480 ? 0.78 : rect.width < 768 ? 0.88 : 1;
       canvas.width = Math.max(1, Math.floor(rect.width * dpr));
       canvas.height = Math.max(1, Math.floor(rect.height * dpr));
       canvas.style.width = `${rect.width}px`;
       canvas.style.height = `${rect.height}px`;
       bloomGrad = null;
+      // Clear immediately — some mobile browsers flash opaque black after resize
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
     };
 
     resize();
@@ -748,7 +753,7 @@ export function HeroGlobeVisual({ reduced }: { reduced?: boolean }) {
 
     const tick = (now: number) => {
       raf = requestAnimationFrame(tick);
-      // Freeze while intro loader / scroll / off-screen so the page stays smooth
+      // Freeze during scroll / off-screen — but always clear if we skipped a dirty frame
       if (
         introLoading ||
         !inView ||
@@ -1297,7 +1302,7 @@ export function HeroGlobeVisual({ reduced }: { reduced?: boolean }) {
   return (
     <div
       ref={wrapRef}
-      className="relative w-full h-full min-h-[320px] sm:min-h-[420px] lg:min-h-[560px] xl:min-h-[640px] select-none cursor-grab active:cursor-grabbing touch-pan-y"
+      className="relative w-full h-full min-h-[320px] sm:min-h-[420px] lg:min-h-[560px] xl:min-h-[640px] select-none cursor-grab active:cursor-grabbing touch-pan-y bg-transparent"
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
       onPointerUp={endDrag}
@@ -1309,7 +1314,10 @@ export function HeroGlobeVisual({ reduced }: { reduced?: boolean }) {
       <div className="pointer-events-none absolute inset-[14%] rounded-full border border-[#007bff]/10" />
       <div className="pointer-events-none absolute inset-[24%] rounded-full border border-slate-200/35" />
 
-      <canvas ref={canvasRef} className="absolute inset-0 h-full w-full" />
+      <canvas
+        ref={canvasRef}
+        className="absolute inset-0 h-full w-full bg-transparent"
+      />
 
       <p className="pointer-events-none absolute bottom-3 left-1/2 -translate-x-1/2 text-[10px] font-medium text-gray-400 bg-white/70 backdrop-blur-sm px-2.5 py-1 rounded-full border border-gray-100/80 lg:left-auto lg:right-4 lg:translate-x-0">
         Drag to explore
