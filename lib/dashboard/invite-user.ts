@@ -23,13 +23,14 @@ export type InviteUserInput = {
   phoneVerified?: boolean;
 };
 
-export type InviteDeliveryChannel = "sms" | "email";
+export type InviteDeliveryChannel = "sms" | "email" | "both";
 
 export type InviteUserResult = {
   userId: string;
   resent: boolean;
   deliveredVia: InviteDeliveryChannel;
   smsError?: string | null;
+  emailError?: string | null;
 };
 
 async function sendInviteEmail(params: {
@@ -149,7 +150,9 @@ export async function inviteDashboardUser(
   const channels = await getTenantChannelSettings(tenantId);
 
   let smsError: string | null = null;
+  let emailError: string | null = null;
   let smsSent = false;
+  let emailSent = false;
 
   if (channels.smsEthiopiaApiKey && input.phone) {
     try {
@@ -167,32 +170,42 @@ export async function inviteDashboardUser(
         smsSent = true;
       } else {
         smsError = smsResult.error ?? "SMS send failed";
-        console.warn("Invite SMS failed, falling back to email:", smsError);
+        console.warn("Invite SMS failed:", smsError);
       }
     } catch (error) {
       smsError =
         error instanceof Error ? error.message : "SMS send failed unexpectedly";
-      console.warn("Invite SMS threw, falling back to email:", smsError);
+      console.warn("Invite SMS threw:", smsError);
     }
   } else if (!channels.smsEthiopiaApiKey) {
     smsError = "SMS not configured";
   }
 
-  if (smsSent) {
-    return {
-      userId,
-      resent,
-      deliveredVia: "sms",
-      smsError: null,
-    };
+  try {
+    await sendInviteEmail({ email: input.email, loginUrl });
+    emailSent = true;
+  } catch (error) {
+    emailError =
+      error instanceof Error ? error.message : "Email send failed unexpectedly";
+    console.warn("Invite email failed:", emailError);
   }
 
-  await sendInviteEmail({ email: input.email, loginUrl });
+  if (!smsSent && !emailSent) {
+    throw new Error(
+      emailError ??
+        smsError ??
+        "Invite could not be delivered by SMS or email",
+    );
+  }
+
+  const deliveredVia: InviteDeliveryChannel =
+    smsSent && emailSent ? "both" : smsSent ? "sms" : "email";
 
   return {
     userId,
     resent,
-    deliveredVia: "email",
-    smsError,
+    deliveredVia,
+    smsError: smsSent ? null : smsError,
+    emailError: emailSent ? null : emailError,
   };
 }

@@ -53,26 +53,33 @@ export async function POST(request: Request) {
   }
 
   try {
-    const { userId, resent, deliveredVia, smsError } = await inviteDashboardUser({
-      email,
-      password,
-      fullName,
-      phone,
-      role,
-      emailVerified,
-      phoneVerified,
-    });
+    const { userId, resent, deliveredVia, smsError, emailError } =
+      await inviteDashboardUser({
+        email,
+        password,
+        fullName,
+        phone,
+        role,
+        emailVerified,
+        phoneVerified,
+      });
 
     const base = resent
       ? "User already existed — password updated."
       : "User created.";
 
-    const message =
-      deliveredVia === "sms"
-        ? `${base} Invite sent by SMS.`
-        : smsError && smsError !== "SMS not configured"
-          ? `${base} SMS failed (${smsError}); invite sent by email instead.`
-          : `${base} Invite sent by email.`;
+    let message: string;
+    if (deliveredVia === "both") {
+      message = `${base} Invite sent by SMS and email.`;
+    } else if (deliveredVia === "sms") {
+      message = emailError
+        ? `${base} Invite sent by SMS. Email failed (${emailError}).`
+        : `${base} Invite sent by SMS.`;
+    } else if (smsError && smsError !== "SMS not configured") {
+      message = `${base} SMS failed (${smsError}); invite sent by email instead.`;
+    } else {
+      message = `${base} Invite sent by email.`;
+    }
 
     return NextResponse.json({
       ok: true,
@@ -80,6 +87,7 @@ export async function POST(request: Request) {
       resent,
       deliveredVia,
       smsError: smsError ?? null,
+      emailError: emailError ?? null,
       message,
     });
   } catch (err) {

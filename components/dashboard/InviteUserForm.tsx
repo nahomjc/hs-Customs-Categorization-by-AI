@@ -183,7 +183,7 @@ export function InviteUserForm() {
             />
             <p className="mt-1.5 text-xs text-gray-500">
               Temporary password for first sign-in. They must choose a new password after accepting the invite.
-              We try SMS first; if SMS fails the invite is sent by email instead.
+              We send the invite by SMS and email when both are available.
             </p>
           </div>
           <div className="flex flex-col sm:flex-row gap-3 pt-2">
