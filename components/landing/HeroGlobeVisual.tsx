@@ -32,13 +32,31 @@ const INITIAL_ROT_Y = -0.32;
 const INITIAL_ROT_X = 0.1;
 
 const VEHICLES: Vehicle[] = [
-  { id: "plane-1", type: "plane", lat: 0.42, lon0: 0.3, speed: 0.00055, altitude: 1.13, scale: 1.12 },
-  { id: "plane-2", type: "plane", lat: -0.22, lon0: 2.2, speed: -0.00042, altitude: 1.15, scale: 1 },
-  { id: "plane-3", type: "plane", lat: 0.18, lon0: 4.1, speed: 0.00038, altitude: 1.11, scale: 0.92 },
-  { id: "ship-1", type: "ship", lat: 0.06, lon0: 1.1, speed: 0.0002, altitude: 1.02, scale: 1.02 },
-  { id: "ship-2", type: "ship", lat: -0.1, lon0: 3.3, speed: -0.00016, altitude: 1.02, scale: 0.95 },
-  { id: "ship-3", type: "ship", lat: 0.02, lon0: 5.1, speed: 0.00014, altitude: 1.015, scale: 0.88 },
+  { id: "plane-1", type: "plane", lat: 0.42, lon0: 0.3, speed: 0.00072, altitude: 1.13, scale: 1.12 },
+  { id: "plane-2", type: "plane", lat: -0.22, lon0: 2.2, speed: -0.00058, altitude: 1.15, scale: 1 },
+  { id: "plane-3", type: "plane", lat: 0.18, lon0: 4.1, speed: 0.0005, altitude: 1.11, scale: 0.92 },
+  { id: "ship-1", type: "ship", lat: 0.06, lon0: 1.1, speed: 0.00028, altitude: 1.02, scale: 1.02 },
+  { id: "ship-2", type: "ship", lat: -0.1, lon0: 3.3, speed: -0.00022, altitude: 1.02, scale: 0.95 },
+  { id: "ship-3", type: "ship", lat: 0.02, lon0: 5.1, speed: 0.0002, altitude: 1.015, scale: 0.88 },
 ];
+
+type VehicleMotion = {
+  angle: number;
+  alpha: number;
+  initialized: boolean;
+};
+
+function lerpAngle(from: number, to: number, t: number) {
+  let diff = to - from;
+  while (diff > Math.PI) diff -= Math.PI * 2;
+  while (diff < -Math.PI) diff += Math.PI * 2;
+  return from + diff * t;
+}
+
+function smoothToward(current: number, target: number, dt: number, rate: number) {
+  const k = 1 - Math.exp(-rate * dt);
+  return current + (target - current) * k;
+}
 
 /** Prebaked Natural Earth land samples: [latRad, lonRad, accent, inland] */
 const LAND_DOTS: LandDot[] = (landDotsRaw as [number, number, number, number][]).map(
@@ -74,49 +92,64 @@ function project(
   return { x: x1, y: y2, z: z2 };
 }
 
+/**
+ * Minimal map icons — single-tone silhouettes that stay crisp at small sizes.
+ * Nose / bow points +X (travel direction).
+ */
 function drawPlane(
   ctx: CanvasRenderingContext2D,
   scale: number,
   alpha: number,
 ) {
-  const s = 15 * scale;
+  const s = 11 * scale;
   ctx.save();
   ctx.globalAlpha = alpha;
-  ctx.fillStyle = "#007bff";
-  ctx.strokeStyle = "#0056b3";
-  ctx.lineWidth = 0.6;
+
+  // Soft contact shadow
+  ctx.fillStyle = "rgba(15,23,42,0.14)";
   ctx.beginPath();
-  ctx.moveTo(-s * 0.08, -s * 0.08);
-  ctx.lineTo(-s * 0.42, -s * 0.55);
-  ctx.lineTo(-s * 0.28, -s * 0.55);
+  ctx.ellipse(0, s * 0.08, s * 0.55, s * 0.16, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Classic top-down jet silhouette (one path)
+  ctx.fillStyle = "#0f172a";
+  ctx.beginPath();
+  // nose
+  ctx.moveTo(s * 0.72, 0);
+  ctx.quadraticCurveTo(s * 0.72, -s * 0.08, s * 0.45, -s * 0.09);
+  // right wing root → tip
   ctx.lineTo(s * 0.12, -s * 0.1);
+  ctx.lineTo(-s * 0.05, -s * 0.55);
+  ctx.lineTo(-s * 0.22, -s * 0.55);
+  ctx.lineTo(-s * 0.08, -s * 0.12);
+  // tail right
+  ctx.lineTo(-s * 0.42, -s * 0.1);
+  ctx.lineTo(-s * 0.62, -s * 0.28);
+  ctx.lineTo(-s * 0.55, -s * 0.04);
+  // center rear
+  ctx.lineTo(-s * 0.55, s * 0.04);
+  // tail left
+  ctx.lineTo(-s * 0.62, s * 0.28);
+  ctx.lineTo(-s * 0.42, s * 0.1);
+  // left wing
+  ctx.lineTo(-s * 0.08, s * 0.12);
+  ctx.lineTo(-s * 0.22, s * 0.55);
+  ctx.lineTo(-s * 0.05, s * 0.55);
   ctx.lineTo(s * 0.12, s * 0.1);
-  ctx.lineTo(-s * 0.28, s * 0.55);
-  ctx.lineTo(-s * 0.42, s * 0.55);
-  ctx.lineTo(-s * 0.08, s * 0.08);
+  ctx.lineTo(s * 0.45, s * 0.09);
+  ctx.quadraticCurveTo(s * 0.72, s * 0.08, s * 0.72, 0);
   ctx.closePath();
   ctx.fill();
+
+  // Brand accent stripe on fuselage
+  ctx.strokeStyle = "#007bff";
+  ctx.lineWidth = Math.max(1.1, s * 0.09);
+  ctx.lineCap = "round";
+  ctx.beginPath();
+  ctx.moveTo(-s * 0.2, 0);
+  ctx.lineTo(s * 0.42, 0);
   ctx.stroke();
 
-  ctx.fillStyle = "#0e1526";
-  ctx.beginPath();
-  ctx.moveTo(s * 0.52, 0);
-  ctx.bezierCurveTo(s * 0.52, -s * 0.08, s * 0.35, -s * 0.1, s * 0.2, -s * 0.1);
-  ctx.lineTo(-s * 0.35, -s * 0.09);
-  ctx.lineTo(-s * 0.55, -s * 0.22);
-  ctx.lineTo(-s * 0.48, -s * 0.05);
-  ctx.lineTo(-s * 0.48, s * 0.05);
-  ctx.lineTo(-s * 0.55, s * 0.22);
-  ctx.lineTo(-s * 0.35, s * 0.09);
-  ctx.lineTo(s * 0.2, s * 0.1);
-  ctx.bezierCurveTo(s * 0.35, s * 0.1, s * 0.52, s * 0.08, s * 0.52, 0);
-  ctx.closePath();
-  ctx.fill();
-
-  ctx.fillStyle = "#38bdf8";
-  ctx.beginPath();
-  ctx.ellipse(s * 0.38, 0, s * 0.1, s * 0.045, 0, 0, Math.PI * 2);
-  ctx.fill();
   ctx.restore();
 }
 
@@ -125,31 +158,55 @@ function drawShip(
   scale: number,
   alpha: number,
 ) {
-  const s = 14 * scale;
+  const s = 12 * scale;
   ctx.save();
   ctx.globalAlpha = alpha;
-  ctx.fillStyle = "#007bff";
+
+  // Soft contact shadow
+  ctx.fillStyle = "rgba(15,23,42,0.14)";
   ctx.beginPath();
-  ctx.moveTo(-s * 0.58, s * 0.08);
-  ctx.lineTo(s * 0.42, s * 0.08);
-  ctx.lineTo(s * 0.58, -s * 0.02);
+  ctx.ellipse(0, s * 0.3, s * 0.55, s * 0.12, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Hull + bow as one silhouette
+  ctx.fillStyle = "#0f172a";
+  ctx.beginPath();
+  ctx.moveTo(-s * 0.58, s * 0.04);
+  ctx.lineTo(s * 0.32, s * 0.04);
+  ctx.lineTo(s * 0.62, -s * 0.02);
   ctx.lineTo(s * 0.42, s * 0.32);
   ctx.lineTo(-s * 0.35, s * 0.32);
-  ctx.lineTo(-s * 0.55, s * 0.18);
+  ctx.lineTo(-s * 0.58, s * 0.16);
   ctx.closePath();
   ctx.fill();
 
-  ctx.fillStyle = "#0e1526";
-  ctx.fillRect(-s * 0.42, -s * 0.12, s * 0.18, s * 0.2);
-  ctx.fillRect(-s * 0.22, -s * 0.18, s * 0.18, s * 0.26);
-  ctx.fillRect(-s * 0.02, -s * 0.12, s * 0.18, s * 0.2);
-  ctx.fillRect(s * 0.2, -s * 0.28, s * 0.2, s * 0.36);
+  // Deck / containers block
+  ctx.fillStyle = "#1e293b";
+  ctx.beginPath();
+  ctx.moveTo(-s * 0.48, s * 0.04);
+  ctx.lineTo(s * 0.18, s * 0.04);
+  ctx.lineTo(s * 0.18, -s * 0.14);
+  ctx.lineTo(-s * 0.48, -s * 0.14);
+  ctx.closePath();
+  ctx.fill();
+
+  // Bridge
+  ctx.fillStyle = "#0f172a";
+  ctx.fillRect(s * 0.2, -s * 0.28, s * 0.2, s * 0.32);
+
+  // Brand waterline
+  ctx.strokeStyle = "#007bff";
+  ctx.lineWidth = Math.max(1, s * 0.07);
+  ctx.lineCap = "round";
+  ctx.beginPath();
+  ctx.moveTo(-s * 0.48, s * 0.14);
+  ctx.lineTo(s * 0.36, s * 0.14);
+  ctx.stroke();
+
+  // Tiny bridge window
   ctx.fillStyle = "#38bdf8";
-  ctx.fillRect(s * 0.23, -s * 0.22, s * 0.14, s * 0.07);
-  ctx.fillStyle = "#64748b";
-  ctx.fillRect(s * 0.26, -s * 0.42, s * 0.08, s * 0.14);
-  ctx.fillStyle = "#ef4444";
-  ctx.fillRect(s * 0.26, -s * 0.42, s * 0.08, s * 0.04);
+  ctx.fillRect(s * 0.24, -s * 0.22, s * 0.12, s * 0.06);
+
   ctx.restore();
 }
 
@@ -324,14 +381,12 @@ export function HeroGlobeVisual({ reduced }: { reduced?: boolean }) {
         // Flip Y for screen-space heading
         const angle = Math.atan2(-(ahead.y - pos.y), ahead.x - pos.x);
         const depth = (pos.z + radius) / (2 * radius);
-        const alpha = 0.4 + depth * 0.55;
-        const scale = v.scale * (0.7 + depth * 0.5);
+        const alpha = 0.55 + depth * 0.45;
+        const scale = v.scale * (0.85 + depth * 0.45);
 
         ctx.save();
         ctx.translate(cx + pos.x, cy - pos.y);
         ctx.rotate(angle);
-        ctx.shadowColor = "rgba(0,123,255,0.35)";
-        ctx.shadowBlur = 6 * dpr;
         if (v.type === "plane") drawPlane(ctx, scale * dpr, alpha);
         else drawShip(ctx, scale * dpr, alpha);
         ctx.restore();
