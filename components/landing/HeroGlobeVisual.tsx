@@ -540,6 +540,8 @@ export function HeroGlobeVisual({ reduced }: { reduced?: boolean }) {
     let dpr = 1;
     let inView = true;
     let pageVisible = document.visibilityState === "visible";
+    let scrolling = false;
+    let scrollIdleTimer = 0;
     const visibleBuf: {
       p: LandDot;
       x: number;
@@ -640,9 +642,20 @@ export function HeroGlobeVisual({ reduced }: { reduced?: boolean }) {
     };
     document.addEventListener("visibilitychange", onVis);
 
+    const onScroll = () => {
+      scrolling = true;
+      window.clearTimeout(scrollIdleTimer);
+      // Resume globe shortly after scroll settles
+      scrollIdleTimer = window.setTimeout(() => {
+        scrolling = false;
+      }, 140);
+    };
+    window.addEventListener("scroll", onScroll, { passive: true });
+
     const tick = (now: number) => {
       raf = requestAnimationFrame(tick);
-      if (!inView || !pageVisible) {
+      // Freeze during scroll / off-screen so the page stays smooth
+      if (!inView || !pageVisible || (scrolling && !dragging.current)) {
         last = now;
         return;
       }
@@ -998,24 +1011,60 @@ export function HeroGlobeVisual({ reduced }: { reduced?: boolean }) {
       ro.disconnect();
       io.disconnect();
       document.removeEventListener("visibilitychange", onVis);
+      window.removeEventListener("scroll", onScroll);
+      window.clearTimeout(scrollIdleTimer);
     };
   }, [noMotion, light]);
 
+  const pendingDrag = useRef<{
+    pointerId: number;
+    x: number;
+    y: number;
+  } | null>(null);
+
   const onPointerDown = useCallback((e: ReactPointerEvent<HTMLDivElement>) => {
-    dragging.current = true;
+    // Don't steal the gesture yet — wait to see if this is a scroll or a drag
+    pendingDrag.current = {
+      pointerId: e.pointerId,
+      x: e.clientX,
+      y: e.clientY,
+    };
     lastPointer.current = { x: e.clientX, y: e.clientY };
     velocity.current = { y: 0, x: 0 };
-    e.currentTarget.setPointerCapture(e.pointerId);
   }, []);
 
   const onPointerMove = useCallback((e: ReactPointerEvent<HTMLDivElement>) => {
-    if (!dragging.current) return;
+    if (!dragging.current) {
+      const pending = pendingDrag.current;
+      if (!pending || pending.pointerId !== e.pointerId) return;
+
+      const dx = e.clientX - pending.x;
+      const dy = e.clientY - pending.y;
+      const dist = Math.hypot(dx, dy);
+      if (dist < 10) return;
+
+      // Vertical movement = page scroll — release and don't rotate the globe
+      if (Math.abs(dy) > Math.abs(dx) * 1.15) {
+        pendingDrag.current = null;
+        return;
+      }
+
+      dragging.current = true;
+      pendingDrag.current = null;
+      lastPointer.current = { x: e.clientX, y: e.clientY };
+      try {
+        e.currentTarget.setPointerCapture(e.pointerId);
+      } catch {
+        // ignore
+      }
+      return;
+    }
+
     const dx = e.clientX - lastPointer.current.x;
     const dy = e.clientY - lastPointer.current.y;
     lastPointer.current = { x: e.clientX, y: e.clientY };
 
     const yawDelta = dx * 0.005;
-    // Drag down tips the north edge toward you (natural with screen Y-down)
     const pitchDelta = dy * 0.004;
     rotY.current += yawDelta;
     rotX.current = Math.max(-0.55, Math.min(0.55, rotX.current + pitchDelta));
@@ -1023,6 +1072,8 @@ export function HeroGlobeVisual({ reduced }: { reduced?: boolean }) {
   }, []);
 
   const endDrag = useCallback((e: ReactPointerEvent<HTMLDivElement>) => {
+    pendingDrag.current = null;
+    if (!dragging.current) return;
     dragging.current = false;
     try {
       e.currentTarget.releasePointerCapture(e.pointerId);
@@ -1034,7 +1085,7 @@ export function HeroGlobeVisual({ reduced }: { reduced?: boolean }) {
   return (
     <div
       ref={wrapRef}
-      className="relative w-full h-full min-h-[320px] sm:min-h-[420px] lg:min-h-[560px] xl:min-h-[640px] select-none touch-none cursor-grab active:cursor-grabbing"
+      className="relative w-full h-full min-h-[320px] sm:min-h-[420px] lg:min-h-[560px] xl:min-h-[640px] select-none cursor-grab active:cursor-grabbing touch-pan-y"
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
       onPointerUp={endDrag}
