@@ -9,22 +9,16 @@ import {
 } from "react";
 import { useReducedMotion } from "framer-motion";
 import landDotsRaw from "@/lib/land-dots.json";
+import ethiopiaDotsRaw from "@/lib/ethiopia-dots.json";
+import ethiopiaRings from "@/lib/ethiopia-rings.json";
 
 type LandDot = {
   lat: number;
   lon: number;
   inland: number;
   region: number;
-};
-
-type Vehicle = {
-  id: string;
-  type: "plane" | "ship";
-  lat: number;
-  lon0: number;
-  speed: number;
-  altitude: number;
-  scale: number;
+  /** Ethiopian flag band: 0 none, 1 green, 2 yellow, 3 red */
+  flag: 0 | 1 | 2 | 3;
 };
 
 type RegionDef = {
@@ -36,9 +30,51 @@ type RegionDef = {
   test: (lonDeg: number, latDeg: number) => boolean;
 };
 
-/** Face Africa / Europe — most recognizable silhouette */
-const INITIAL_ROT_Y = -0.32;
-const INITIAL_ROT_X = 0.1;
+/** Face Horn of Africa so Ethiopia is visible on first paint */
+const INITIAL_ROT_Y = -0.68;
+const INITIAL_ROT_X = 0.08;
+
+/** Ethiopian flag colors */
+const FLAG_GREEN = [7, 137, 48] as const;
+const FLAG_YELLOW = [252, 221, 9] as const;
+const FLAG_RED = [218, 18, 26] as const;
+
+type LonLat = [number, number];
+
+function pointInRing(lon: number, lat: number, ring: LonLat[]): boolean {
+  let inside = false;
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    const [xi, yi] = ring[i];
+    const [xj, yj] = ring[j];
+    if (yi > lat !== yj > lat && lon < ((xj - xi) * (lat - yi)) / (yj - yi + Number.EPSILON) + xi) {
+      inside = !inside;
+    }
+  }
+  return inside;
+}
+
+/** Accurate Natural Earth Ethiopia boundary */
+function isEthiopia(lonDeg: number, latDeg: number): boolean {
+  const polys = ethiopiaRings as LonLat[][][];
+  for (const rings of polys) {
+    if (!pointInRing(lonDeg, latDeg, rings[0])) continue;
+    let inHole = false;
+    for (let h = 1; h < rings.length; h++) {
+      if (pointInRing(lonDeg, latDeg, rings[h])) {
+        inHole = true;
+        break;
+      }
+    }
+    if (!inHole) return true;
+  }
+  return false;
+}
+
+function flagRgb(band: 1 | 2 | 3): readonly [number, number, number] {
+  if (band === 1) return FLAG_GREEN;
+  if (band === 2) return FLAG_YELLOW;
+  return FLAG_RED;
+}
 
 /** Trade regions — distinct colors, professional palette (specific → broad) */
 const REGIONS: RegionDef[] = [
@@ -100,6 +136,13 @@ const REGIONS: RegionDef[] = [
 
 const REGION_CYCLE_MS = 3200;
 
+/** Addis Ababa — hub for outbound routes */
+const ETH_HUB_LAT = (9.03 * Math.PI) / 180;
+const ETH_HUB_LON = (38.75 * Math.PI) / 180;
+/** Djibouti / Red Sea gate for Ethiopia trade ships */
+const ETH_PORT_LAT = (11.6 * Math.PI) / 180;
+const ETH_PORT_LON = (43.15 * Math.PI) / 180;
+
 function regionIndexFor(lonDeg: number, latDeg: number): number {
   for (let i = 0; i < REGIONS.length; i++) {
     if (REGIONS[i].test(lonDeg, latDeg)) return i;
@@ -114,13 +157,124 @@ function shortestLonDelta(a: number, b: number) {
   return d;
 }
 
-const VEHICLES: Vehicle[] = [
-  { id: "plane-1", type: "plane", lat: 0.42, lon0: 0.3, speed: 0.00072, altitude: 1.13, scale: 1.12 },
-  { id: "plane-2", type: "plane", lat: -0.22, lon0: 2.2, speed: -0.00058, altitude: 1.15, scale: 1 },
-  { id: "plane-3", type: "plane", lat: 0.18, lon0: 4.1, speed: 0.0005, altitude: 1.11, scale: 0.92 },
-  { id: "ship-1", type: "ship", lat: 0.06, lon0: 1.1, speed: 0.00028, altitude: 1.02, scale: 1.02 },
-  { id: "ship-2", type: "ship", lat: -0.1, lon0: 3.3, speed: -0.00022, altitude: 1.02, scale: 0.95 },
-  { id: "ship-3", type: "ship", lat: 0.02, lon0: 5.1, speed: 0.0002, altitude: 1.015, scale: 0.88 },
+function lerpLon(a: number, b: number, t: number) {
+  return a + shortestLonDelta(b, a) * t;
+}
+
+type RouteVehicle = {
+  id: string;
+  type: "plane" | "ship";
+  fromLat: number;
+  fromLon: number;
+  toLat: number;
+  toLon: number;
+  /** Progress units per ms (full loop = 1) */
+  speed: number;
+  phase: number;
+  altitude: number;
+  scale: number;
+};
+
+/** Planes & ships flowing in/out of Ethiopia */
+const VEHICLES: RouteVehicle[] = [
+  // Planes — Addis ↔ hubs (speed = one-way progress per ms)
+  {
+    id: "plane-eu",
+    type: "plane",
+    fromLat: ETH_HUB_LAT,
+    fromLon: ETH_HUB_LON,
+    toLat: (51.5 * Math.PI) / 180,
+    toLon: (-0.1 * Math.PI) / 180,
+    speed: 0.00016,
+    phase: 0,
+    altitude: 1.14,
+    scale: 1.12,
+  },
+  {
+    id: "plane-me",
+    type: "plane",
+    fromLat: ETH_HUB_LAT,
+    fromLon: ETH_HUB_LON,
+    toLat: (25.2 * Math.PI) / 180,
+    toLon: (55.3 * Math.PI) / 180,
+    speed: 0.0002,
+    phase: 0.35,
+    altitude: 1.13,
+    scale: 1.05,
+  },
+  {
+    id: "plane-asia",
+    type: "plane",
+    fromLat: ETH_HUB_LAT,
+    fromLon: ETH_HUB_LON,
+    toLat: (31.2 * Math.PI) / 180,
+    toLon: (121.5 * Math.PI) / 180,
+    speed: 0.00012,
+    phase: 0.7,
+    altitude: 1.15,
+    scale: 1,
+  },
+  {
+    id: "plane-us",
+    type: "plane",
+    fromLat: ETH_HUB_LAT,
+    fromLon: ETH_HUB_LON,
+    toLat: (40.7 * Math.PI) / 180,
+    toLon: (-74 * Math.PI) / 180,
+    speed: 0.00011,
+    phase: 1.15,
+    altitude: 1.16,
+    scale: 1.08,
+  },
+  {
+    id: "plane-sa",
+    type: "plane",
+    fromLat: ETH_HUB_LAT,
+    fromLon: ETH_HUB_LON,
+    toLat: (-26.2 * Math.PI) / 180,
+    toLon: (28.0 * Math.PI) / 180, // Johannesburg
+    speed: 0.00015,
+    phase: 1.55,
+    altitude: 1.13,
+    scale: 0.98,
+  },
+  // Ships — Djibouti ↔ ports
+  {
+    id: "ship-suez",
+    type: "ship",
+    fromLat: ETH_PORT_LAT,
+    fromLon: ETH_PORT_LON,
+    toLat: (31.2 * Math.PI) / 180,
+    toLon: (32.3 * Math.PI) / 180,
+    speed: 0.00007,
+    phase: 0.2,
+    altitude: 1.02,
+    scale: 1.02,
+  },
+  {
+    id: "ship-india",
+    type: "ship",
+    fromLat: ETH_PORT_LAT,
+    fromLon: ETH_PORT_LON,
+    toLat: (18.9 * Math.PI) / 180,
+    toLon: (72.8 * Math.PI) / 180,
+    speed: 0.000055,
+    phase: 0.9,
+    altitude: 1.02,
+    scale: 0.95,
+  },
+  {
+    id: "ship-cape",
+    type: "ship",
+    fromLat: ETH_PORT_LAT,
+    fromLon: ETH_PORT_LON,
+    toLat: (-33.9 * Math.PI) / 180,
+    toLon: (18.4 * Math.PI) / 180,
+    speed: 0.00005,
+    phase: 1.4,
+    altitude: 1.015,
+    scale: 0.92,
+  },
 ];
 
 type VehicleMotion = {
@@ -141,19 +295,34 @@ function smoothToward(current: number, target: number, dt: number, rate: number)
   return current + (target - current) * k;
 }
 
-/** Prebaked Natural Earth land samples: [latRad, lonRad, accent, inland] */
-const LAND_DOTS: LandDot[] = (landDotsRaw as [number, number, number, number][]).map(
-  ([lat, lon, , inland]) => {
-    const lonDeg = (lon * 180) / Math.PI;
-    const latDeg = (lat * 180) / Math.PI;
-    return {
+/** World land dots, with Ethiopia cut out then replaced by dense accurate flag dots */
+const LAND_DOTS: LandDot[] = (() => {
+  const world: LandDot[] = (landDotsRaw as [number, number, number, number][])
+    .map(([lat, lon, , inland]) => {
+      const lonDeg = (lon * 180) / Math.PI;
+      const latDeg = (lat * 180) / Math.PI;
+      return {
+        lat,
+        lon,
+        inland,
+        region: regionIndexFor(lonDeg, latDeg),
+        flag: 0 as const,
+      };
+    })
+    .filter((d) => !isEthiopia((d.lon * 180) / Math.PI, (d.lat * 180) / Math.PI));
+
+  const ethiopia: LandDot[] = (ethiopiaDotsRaw as [number, number, number, number][]).map(
+    ([lat, lon, inland, flag]) => ({
       lat,
       lon,
       inland,
-      region: regionIndexFor(lonDeg, latDeg),
-    };
-  },
-);
+      region: -1,
+      flag: flag as 1 | 2 | 3,
+    }),
+  );
+
+  return world.concat(ethiopia);
+})();
 
 function project(
   lat: number,
@@ -518,35 +687,57 @@ export function HeroGlobeVisual({ reduced }: { reduced?: boolean }) {
         return Math.min(1, g);
       };
 
+      // Ethiopia always pulses noticeably (flag spotlight)
+      const ethPulse = noMotion
+        ? 0.85
+        : 0.55 + 0.45 * (0.5 + 0.5 * Math.sin(t * 0.0024));
+      const ethFace = Math.max(
+        0,
+        1 - Math.abs(shortestLonDelta((40 * Math.PI) / 180, frontLon)) / 0.95,
+      );
+      const ethGlow = Math.min(1, ethPulse * (0.65 + ethFace * 0.5));
+
       // Project once, then draw glow + cores
       visibleCount = 0;
       for (const p of LAND_DOTS) {
         const { x, y, z } = project(p.lat, p.lon, rotYNow, rotXNow, radius);
         if (z <= 0) continue;
+        const glow = p.flag ? ethGlow : glowOf(p.region);
         const slot = visibleBuf[visibleCount];
         if (slot) {
           slot.p = p;
           slot.x = x;
           slot.y = y;
           slot.z = z;
-          slot.glow = glowOf(p.region);
+          slot.glow = glow;
         } else {
-          visibleBuf[visibleCount] = { p, x, y, z, glow: glowOf(p.region) };
+          visibleBuf[visibleCount] = { p, x, y, z, glow };
         }
         visibleCount++;
       }
 
-      // Soft glow halos for lit regions
+      // Soft glow halos for lit regions + strong Ethiopia flag glow
       ctx.save();
       ctx.globalCompositeOperation = "lighter";
       for (let i = 0; i < visibleCount; i++) {
         const v = visibleBuf[i];
-        if (v.glow < 0.08 || v.p.region < 0) continue;
+        const isEth = v.p.flag > 0;
+        if (v.glow < 0.08 && !isEth) continue;
+        if (!isEth && v.p.region < 0) continue;
+
         const depth = v.z / radius;
-        const [cr, cg, cb] = REGIONS[v.p.region].rgb;
+        const [cr, cg, cb] = isEth
+          ? flagRgb(v.p.flag as 1 | 2 | 3)
+          : REGIONS[v.p.region].rgb;
+        const glow = isEth ? Math.max(v.glow, 0.75) : v.glow;
         const gr =
-          (1.8 + (1 - v.p.inland) * 1.2) * (0.75 + depth * 0.5) * dpr * (0.7 + v.glow * 0.9);
-        const gaq = Math.round(0.1 * v.glow * (0.45 + depth * 0.55) * 25) / 25;
+          (isEth ? 2.1 : 1.8) *
+          (1 + (1 - v.p.inland) * 0.7) *
+          (0.75 + depth * 0.5) *
+          dpr *
+          (0.7 + glow * 0.95);
+        const gaq =
+          Math.round((isEth ? 0.16 : 0.1) * glow * (0.5 + depth * 0.5) * 25) / 25;
         if (gaq < 0.02) continue;
         ctx.fillStyle = `rgba(${cr},${cg},${cb},${gaq})`;
         ctx.beginPath();
@@ -555,7 +746,7 @@ export function HeroGlobeVisual({ reduced }: { reduced?: boolean }) {
       }
       ctx.restore();
 
-      // Region-tinted cores
+      // Region-tinted cores — Ethiopia always full flag colors
       for (let i = 0; i < visibleCount; i++) {
         const v = visibleBuf[i];
         const invR = 1 / radius;
@@ -563,12 +754,23 @@ export function HeroGlobeVisual({ reduced }: { reduced?: boolean }) {
         const depth = v.z * invR;
         const shade = 0.42 + lit * 0.58;
         const { glow, p } = v;
+        const isEth = p.flag > 0;
 
-        const baseR = 0.88 + (1 - p.inland) * 0.28 + glow * 0.55;
+        const baseR = isEth
+          ? 1.05 + (1 - p.inland) * 0.25 + glow * 0.55
+          : 0.88 + (1 - p.inland) * 0.28 + glow * 0.55;
         const r = Math.max(0.65 * dpr, baseR * (0.7 + depth * 0.45) * dpr);
-        const aq = Math.round((0.38 + depth * 0.55 + glow * 0.35) * shade * 20) / 20;
+        const aq =
+          Math.round(
+            (isEth ? 0.78 + depth * 0.22 + glow * 0.15 : 0.38 + depth * 0.55 + glow * 0.35) *
+              shade *
+              20,
+          ) / 20;
 
-        if (p.region >= 0) {
+        if (isEth) {
+          const [cr, cg, cb] = flagRgb(p.flag as 1 | 2 | 3);
+          ctx.fillStyle = `rgba(${cr},${cg},${cb},${Math.min(1, aq + 0.15)})`;
+        } else if (p.region >= 0) {
           const [cr, cg, cb] = REGIONS[p.region].rgb;
           const mix = 0.35 + glow * 0.65;
           ctx.fillStyle = `rgba(${Math.round(90 + (cr - 90) * mix)},${Math.round(100 + (cg - 100) * mix)},${Math.round(115 + (cb - 115) * mix)},${aq})`;
@@ -580,26 +782,37 @@ export function HeroGlobeVisual({ reduced }: { reduced?: boolean }) {
         ctx.fill();
       }
 
-      // Vehicles — smoothed heading + soft limb fade (no hard pop)
-      const lookAhead = 0.12;
+      // Vehicles — fast in/out of Ethiopia (ping-pong, no teleport stack)
       for (const v of VEHICLES) {
-        const lon = v.lon0 + timeRef.current * v.speed;
-        const pos = project(v.lat, lon, rotYNow, rotXNow, radius * v.altitude);
+        // Round trip: 0→1 outbound, 1→2 inbound
+        const cycle = noMotion ? v.phase % 2 : (t * v.speed + v.phase) % 2;
+        const outbound = cycle < 1;
+        const u = outbound ? cycle : 2 - cycle;
+        const dir = outbound ? 1 : -1;
+
+        const lat = v.fromLat + (v.toLat - v.fromLat) * u;
+        const lon = lerpLon(v.fromLon, v.toLon, u);
+        const altLift = v.type === "plane" ? Math.sin(u * Math.PI) * 0.04 : 0;
+        const altitude = v.altitude + altLift;
+
+        const pos = project(lat, lon, rotYNow, rotXNow, radius * altitude);
+        const aheadT = Math.max(0, Math.min(1, u + dir * 0.04));
         const ahead = project(
-          v.lat,
-          lon + Math.sign(v.speed || 1) * lookAhead,
+          v.fromLat + (v.toLat - v.fromLat) * aheadT,
+          lerpLon(v.fromLon, v.toLon, aheadT),
           rotYNow,
           rotXNow,
-          radius * v.altitude,
+          radius *
+            (v.altitude +
+              (v.type === "plane" ? Math.sin(aheadT * Math.PI) * 0.04 : 0)),
         );
 
         const depth = (pos.z + radius) / (2 * radius);
-        // Soft visibility: fade out near the back edge instead of vanishing
         const targetAlpha =
           pos.z < -radius * 0.15
             ? 0
             : Math.max(0, Math.min(1, (pos.z + radius * 0.12) / (radius * 0.55))) *
-              (0.6 + depth * 0.4);
+              (0.7 + depth * 0.3);
 
         let motion = vehicleMotion.current[v.id];
         if (!motion) {
@@ -610,22 +823,40 @@ export function HeroGlobeVisual({ reduced }: { reduced?: boolean }) {
         const dx = ahead.x - pos.x;
         const dy = -(ahead.y - pos.y);
         const len = Math.hypot(dx, dy);
-        // Only trust heading when projection has enough screen length
-        if (len > radius * 0.012) {
+        if (len > radius * 0.006) {
           const targetAngle = Math.atan2(dy, dx);
           if (!motion.initialized) {
             motion.angle = targetAngle;
             motion.initialized = true;
           } else {
-            motion.angle = lerpAngle(motion.angle, targetAngle, 1 - Math.exp(-0.014 * dt));
+            motion.angle = lerpAngle(motion.angle, targetAngle, 1 - Math.exp(-0.02 * dt));
           }
         }
 
-        motion.alpha = smoothToward(motion.alpha, targetAlpha, dt, 0.01);
+        motion.alpha = smoothToward(motion.alpha, targetAlpha, dt, 0.012);
         if (motion.alpha < 0.02) continue;
 
-        const scale = v.scale * (0.88 + depth * 0.4);
+        // Trail behind travel direction
+        ctx.save();
+        ctx.globalCompositeOperation = "lighter";
+        const trailSteps = 10;
+        for (let s = 1; s <= trailSteps; s++) {
+          const tu = Math.max(0, Math.min(1, u - dir * s * 0.022));
+          const tLat = v.fromLat + (v.toLat - v.fromLat) * tu;
+          const tLon = lerpLon(v.fromLon, v.toLon, tu);
+          const tAlt =
+            v.altitude + (v.type === "plane" ? Math.sin(tu * Math.PI) * 0.04 : 0);
+          const tp = project(tLat, tLon, rotYNow, rotXNow, radius * tAlt);
+          if (tp.z <= 0) continue;
+          const fade = (1 - s / trailSteps) * motion.alpha * 0.4;
+          ctx.fillStyle = `rgba(0,123,255,${fade})`;
+          ctx.beginPath();
+          ctx.arc(cx + tp.x, cy - tp.y, (1.2 - s * 0.07) * dpr, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        ctx.restore();
 
+        const scale = v.scale * (0.9 + depth * 0.35);
         ctx.save();
         ctx.translate(cx + pos.x, cy - pos.y);
         ctx.rotate(motion.angle);
