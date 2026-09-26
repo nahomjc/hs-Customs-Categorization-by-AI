@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { motion, useReducedMotion } from "framer-motion";
 import { useEffect, useState } from "react";
+import { CountryFlag } from "@/components/dashboard/CountryFlag";
 import { HeroBackground } from "./HeroExtras";
 import { HeroGlobeVisual } from "./HeroGlobeVisual";
 import { fadeUp, staggerContainer } from "./motion";
@@ -58,7 +59,12 @@ export function HeroSection() {
                 variants={fadeUp}
                 className="flex justify-center lg:justify-start"
               >
-                <span className="inline-flex items-center rounded-full bg-gray-100/90 px-3.5 py-1.5 text-xs font-medium text-gray-600 ring-1 ring-gray-200/80">
+                <span className="inline-flex items-center gap-2 rounded-full bg-gray-100/90 px-3.5 py-1.5 text-xs font-medium text-gray-600 ring-1 ring-gray-200/80">
+                  <CountryFlag
+                    code="et"
+                    title="Ethiopia"
+                    className="h-3.5 w-[1.35rem] object-cover rounded-[2px] shadow-sm ring-1 ring-black/5"
+                  />
                   Impact Logistics
                 </span>
               </motion.div>
