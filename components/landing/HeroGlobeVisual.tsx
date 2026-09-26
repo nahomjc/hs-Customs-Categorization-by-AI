@@ -13,8 +13,8 @@ import landDotsRaw from "@/lib/land-dots.json";
 type LandDot = {
   lat: number;
   lon: number;
-  accent: boolean;
   inland: number;
+  region: number;
 };
 
 type Vehicle = {
@@ -27,9 +27,92 @@ type Vehicle = {
   scale: number;
 };
 
+type RegionDef = {
+  id: string;
+  /** Soft brand-safe regional tint */
+  rgb: readonly [number, number, number];
+  /** Approx center lon (rad) — used to sync glow with facing side */
+  centerLon: number;
+  test: (lonDeg: number, latDeg: number) => boolean;
+};
+
 /** Face Africa / Europe — most recognizable silhouette */
 const INITIAL_ROT_Y = -0.32;
 const INITIAL_ROT_X = 0.1;
+
+/** Trade regions — distinct colors, professional palette (specific → broad) */
+const REGIONS: RegionDef[] = [
+  {
+    id: "north-america",
+    rgb: [37, 99, 235],
+    centerLon: (-100 * Math.PI) / 180,
+    test: (lon, lat) => lon >= -170 && lon <= -50 && lat >= 15 && lat <= 83,
+  },
+  {
+    id: "south-america",
+    rgb: [16, 185, 129],
+    centerLon: (-60 * Math.PI) / 180,
+    test: (lon, lat) => lon >= -82 && lon <= -34 && lat >= -56 && lat < 15,
+  },
+  {
+    id: "europe",
+    rgb: [99, 102, 241],
+    centerLon: (10 * Math.PI) / 180,
+    test: (lon, lat) => lon >= -12 && lon <= 40 && lat >= 36 && lat <= 72,
+  },
+  {
+    id: "middle-east",
+    rgb: [236, 72, 153],
+    centerLon: (45 * Math.PI) / 180,
+    test: (lon, lat) => lon >= 32 && lon <= 62 && lat >= 12 && lat <= 42,
+  },
+  {
+    id: "south-asia",
+    rgb: [14, 165, 233],
+    centerLon: (78 * Math.PI) / 180,
+    test: (lon, lat) => lon >= 60 && lon <= 95 && lat >= 5 && lat <= 36,
+  },
+  {
+    id: "east-asia",
+    rgb: [6, 182, 212],
+    centerLon: (115 * Math.PI) / 180,
+    test: (lon, lat) => lon >= 95 && lon <= 150 && lat >= 18 && lat <= 55,
+  },
+  {
+    id: "se-asia",
+    rgb: [34, 197, 94],
+    centerLon: (115 * Math.PI) / 180,
+    test: (lon, lat) => lon >= 95 && lon <= 140 && lat >= -11 && lat < 18,
+  },
+  {
+    id: "oceania",
+    rgb: [168, 85, 247],
+    centerLon: (134 * Math.PI) / 180,
+    test: (lon, lat) => lon >= 110 && lon <= 180 && lat >= -48 && lat <= -10,
+  },
+  {
+    id: "africa",
+    rgb: [245, 158, 11],
+    centerLon: (20 * Math.PI) / 180,
+    test: (lon, lat) => lon >= -18 && lon <= 52 && lat >= -35 && lat < 38,
+  },
+];
+
+const REGION_CYCLE_MS = 3200;
+
+function regionIndexFor(lonDeg: number, latDeg: number): number {
+  for (let i = 0; i < REGIONS.length; i++) {
+    if (REGIONS[i].test(lonDeg, latDeg)) return i;
+  }
+  return -1; // unassigned land — neutral gray
+}
+
+function shortestLonDelta(a: number, b: number) {
+  let d = a - b;
+  while (d > Math.PI) d -= Math.PI * 2;
+  while (d < -Math.PI) d += Math.PI * 2;
+  return d;
+}
 
 const VEHICLES: Vehicle[] = [
   { id: "plane-1", type: "plane", lat: 0.42, lon0: 0.3, speed: 0.00072, altitude: 1.13, scale: 1.12 },
@@ -60,12 +143,16 @@ function smoothToward(current: number, target: number, dt: number, rate: number)
 
 /** Prebaked Natural Earth land samples: [latRad, lonRad, accent, inland] */
 const LAND_DOTS: LandDot[] = (landDotsRaw as [number, number, number, number][]).map(
-  ([lat, lon, accent, inland]) => ({
-    lat,
-    lon,
-    accent: accent === 1,
-    inland,
-  }),
+  ([lat, lon, , inland]) => {
+    const lonDeg = (lon * 180) / Math.PI;
+    const latDeg = (lat * 180) / Math.PI;
+    return {
+      lat,
+      lon,
+      inland,
+      region: regionIndexFor(lonDeg, latDeg),
+    };
+  },
 );
 
 function project(
@@ -222,10 +309,11 @@ export function HeroGlobeVisual({ reduced }: { reduced?: boolean }) {
   const lastPointer = useRef({ x: 0, y: 0 });
   const velocity = useRef({ y: 0, x: 0 });
   const timeRef = useRef(0);
+  const vehicleMotion = useRef<Record<string, VehicleMotion>>({});
 
   const light = useMemo(() => {
     const lx = -0.4;
-    const ly = 0.55; // screen-up after Y flip
+    const ly = 0.55;
     const lz = 0.75;
     const len = Math.hypot(lx, ly, lz);
     return { x: lx / len, y: ly / len, z: lz / len };
@@ -236,12 +324,76 @@ export function HeroGlobeVisual({ reduced }: { reduced?: boolean }) {
     const wrap = wrapRef.current;
     if (!canvas || !wrap) return;
 
-    const ctx = canvas.getContext("2d");
+    const ctx = canvas.getContext("2d", { alpha: true });
     if (!ctx) return;
 
     let raf = 0;
     let last = performance.now();
     let dpr = 1;
+    const visibleBuf: {
+      p: LandDot;
+      x: number;
+      y: number;
+      z: number;
+      glow: number;
+    }[] = [];
+    let visibleCount = 0;
+
+    // Cache gradients — recreating every frame was a big source of jank
+    let bloomGrad: CanvasGradient | null = null;
+    let oceanGrad: CanvasGradient | null = null;
+    let fadeGrad: CanvasGradient | null = null;
+    let rimGrad: CanvasGradient | null = null;
+    let cachedRadius = 0;
+    let cachedCx = 0;
+    let cachedCy = 0;
+
+    const rebuildGradients = (cx: number, cy: number, radius: number) => {
+      cachedRadius = radius;
+      cachedCx = cx;
+      cachedCy = cy;
+
+      bloomGrad = ctx.createRadialGradient(
+        cx - radius * 0.25,
+        cy - radius * 0.3,
+        radius * 0.1,
+        cx,
+        cy,
+        radius * 1.15,
+      );
+      bloomGrad.addColorStop(0, "rgba(0,123,255,0.16)");
+      bloomGrad.addColorStop(0.45, "rgba(0,123,255,0.04)");
+      bloomGrad.addColorStop(1, "rgba(0,123,255,0)");
+
+      oceanGrad = ctx.createRadialGradient(
+        cx - radius * 0.35,
+        cy - radius * 0.4,
+        radius * 0.05,
+        cx,
+        cy,
+        radius,
+      );
+      oceanGrad.addColorStop(0, "rgba(241,245,249,0.95)");
+      oceanGrad.addColorStop(0.55, "rgba(226,232,240,0.72)");
+      oceanGrad.addColorStop(1, "rgba(203,213,225,0.55)");
+
+      fadeGrad = ctx.createRadialGradient(cx, cy, radius * 0.72, cx, cy, radius * 1.02);
+      fadeGrad.addColorStop(0, "rgba(248,249,250,0)");
+      fadeGrad.addColorStop(0.7, "rgba(248,249,250,0)");
+      fadeGrad.addColorStop(1, "rgba(248,249,250,0.55)");
+
+      rimGrad = ctx.createRadialGradient(
+        cx - radius * 0.4,
+        cy - radius * 0.45,
+        0,
+        cx - radius * 0.2,
+        cy - radius * 0.25,
+        radius * 0.7,
+      );
+      rimGrad.addColorStop(0, "rgba(255,255,255,0.28)");
+      rimGrad.addColorStop(0.35, "rgba(255,255,255,0.08)");
+      rimGrad.addColorStop(1, "rgba(255,255,255,0)");
+    };
 
     const resize = () => {
       const rect = wrap.getBoundingClientRect();
@@ -250,6 +402,7 @@ export function HeroGlobeVisual({ reduced }: { reduced?: boolean }) {
       canvas.height = Math.max(1, Math.floor(rect.height * dpr));
       canvas.style.width = `${rect.width}px`;
       canvas.style.height = `${rect.height}px`;
+      bloomGrad = null;
     };
 
     resize();
@@ -262,14 +415,15 @@ export function HeroGlobeVisual({ reduced }: { reduced?: boolean }) {
       if (!noMotion) timeRef.current += dt;
 
       if (!dragging.current && !noMotion) {
-        rotY.current += dt * 0.00012 + velocity.current.y;
+        // Steady, constant spin — avoids micro-stutter from velocity noise
+        rotY.current += dt * 0.00011 + velocity.current.y;
         rotX.current += velocity.current.x;
-        velocity.current.y *= 0.94;
-        velocity.current.x *= 0.91;
+        velocity.current.y *= 0.92;
+        velocity.current.x *= 0.9;
         rotX.current = Math.max(-0.55, Math.min(0.55, rotX.current));
       } else if (!dragging.current) {
-        velocity.current.y *= 0.9;
-        velocity.current.x *= 0.9;
+        velocity.current.y *= 0.88;
+        velocity.current.x *= 0.88;
       }
 
       const w = canvas.width;
@@ -278,39 +432,29 @@ export function HeroGlobeVisual({ reduced }: { reduced?: boolean }) {
       const cy = h / 2;
       const radius = Math.min(w, h) * 0.42;
 
+      if (
+        !bloomGrad ||
+        !oceanGrad ||
+        !fadeGrad ||
+        !rimGrad ||
+        Math.abs(radius - cachedRadius) > 0.5 ||
+        Math.abs(cx - cachedCx) > 0.5 ||
+        Math.abs(cy - cachedCy) > 0.5
+      ) {
+        rebuildGradients(cx, cy, radius);
+      }
+
       ctx.setTransform(1, 0, 0, 1, 0, 0);
       ctx.clearRect(0, 0, w, h);
 
-      const bloom = ctx.createRadialGradient(
-        cx - radius * 0.25,
-        cy - radius * 0.3,
-        radius * 0.1,
-        cx,
-        cy,
-        radius * 1.15,
-      );
-      bloom.addColorStop(0, "rgba(0,123,255,0.16)");
-      bloom.addColorStop(0.45, "rgba(0,123,255,0.04)");
-      bloom.addColorStop(1, "rgba(0,123,255,0)");
-      ctx.fillStyle = bloom;
+      ctx.fillStyle = bloomGrad;
       ctx.beginPath();
       ctx.arc(cx, cy, radius * 1.2, 0, Math.PI * 2);
       ctx.fill();
 
-      const ocean = ctx.createRadialGradient(
-        cx - radius * 0.35,
-        cy - radius * 0.4,
-        radius * 0.05,
-        cx,
-        cy,
-        radius,
-      );
-      ocean.addColorStop(0, "rgba(241,245,249,0.95)");
-      ocean.addColorStop(0.55, "rgba(226,232,240,0.72)");
-      ocean.addColorStop(1, "rgba(203,213,225,0.55)");
       ctx.beginPath();
       ctx.arc(cx, cy, radius, 0, Math.PI * 2);
-      ctx.fillStyle = ocean;
+      ctx.fillStyle = oceanGrad;
       ctx.fill();
       ctx.strokeStyle = "rgba(148,163,184,0.28)";
       ctx.lineWidth = 1.25 * dpr;
@@ -339,83 +483,166 @@ export function HeroGlobeVisual({ reduced }: { reduced?: boolean }) {
       ctx.stroke();
       ctx.setLineDash([]);
 
-      // Land dots — canvas Y is flipped so north is up (cy - y)
+      // Land dots — regional colors + soft pulse glow cycling nations
+      const rotYNow = rotY.current;
+      const rotXNow = rotX.current;
+      const lx = light.x;
+      const ly = light.y;
+      const lz = light.z;
+      const t = timeRef.current;
+      const frontLon = -rotYNow;
+
+      // Cycle which region is "active", with a smooth sine breath
+      const cyclePos = noMotion ? 0 : t / REGION_CYCLE_MS;
+      const activeIdx = Math.floor(cyclePos) % REGIONS.length;
+      const nextIdx = (activeIdx + 1) % REGIONS.length;
+      const phase = cyclePos - Math.floor(cyclePos); // 0..1 within cycle
+      // Ease: glow up mid-cycle, soft handoff near the end
+      const breath = Math.sin(phase * Math.PI); // 0→1→0
+      const handoff = phase > 0.78 ? (phase - 0.78) / 0.22 : 0;
+
+      // Camera boost: regions facing us glow a bit more
+      const faceBoost = (regionIdx: number) => {
+        if (regionIdx < 0) return 0;
+        const d = Math.abs(shortestLonDelta(REGIONS[regionIdx].centerLon, frontLon));
+        return Math.max(0, 1 - d / 1.1);
+      };
+
+      const glowOf = (regionIdx: number) => {
+        if (regionIdx < 0 || noMotion) return 0;
+        let g = 0;
+        if (regionIdx === activeIdx) g = breath * (1 - handoff * 0.85);
+        if (regionIdx === nextIdx) g = Math.max(g, handoff * breath);
+        // Blend with facing so rotation feels connected
+        g = Math.max(g * 0.75, g * 0.45 + faceBoost(regionIdx) * 0.55 * 0.35);
+        return Math.min(1, g);
+      };
+
+      // Project once, then draw glow + cores
+      visibleCount = 0;
       for (const p of LAND_DOTS) {
-        const { x, y, z } = project(p.lat, p.lon, rotY.current, rotX.current, radius);
+        const { x, y, z } = project(p.lat, p.lon, rotYNow, rotXNow, radius);
         if (z <= 0) continue;
-
-        const nx = x / radius;
-        const ny = y / radius;
-        const nz = z / radius;
-        // light.y is screen-up; 3D +Y is north, matches after we flip draw Y
-        const lit = Math.max(0, nx * light.x + ny * light.y + nz * light.z);
-        const depth = z / radius;
-        const shade = 0.42 + lit * 0.58;
-
-        const baseR = (p.accent ? 1.05 : 0.9) + (1 - p.inland) * 0.28;
-        const r = Math.max(0.7 * dpr, baseR * (0.7 + depth * 0.45) * dpr);
-        const a = (0.4 + depth * 0.6) * shade;
-
-        if (p.accent) {
-          ctx.fillStyle = `rgba(0,${Math.round(110 + lit * 30)},${Math.round(200 + lit * 40)},${a})`;
+        const slot = visibleBuf[visibleCount];
+        if (slot) {
+          slot.p = p;
+          slot.x = x;
+          slot.y = y;
+          slot.z = z;
+          slot.glow = glowOf(p.region);
         } else {
-          const g = Math.round(78 + lit * 45);
-          ctx.fillStyle = `rgba(${g - 4},${g},${g + 12},${a})`;
+          visibleBuf[visibleCount] = { p, x, y, z, glow: glowOf(p.region) };
+        }
+        visibleCount++;
+      }
+
+      // Soft glow halos for lit regions
+      ctx.save();
+      ctx.globalCompositeOperation = "lighter";
+      for (let i = 0; i < visibleCount; i++) {
+        const v = visibleBuf[i];
+        if (v.glow < 0.08 || v.p.region < 0) continue;
+        const depth = v.z / radius;
+        const [cr, cg, cb] = REGIONS[v.p.region].rgb;
+        const gr =
+          (1.8 + (1 - v.p.inland) * 1.2) * (0.75 + depth * 0.5) * dpr * (0.7 + v.glow * 0.9);
+        const gaq = Math.round(0.1 * v.glow * (0.45 + depth * 0.55) * 25) / 25;
+        if (gaq < 0.02) continue;
+        ctx.fillStyle = `rgba(${cr},${cg},${cb},${gaq})`;
+        ctx.beginPath();
+        ctx.arc(cx + v.x, cy - v.y, gr, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.restore();
+
+      // Region-tinted cores
+      for (let i = 0; i < visibleCount; i++) {
+        const v = visibleBuf[i];
+        const invR = 1 / radius;
+        const lit = Math.max(0, v.x * invR * lx + v.y * invR * ly + v.z * invR * lz);
+        const depth = v.z * invR;
+        const shade = 0.42 + lit * 0.58;
+        const { glow, p } = v;
+
+        const baseR = 0.88 + (1 - p.inland) * 0.28 + glow * 0.55;
+        const r = Math.max(0.65 * dpr, baseR * (0.7 + depth * 0.45) * dpr);
+        const aq = Math.round((0.38 + depth * 0.55 + glow * 0.35) * shade * 20) / 20;
+
+        if (p.region >= 0) {
+          const [cr, cg, cb] = REGIONS[p.region].rgb;
+          const mix = 0.35 + glow * 0.65;
+          ctx.fillStyle = `rgba(${Math.round(90 + (cr - 90) * mix)},${Math.round(100 + (cg - 100) * mix)},${Math.round(115 + (cb - 115) * mix)},${aq})`;
+        } else {
+          ctx.fillStyle = `rgba(90,100,115,${aq})`;
         }
         ctx.beginPath();
-        ctx.arc(cx + x, cy - y, r, 0, Math.PI * 2);
+        ctx.arc(cx + v.x, cy - v.y, r, 0, Math.PI * 2);
         ctx.fill();
       }
 
+      // Vehicles — smoothed heading + soft limb fade (no hard pop)
+      const lookAhead = 0.12;
       for (const v of VEHICLES) {
         const lon = v.lon0 + timeRef.current * v.speed;
-        const pos = project(v.lat, lon, rotY.current, rotX.current, radius * v.altitude);
-        if (pos.z < -radius * 0.02) continue;
+        const pos = project(v.lat, lon, rotYNow, rotXNow, radius * v.altitude);
         const ahead = project(
           v.lat,
-          lon + Math.sign(v.speed || 1) * 0.08,
-          rotY.current,
-          rotX.current,
+          lon + Math.sign(v.speed || 1) * lookAhead,
+          rotYNow,
+          rotXNow,
           radius * v.altitude,
         );
-        // Flip Y for screen-space heading
-        const angle = Math.atan2(-(ahead.y - pos.y), ahead.x - pos.x);
+
         const depth = (pos.z + radius) / (2 * radius);
-        const alpha = 0.55 + depth * 0.45;
-        const scale = v.scale * (0.85 + depth * 0.45);
+        // Soft visibility: fade out near the back edge instead of vanishing
+        const targetAlpha =
+          pos.z < -radius * 0.15
+            ? 0
+            : Math.max(0, Math.min(1, (pos.z + radius * 0.12) / (radius * 0.55))) *
+              (0.6 + depth * 0.4);
+
+        let motion = vehicleMotion.current[v.id];
+        if (!motion) {
+          motion = { angle: 0, alpha: 0, initialized: false };
+          vehicleMotion.current[v.id] = motion;
+        }
+
+        const dx = ahead.x - pos.x;
+        const dy = -(ahead.y - pos.y);
+        const len = Math.hypot(dx, dy);
+        // Only trust heading when projection has enough screen length
+        if (len > radius * 0.012) {
+          const targetAngle = Math.atan2(dy, dx);
+          if (!motion.initialized) {
+            motion.angle = targetAngle;
+            motion.initialized = true;
+          } else {
+            motion.angle = lerpAngle(motion.angle, targetAngle, 1 - Math.exp(-0.014 * dt));
+          }
+        }
+
+        motion.alpha = smoothToward(motion.alpha, targetAlpha, dt, 0.01);
+        if (motion.alpha < 0.02) continue;
+
+        const scale = v.scale * (0.88 + depth * 0.4);
 
         ctx.save();
         ctx.translate(cx + pos.x, cy - pos.y);
-        ctx.rotate(angle);
-        if (v.type === "plane") drawPlane(ctx, scale * dpr, alpha);
-        else drawShip(ctx, scale * dpr, alpha);
+        ctx.rotate(motion.angle);
+        if (v.type === "plane") drawPlane(ctx, scale * dpr, motion.alpha);
+        else drawShip(ctx, scale * dpr, motion.alpha);
         ctx.restore();
       }
 
-      const fade = ctx.createRadialGradient(cx, cy, radius * 0.72, cx, cy, radius * 1.02);
-      fade.addColorStop(0, "rgba(248,249,250,0)");
-      fade.addColorStop(0.7, "rgba(248,249,250,0)");
-      fade.addColorStop(1, "rgba(248,249,250,0.55)");
+      ctx.fillStyle = fadeGrad;
       ctx.beginPath();
       ctx.arc(cx, cy, radius * 1.05, 0, Math.PI * 2);
-      ctx.fillStyle = fade;
       ctx.fill();
 
-      const rim = ctx.createRadialGradient(
-        cx - radius * 0.4,
-        cy - radius * 0.45,
-        0,
-        cx - radius * 0.2,
-        cy - radius * 0.25,
-        radius * 0.7,
-      );
-      rim.addColorStop(0, "rgba(255,255,255,0.28)");
-      rim.addColorStop(0.35, "rgba(255,255,255,0.08)");
-      rim.addColorStop(1, "rgba(255,255,255,0)");
       ctx.globalCompositeOperation = "screen";
+      ctx.fillStyle = rimGrad;
       ctx.beginPath();
       ctx.arc(cx, cy, radius, 0, Math.PI * 2);
-      ctx.fillStyle = rim;
       ctx.fill();
       ctx.globalCompositeOperation = "source-over";
 
