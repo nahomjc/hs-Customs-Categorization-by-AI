@@ -5,19 +5,16 @@ import {
   useEffect,
   useMemo,
   useRef,
-  useState,
   type PointerEvent as ReactPointerEvent,
 } from "react";
 import { useReducedMotion } from "framer-motion";
+import landDotsRaw from "@/lib/land-dots.json";
 
-type GlyphKind = "crate" | "doc" | "chip";
-
-type GlobePoint = {
-  id: string;
-  kind: GlyphKind;
+type LandDot = {
+  lat: number;
+  lon: number;
   accent: boolean;
-  theta: number;
-  phi: number;
+  inland: number;
 };
 
 type Vehicle = {
@@ -30,50 +27,30 @@ type Vehicle = {
   scale: number;
 };
 
-const POINT_COUNT = 220;
-const GLOBE_SIZE = 720;
-
-function fibonacciSphere(count: number): GlobePoint[] {
-  const points: GlobePoint[] = [];
-  const golden = Math.PI * (3 - Math.sqrt(5));
-  const kinds: GlyphKind[] = ["crate", "doc", "chip"];
-
-  for (let i = 0; i < count; i++) {
-    const y = 1 - (i / (count - 1)) * 2;
-    const radius = Math.sqrt(1 - y * y);
-    const theta = golden * i;
-    const x = Math.cos(theta) * radius;
-    const z = Math.sin(theta) * radius;
-    const phi = Math.acos(Math.min(1, Math.max(-1, y)));
-    const lon = Math.atan2(z, x);
-
-    const accent =
-      (lon > -0.4 && lon < 0.9 && phi > 0.7 && phi < 1.55) ||
-      (lon > 1.6 && lon < 2.8 && phi > 0.85 && phi < 1.7) ||
-      (lon > -2.2 && lon < -1.0 && phi > 0.9 && phi < 1.65);
-
-    points.push({
-      id: `p-${i}`,
-      kind: kinds[i % kinds.length],
-      accent,
-      theta: lon,
-      phi,
-    });
-  }
-
-  return points;
-}
+/** Face Africa / Europe — most recognizable silhouette */
+const INITIAL_ROT_Y = -0.32;
+const INITIAL_ROT_X = 0.1;
 
 const VEHICLES: Vehicle[] = [
-  { id: "plane-1", type: "plane", lat: 0.45, lon0: 0.2, speed: 0.00055, altitude: 1.12, scale: 1.15 },
-  { id: "plane-2", type: "plane", lat: -0.25, lon0: 2.1, speed: -0.00042, altitude: 1.14, scale: 1 },
-  { id: "plane-3", type: "plane", lat: 0.15, lon0: 4.0, speed: 0.00038, altitude: 1.1, scale: 0.95 },
-  { id: "ship-1", type: "ship", lat: 0.08, lon0: 1.0, speed: 0.00022, altitude: 1.02, scale: 1.05 },
-  { id: "ship-2", type: "ship", lat: -0.12, lon0: 3.2, speed: -0.00018, altitude: 1.02, scale: 1 },
-  { id: "ship-3", type: "ship", lat: 0.02, lon0: 5.0, speed: 0.00015, altitude: 1.015, scale: 0.9 },
+  { id: "plane-1", type: "plane", lat: 0.42, lon0: 0.3, speed: 0.00055, altitude: 1.13, scale: 1.12 },
+  { id: "plane-2", type: "plane", lat: -0.22, lon0: 2.2, speed: -0.00042, altitude: 1.15, scale: 1 },
+  { id: "plane-3", type: "plane", lat: 0.18, lon0: 4.1, speed: 0.00038, altitude: 1.11, scale: 0.92 },
+  { id: "ship-1", type: "ship", lat: 0.06, lon0: 1.1, speed: 0.0002, altitude: 1.02, scale: 1.02 },
+  { id: "ship-2", type: "ship", lat: -0.1, lon0: 3.3, speed: -0.00016, altitude: 1.02, scale: 0.95 },
+  { id: "ship-3", type: "ship", lat: 0.02, lon0: 5.1, speed: 0.00014, altitude: 1.015, scale: 0.88 },
 ];
 
-function projectPoint(
+/** Prebaked Natural Earth land samples: [latRad, lonRad, accent, inland] */
+const LAND_DOTS: LandDot[] = (landDotsRaw as [number, number, number, number][]).map(
+  ([lat, lon, accent, inland]) => ({
+    lat,
+    lon,
+    accent: accent === 1,
+    inland,
+  }),
+);
+
+function project(
   lat: number,
   lon: number,
   rotY: number,
@@ -88,287 +65,314 @@ function projectPoint(
   const sinY = Math.sin(rotY);
   const x1 = x0 * cosY + z0 * sinY;
   const z1 = -x0 * sinY + z0 * cosY;
-  const y1 = y0;
 
   const cosX = Math.cos(rotX);
   const sinX = Math.sin(rotX);
-  const y2 = y1 * cosX - z1 * sinX;
-  const z2 = y1 * sinX + z1 * cosX;
+  const y2 = y0 * cosX - z1 * sinX;
+  const z2 = y0 * sinX + z1 * cosX;
 
   return { x: x1, y: y2, z: z2 };
 }
 
-function Glyph({ kind, accent, scale }: { kind: GlyphKind; accent: boolean; scale: number }) {
-  const size = 10 * scale;
-  const fill = accent ? "#007bff" : "rgba(148, 163, 184, 0.55)";
-  const stroke = accent ? "#0056b3" : "rgba(148, 163, 184, 0.35)";
-
-  if (kind === "crate") {
-    return (
-      <g>
-        <rect
-          x={-size / 2}
-          y={-size / 2}
-          width={size}
-          height={size}
-          rx={1.2}
-          fill={fill}
-          stroke={stroke}
-          strokeWidth={0.6}
-          opacity={accent ? 0.95 : 0.7}
-        />
-        <line
-          x1={-size / 2}
-          y1={0}
-          x2={size / 2}
-          y2={0}
-          stroke={accent ? "rgba(255,255,255,0.5)" : "rgba(255,255,255,0.25)"}
-          strokeWidth={0.7}
-        />
-        <line
-          x1={0}
-          y1={-size / 2}
-          x2={0}
-          y2={size / 2}
-          stroke={accent ? "rgba(255,255,255,0.5)" : "rgba(255,255,255,0.25)"}
-          strokeWidth={0.7}
-        />
-      </g>
-    );
-  }
-
-  if (kind === "doc") {
-    return (
-      <g>
-        <rect
-          x={-size * 0.35}
-          y={-size / 2}
-          width={size * 0.7}
-          height={size}
-          rx={1}
-          fill={fill}
-          stroke={stroke}
-          strokeWidth={0.5}
-          opacity={accent ? 0.95 : 0.65}
-        />
-        <line
-          x1={-size * 0.18}
-          y1={-size * 0.15}
-          x2={size * 0.18}
-          y2={-size * 0.15}
-          stroke="rgba(255,255,255,0.65)"
-          strokeWidth={0.8}
-        />
-        <line
-          x1={-size * 0.18}
-          y1={size * 0.05}
-          x2={size * 0.12}
-          y2={size * 0.05}
-          stroke="rgba(255,255,255,0.45)"
-          strokeWidth={0.7}
-        />
-      </g>
-    );
-  }
-
-  return (
-    <g>
-      <rect
-        x={-size / 2}
-        y={-size * 0.32}
-        width={size}
-        height={size * 0.64}
-        rx={1}
-        fill={fill}
-        stroke={stroke}
-        strokeWidth={0.5}
-        opacity={accent ? 0.95 : 0.65}
-      />
-      {[-0.28, -0.12, 0.04, 0.2].map((ox) => (
-        <line
-          key={ox}
-          x1={size * ox}
-          y1={-size * 0.2}
-          x2={size * ox}
-          y2={size * 0.2}
-          stroke="rgba(255,255,255,0.7)"
-          strokeWidth={0.7}
-        />
-      ))}
-    </g>
-  );
-}
-
-function PlaneIcon({ scale }: { scale: number }) {
-  const s = 16 * scale;
-  return (
-    <g>
-      {/* Wings */}
-      <path
-        d={`
-          M ${-s * 0.08} ${-s * 0.08}
-          L ${-s * 0.42} ${-s * 0.55}
-          L ${-s * 0.28} ${-s * 0.55}
-          L ${s * 0.12} ${-s * 0.1}
-          L ${s * 0.12} ${s * 0.1}
-          L ${-s * 0.28} ${s * 0.55}
-          L ${-s * 0.42} ${s * 0.55}
-          L ${-s * 0.08} ${s * 0.08}
-          Z
-        `}
-        fill="#007bff"
-        stroke="#0056b3"
-        strokeWidth={0.6}
-        strokeLinejoin="round"
-      />
-      {/* Fuselage */}
-      <path
-        d={`
-          M ${s * 0.52} 0
-          C ${s * 0.52} ${-s * 0.08} ${s * 0.35} ${-s * 0.1} ${s * 0.2} ${-s * 0.1}
-          L ${-s * 0.35} ${-s * 0.09}
-          L ${-s * 0.55} ${-s * 0.22}
-          L ${-s * 0.48} ${-s * 0.05}
-          L ${-s * 0.48} ${s * 0.05}
-          L ${-s * 0.55} ${s * 0.22}
-          L ${-s * 0.35} ${s * 0.09}
-          L ${s * 0.2} ${s * 0.1}
-          C ${s * 0.35} ${s * 0.1} ${s * 0.52} ${s * 0.08} ${s * 0.52} 0
-          Z
-        `}
-        fill="#0e1526"
-      />
-      {/* Nose highlight */}
-      <ellipse cx={s * 0.38} cy={0} rx={s * 0.1} ry={s * 0.045} fill="#38bdf8" opacity={0.9} />
-      {/* Cabin windows */}
-      <line
-        x1={-s * 0.05}
-        y1={0}
-        x2={s * 0.22}
-        y2={0}
-        stroke="rgba(255,255,255,0.45)"
-        strokeWidth={1.1}
-        strokeLinecap="round"
-      />
-    </g>
-  );
-}
-
-function ShipIcon({ scale }: { scale: number }) {
+function drawPlane(
+  ctx: CanvasRenderingContext2D,
+  scale: number,
+  alpha: number,
+) {
   const s = 15 * scale;
-  return (
-    <g>
-      {/* Hull */}
-      <path
-        d={`
-          M ${-s * 0.58} ${s * 0.08}
-          L ${s * 0.42} ${s * 0.08}
-          L ${s * 0.58} ${-s * 0.02}
-          L ${s * 0.42} ${s * 0.32}
-          L ${-s * 0.35} ${s * 0.32}
-          L ${-s * 0.55} ${s * 0.18}
-          Z
-        `}
-        fill="#007bff"
-        stroke="#0056b3"
-        strokeWidth={0.5}
-        strokeLinejoin="round"
-      />
-      {/* Waterline stripe */}
-      <line
-        x1={-s * 0.5}
-        y1={s * 0.16}
-        x2={s * 0.4}
-        y2={s * 0.16}
-        stroke="rgba(255,255,255,0.45)"
-        strokeWidth={0.9}
-      />
-      {/* Container stacks */}
-      <rect x={-s * 0.42} y={-s * 0.12} width={s * 0.18} height={s * 0.2} rx={0.6} fill="#0e1526" />
-      <rect x={-s * 0.22} y={-s * 0.18} width={s * 0.18} height={s * 0.26} rx={0.6} fill="#1e293b" />
-      <rect x={-s * 0.02} y={-s * 0.12} width={s * 0.18} height={s * 0.2} rx={0.6} fill="#0e1526" />
-      {/* Bridge / superstructure */}
-      <rect
-        x={s * 0.2}
-        y={-s * 0.28}
-        width={s * 0.2}
-        height={s * 0.36}
-        rx={0.8}
-        fill="#0e1526"
-      />
-      {/* Bridge windows */}
-      <rect
-        x={s * 0.23}
-        y={-s * 0.22}
-        width={s * 0.14}
-        height={s * 0.07}
-        rx={0.4}
-        fill="#38bdf8"
-        opacity={0.9}
-      />
-      {/* Funnel */}
-      <rect x={s * 0.26} y={-s * 0.42} width={s * 0.08} height={s * 0.14} rx={0.4} fill="#64748b" />
-      <rect x={s * 0.26} y={-s * 0.42} width={s * 0.08} height={s * 0.04} rx={0.3} fill="#ef4444" />
-    </g>
-  );
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  ctx.fillStyle = "#007bff";
+  ctx.strokeStyle = "#0056b3";
+  ctx.lineWidth = 0.6;
+  ctx.beginPath();
+  ctx.moveTo(-s * 0.08, -s * 0.08);
+  ctx.lineTo(-s * 0.42, -s * 0.55);
+  ctx.lineTo(-s * 0.28, -s * 0.55);
+  ctx.lineTo(s * 0.12, -s * 0.1);
+  ctx.lineTo(s * 0.12, s * 0.1);
+  ctx.lineTo(-s * 0.28, s * 0.55);
+  ctx.lineTo(-s * 0.42, s * 0.55);
+  ctx.lineTo(-s * 0.08, s * 0.08);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+
+  ctx.fillStyle = "#0e1526";
+  ctx.beginPath();
+  ctx.moveTo(s * 0.52, 0);
+  ctx.bezierCurveTo(s * 0.52, -s * 0.08, s * 0.35, -s * 0.1, s * 0.2, -s * 0.1);
+  ctx.lineTo(-s * 0.35, -s * 0.09);
+  ctx.lineTo(-s * 0.55, -s * 0.22);
+  ctx.lineTo(-s * 0.48, -s * 0.05);
+  ctx.lineTo(-s * 0.48, s * 0.05);
+  ctx.lineTo(-s * 0.55, s * 0.22);
+  ctx.lineTo(-s * 0.35, s * 0.09);
+  ctx.lineTo(s * 0.2, s * 0.1);
+  ctx.bezierCurveTo(s * 0.35, s * 0.1, s * 0.52, s * 0.08, s * 0.52, 0);
+  ctx.closePath();
+  ctx.fill();
+
+  ctx.fillStyle = "#38bdf8";
+  ctx.beginPath();
+  ctx.ellipse(s * 0.38, 0, s * 0.1, s * 0.045, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
 }
 
-type FrameState = {
-  rotY: number;
-  rotX: number;
-  time: number;
-};
+function drawShip(
+  ctx: CanvasRenderingContext2D,
+  scale: number,
+  alpha: number,
+) {
+  const s = 14 * scale;
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  ctx.fillStyle = "#007bff";
+  ctx.beginPath();
+  ctx.moveTo(-s * 0.58, s * 0.08);
+  ctx.lineTo(s * 0.42, s * 0.08);
+  ctx.lineTo(s * 0.58, -s * 0.02);
+  ctx.lineTo(s * 0.42, s * 0.32);
+  ctx.lineTo(-s * 0.35, s * 0.32);
+  ctx.lineTo(-s * 0.55, s * 0.18);
+  ctx.closePath();
+  ctx.fill();
+
+  ctx.fillStyle = "#0e1526";
+  ctx.fillRect(-s * 0.42, -s * 0.12, s * 0.18, s * 0.2);
+  ctx.fillRect(-s * 0.22, -s * 0.18, s * 0.18, s * 0.26);
+  ctx.fillRect(-s * 0.02, -s * 0.12, s * 0.18, s * 0.2);
+  ctx.fillRect(s * 0.2, -s * 0.28, s * 0.2, s * 0.36);
+  ctx.fillStyle = "#38bdf8";
+  ctx.fillRect(s * 0.23, -s * 0.22, s * 0.14, s * 0.07);
+  ctx.fillStyle = "#64748b";
+  ctx.fillRect(s * 0.26, -s * 0.42, s * 0.08, s * 0.14);
+  ctx.fillStyle = "#ef4444";
+  ctx.fillRect(s * 0.26, -s * 0.42, s * 0.08, s * 0.04);
+  ctx.restore();
+}
 
 export function HeroGlobeVisual({ reduced }: { reduced?: boolean }) {
   const prefersReduced = useReducedMotion() ?? false;
   const noMotion = reduced || prefersReduced;
-  const points = useMemo(() => fibonacciSphere(POINT_COUNT), []);
 
-  const rotY = useRef(0.35);
-  const rotX = useRef(0.12);
+  const wrapRef = useRef<HTMLDivElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const rotY = useRef(INITIAL_ROT_Y);
+  const rotX = useRef(INITIAL_ROT_X);
   const dragging = useRef(false);
   const lastPointer = useRef({ x: 0, y: 0 });
   const velocity = useRef({ y: 0, x: 0 });
-  const [frame, setFrame] = useState<FrameState>({
-    rotY: 0.35,
-    rotX: 0.12,
-    time: 0,
-  });
+  const timeRef = useRef(0);
+
+  const light = useMemo(() => {
+    const lx = -0.4;
+    const ly = 0.55; // screen-up after Y flip
+    const lz = 0.75;
+    const len = Math.hypot(lx, ly, lz);
+    return { x: lx / len, y: ly / len, z: lz / len };
+  }, []);
 
   useEffect(() => {
+    const canvas = canvasRef.current;
+    const wrap = wrapRef.current;
+    if (!canvas || !wrap) return;
+
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
     let raf = 0;
     let last = performance.now();
-    let elapsed = 0;
+    let dpr = 1;
+
+    const resize = () => {
+      const rect = wrap.getBoundingClientRect();
+      dpr = Math.min(2, window.devicePixelRatio || 1);
+      canvas.width = Math.max(1, Math.floor(rect.width * dpr));
+      canvas.height = Math.max(1, Math.floor(rect.height * dpr));
+      canvas.style.width = `${rect.width}px`;
+      canvas.style.height = `${rect.height}px`;
+    };
+
+    resize();
+    const ro = new ResizeObserver(resize);
+    ro.observe(wrap);
 
     const tick = (now: number) => {
       const dt = Math.min(32, now - last);
       last = now;
-      if (!noMotion) {
-        elapsed += dt;
-      }
+      if (!noMotion) timeRef.current += dt;
 
       if (!dragging.current && !noMotion) {
-        rotY.current += dt * 0.00016 + velocity.current.y;
+        rotY.current += dt * 0.00012 + velocity.current.y;
         rotX.current += velocity.current.x;
-        velocity.current.y *= 0.95;
-        velocity.current.x *= 0.92;
+        velocity.current.y *= 0.94;
+        velocity.current.x *= 0.91;
         rotX.current = Math.max(-0.55, Math.min(0.55, rotX.current));
       } else if (!dragging.current) {
         velocity.current.y *= 0.9;
         velocity.current.x *= 0.9;
       }
 
-      setFrame({
-        rotY: rotY.current,
-        rotX: rotX.current,
-        time: elapsed,
-      });
+      const w = canvas.width;
+      const h = canvas.height;
+      const cx = w / 2;
+      const cy = h / 2;
+      const radius = Math.min(w, h) * 0.42;
+
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.clearRect(0, 0, w, h);
+
+      const bloom = ctx.createRadialGradient(
+        cx - radius * 0.25,
+        cy - radius * 0.3,
+        radius * 0.1,
+        cx,
+        cy,
+        radius * 1.15,
+      );
+      bloom.addColorStop(0, "rgba(0,123,255,0.16)");
+      bloom.addColorStop(0.45, "rgba(0,123,255,0.04)");
+      bloom.addColorStop(1, "rgba(0,123,255,0)");
+      ctx.fillStyle = bloom;
+      ctx.beginPath();
+      ctx.arc(cx, cy, radius * 1.2, 0, Math.PI * 2);
+      ctx.fill();
+
+      const ocean = ctx.createRadialGradient(
+        cx - radius * 0.35,
+        cy - radius * 0.4,
+        radius * 0.05,
+        cx,
+        cy,
+        radius,
+      );
+      ocean.addColorStop(0, "rgba(241,245,249,0.95)");
+      ocean.addColorStop(0.55, "rgba(226,232,240,0.72)");
+      ocean.addColorStop(1, "rgba(203,213,225,0.55)");
+      ctx.beginPath();
+      ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+      ctx.fillStyle = ocean;
+      ctx.fill();
+      ctx.strokeStyle = "rgba(148,163,184,0.28)";
+      ctx.lineWidth = 1.25 * dpr;
+      ctx.stroke();
+
+      ctx.strokeStyle = "rgba(148,163,184,0.11)";
+      ctx.lineWidth = 1 * dpr;
+      for (const band of [-0.55, 0, 0.55]) {
+        ctx.beginPath();
+        ctx.ellipse(
+          cx,
+          cy + band * radius * 0.72,
+          radius * Math.cos(band * 0.95) * 0.98,
+          radius * 0.28,
+          0,
+          0,
+          Math.PI * 2,
+        );
+        ctx.stroke();
+      }
+
+      ctx.setLineDash([4 * dpr, 6 * dpr]);
+      ctx.strokeStyle = "rgba(0,123,255,0.12)";
+      ctx.beginPath();
+      ctx.ellipse(cx, cy + radius * 0.02, radius * 0.98, radius * 0.24, 0, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      // Land dots — canvas Y is flipped so north is up (cy - y)
+      for (const p of LAND_DOTS) {
+        const { x, y, z } = project(p.lat, p.lon, rotY.current, rotX.current, radius);
+        if (z <= 0) continue;
+
+        const nx = x / radius;
+        const ny = y / radius;
+        const nz = z / radius;
+        // light.y is screen-up; 3D +Y is north, matches after we flip draw Y
+        const lit = Math.max(0, nx * light.x + ny * light.y + nz * light.z);
+        const depth = z / radius;
+        const shade = 0.42 + lit * 0.58;
+
+        const baseR = (p.accent ? 1.05 : 0.9) + (1 - p.inland) * 0.28;
+        const r = Math.max(0.7 * dpr, baseR * (0.7 + depth * 0.45) * dpr);
+        const a = (0.4 + depth * 0.6) * shade;
+
+        if (p.accent) {
+          ctx.fillStyle = `rgba(0,${Math.round(110 + lit * 30)},${Math.round(200 + lit * 40)},${a})`;
+        } else {
+          const g = Math.round(78 + lit * 45);
+          ctx.fillStyle = `rgba(${g - 4},${g},${g + 12},${a})`;
+        }
+        ctx.beginPath();
+        ctx.arc(cx + x, cy - y, r, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      for (const v of VEHICLES) {
+        const lon = v.lon0 + timeRef.current * v.speed;
+        const pos = project(v.lat, lon, rotY.current, rotX.current, radius * v.altitude);
+        if (pos.z < -radius * 0.02) continue;
+        const ahead = project(
+          v.lat,
+          lon + Math.sign(v.speed || 1) * 0.08,
+          rotY.current,
+          rotX.current,
+          radius * v.altitude,
+        );
+        // Flip Y for screen-space heading
+        const angle = Math.atan2(-(ahead.y - pos.y), ahead.x - pos.x);
+        const depth = (pos.z + radius) / (2 * radius);
+        const alpha = 0.4 + depth * 0.55;
+        const scale = v.scale * (0.7 + depth * 0.5);
+
+        ctx.save();
+        ctx.translate(cx + pos.x, cy - pos.y);
+        ctx.rotate(angle);
+        ctx.shadowColor = "rgba(0,123,255,0.35)";
+        ctx.shadowBlur = 6 * dpr;
+        if (v.type === "plane") drawPlane(ctx, scale * dpr, alpha);
+        else drawShip(ctx, scale * dpr, alpha);
+        ctx.restore();
+      }
+
+      const fade = ctx.createRadialGradient(cx, cy, radius * 0.72, cx, cy, radius * 1.02);
+      fade.addColorStop(0, "rgba(248,249,250,0)");
+      fade.addColorStop(0.7, "rgba(248,249,250,0)");
+      fade.addColorStop(1, "rgba(248,249,250,0.55)");
+      ctx.beginPath();
+      ctx.arc(cx, cy, radius * 1.05, 0, Math.PI * 2);
+      ctx.fillStyle = fade;
+      ctx.fill();
+
+      const rim = ctx.createRadialGradient(
+        cx - radius * 0.4,
+        cy - radius * 0.45,
+        0,
+        cx - radius * 0.2,
+        cy - radius * 0.25,
+        radius * 0.7,
+      );
+      rim.addColorStop(0, "rgba(255,255,255,0.28)");
+      rim.addColorStop(0.35, "rgba(255,255,255,0.08)");
+      rim.addColorStop(1, "rgba(255,255,255,0)");
+      ctx.globalCompositeOperation = "screen";
+      ctx.beginPath();
+      ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+      ctx.fillStyle = rim;
+      ctx.fill();
+      ctx.globalCompositeOperation = "source-over";
+
       raf = requestAnimationFrame(tick);
     };
 
     raf = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(raf);
-  }, [noMotion]);
+    return () => {
+      cancelAnimationFrame(raf);
+      ro.disconnect();
+    };
+  }, [noMotion, light]);
 
   const onPointerDown = useCallback((e: ReactPointerEvent<HTMLDivElement>) => {
     dragging.current = true;
@@ -384,6 +388,7 @@ export function HeroGlobeVisual({ reduced }: { reduced?: boolean }) {
     lastPointer.current = { x: e.clientX, y: e.clientY };
 
     const yawDelta = dx * 0.005;
+    // Drag down tips the north edge toward you (natural with screen Y-down)
     const pitchDelta = dy * 0.004;
     rotY.current += yawDelta;
     rotX.current = Math.max(-0.55, Math.min(0.55, rotX.current + pitchDelta));
@@ -399,137 +404,22 @@ export function HeroGlobeVisual({ reduced }: { reduced?: boolean }) {
     }
   }, []);
 
-  const radius = GLOBE_SIZE * 0.42;
-
-  const projected = useMemo(() => {
-    return points
-      .map((p) => {
-        const lat = Math.PI / 2 - p.phi;
-        const lon = p.theta;
-        const { x, y, z } = projectPoint(lat, lon, frame.rotY, frame.rotX, radius);
-        const depth = (z + radius) / (2 * radius);
-        const scale = 0.55 + depth * 0.7;
-        return { ...p, x, y, z, depth, scale };
-      })
-      .filter((p) => p.z > -radius * 0.12)
-      .sort((a, b) => a.z - b.z);
-  }, [points, frame.rotY, frame.rotX, radius]);
-
-  const vehicles = useMemo(() => {
-    return VEHICLES.map((v) => {
-      const lon = v.lon0 + frame.time * v.speed;
-      const { x, y, z } = projectPoint(
-        v.lat,
-        lon,
-        frame.rotY,
-        frame.rotX,
-        radius * v.altitude,
-      );
-      const ahead = projectPoint(
-        v.lat,
-        lon + Math.sign(v.speed || 1) * 0.08,
-        frame.rotY,
-        frame.rotX,
-        radius * v.altitude,
-      );
-      const angle = Math.atan2(ahead.y - y, ahead.x - x);
-      const depth = (z + radius) / (2 * radius);
-      const visible = z > -radius * 0.05;
-      return { ...v, x, y, z, angle, depth, visible };
-    })
-      .filter((v) => v.visible)
-      .sort((a, b) => a.z - b.z);
-  }, [frame.rotY, frame.rotX, frame.time, radius]);
-
   return (
     <div
+      ref={wrapRef}
       className="relative w-full h-full min-h-[320px] sm:min-h-[420px] lg:min-h-[560px] xl:min-h-[640px] select-none touch-none cursor-grab active:cursor-grabbing"
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
       onPointerUp={endDrag}
       onPointerCancel={endDrag}
       role="img"
-      aria-label="Interactive logistics globe. Drag to rotate."
+      aria-label="Interactive dotted world map globe. Drag to rotate."
     >
-      <div className="pointer-events-none absolute inset-[8%] rounded-full bg-[radial-gradient(circle_at_35%_35%,rgba(0,123,255,0.22),transparent_65%)] blur-2xl" />
-      <div className="pointer-events-none absolute inset-[14%] rounded-full border border-[#007bff]/12" />
-      <div className="pointer-events-none absolute inset-[24%] rounded-full border border-slate-200/40" />
+      <div className="pointer-events-none absolute inset-[8%] rounded-full bg-[radial-gradient(circle_at_35%_35%,rgba(0,123,255,0.2),transparent_65%)] blur-2xl" />
+      <div className="pointer-events-none absolute inset-[14%] rounded-full border border-[#007bff]/10" />
+      <div className="pointer-events-none absolute inset-[24%] rounded-full border border-slate-200/35" />
 
-      <svg
-        viewBox={`${-GLOBE_SIZE / 2} ${-GLOBE_SIZE / 2} ${GLOBE_SIZE} ${GLOBE_SIZE}`}
-        className="absolute inset-0 h-full w-full drop-shadow-sm"
-        role="presentation"
-        focusable="false"
-      >
-        <title>Customs and logistics globe</title>
-        <defs>
-          <radialGradient id="hero-globe-fade" cx="40%" cy="35%" r="65%">
-            <stop offset="0%" stopColor="rgba(255,255,255,0)" />
-            <stop offset="70%" stopColor="rgba(248,249,250,0)" />
-            <stop offset="100%" stopColor="rgba(248,249,250,0.4)" />
-          </radialGradient>
-          <filter id="vehicle-glow" x="-50%" y="-50%" width="200%" height="200%">
-            <feDropShadow dx="0" dy="1" stdDeviation="1.5" floodColor="#007bff" floodOpacity="0.35" />
-          </filter>
-        </defs>
-
-        {[-0.55, 0, 0.55].map((band) => (
-          <ellipse
-            key={band}
-            cx={0}
-            cy={band * GLOBE_SIZE * 0.28}
-            rx={GLOBE_SIZE * 0.38 * Math.cos(band * 0.9)}
-            ry={GLOBE_SIZE * 0.12}
-            fill="none"
-            stroke="rgba(148,163,184,0.16)"
-            strokeWidth={1}
-          />
-        ))}
-
-        <ellipse
-          cx={0}
-          cy={GLOBE_SIZE * 0.02}
-          rx={GLOBE_SIZE * 0.4}
-          ry={GLOBE_SIZE * 0.09}
-          fill="none"
-          stroke="rgba(0,123,255,0.15)"
-          strokeWidth={1.2}
-          strokeDasharray="4 6"
-        />
-
-        {projected.map((p) => (
-          <g
-            key={p.id}
-            transform={`translate(${p.x}, ${p.y})`}
-            opacity={0.35 + p.depth * 0.65}
-          >
-            <Glyph kind={p.kind} accent={p.accent} scale={p.scale} />
-          </g>
-        ))}
-
-        {vehicles.map((v) => (
-          <g
-            key={v.id}
-            transform={`translate(${v.x}, ${v.y}) rotate(${(v.angle * 180) / Math.PI})`}
-            opacity={0.45 + v.depth * 0.55}
-            filter="url(#vehicle-glow)"
-          >
-            {v.type === "plane" ? (
-              <PlaneIcon scale={v.scale * (0.7 + v.depth * 0.5)} />
-            ) : (
-              <ShipIcon scale={v.scale * (0.7 + v.depth * 0.5)} />
-            )}
-          </g>
-        ))}
-
-        <circle
-          cx={0}
-          cy={0}
-          r={GLOBE_SIZE * 0.44}
-          fill="url(#hero-globe-fade)"
-          pointerEvents="none"
-        />
-      </svg>
+      <canvas ref={canvasRef} className="absolute inset-0 h-full w-full" />
 
       <p className="pointer-events-none absolute bottom-3 left-1/2 -translate-x-1/2 text-[10px] font-medium text-gray-400 bg-white/70 backdrop-blur-sm px-2.5 py-1 rounded-full border border-gray-100/80 lg:left-auto lg:right-4 lg:translate-x-0">
         Drag to explore
