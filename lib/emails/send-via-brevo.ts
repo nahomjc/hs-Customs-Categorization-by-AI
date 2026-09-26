@@ -3,9 +3,10 @@ export async function sendViaBrevo(params: {
   subject: string;
   html: string;
 }): Promise<void> {
-  const apiKey = process.env.BREVO_API_KEY;
-  const fromEmail = process.env.BREVO_SENDER_EMAIL;
-  const fromName = process.env.BREVO_SENDER_NAME ?? "Impact Logistics";
+  const apiKey = process.env.BREVO_API_KEY?.trim();
+  const fromEmail = process.env.BREVO_SENDER_EMAIL?.trim();
+  const fromName =
+    process.env.BREVO_SENDER_NAME?.trim() || "Impact Logistics";
 
   if (!apiKey || !fromEmail) {
     throw new Error(
@@ -30,6 +31,14 @@ export async function sendViaBrevo(params: {
 
   if (!response.ok) {
     const detail = await response.text();
+    if (
+      response.status === 400 &&
+      /valid sender email required/i.test(detail)
+    ) {
+      throw new Error(
+        `Brevo rejected sender "${fromEmail}". In Brevo → Senders & IP, add and verify this exact address (or use a domain-authenticated sender), then set BREVO_SENDER_EMAIL to match and redeploy.`
+      );
+    }
     throw new Error(`Brevo API error (${response.status}): ${detail}`);
   }
 }
