@@ -29,6 +29,13 @@ export function IntroLoader() {
   }, []);
 
   useEffect(() => {
+    document.documentElement.dataset.introLoading = visible ? "true" : "false";
+    return () => {
+      document.documentElement.dataset.introLoading = "false";
+    };
+  }, [visible]);
+
+  useEffect(() => {
     if (!visible || exiting) return;
 
     const shownAt = performance.now();
@@ -91,12 +98,12 @@ export function IntroLoader() {
           </div>
 
           <motion.div
-            className="intro-loader__hero"
+            className={`intro-loader__hero${exiting ? " intro-loader__hero--exiting" : ""}`}
             initial={reducedMotion ? false : { opacity: 0, scale: 0.9 }}
             animate={
               exiting
-                ? { opacity: 0, scale: 1.1, filter: "blur(12px)" }
-                : { opacity: 1, scale: 1, filter: "blur(0px)" }
+                ? { opacity: 0, scale: 1.1 }
+                : { opacity: 1, scale: 1 }
             }
             transition={{
               duration: exiting ? 0.62 : 0.8,

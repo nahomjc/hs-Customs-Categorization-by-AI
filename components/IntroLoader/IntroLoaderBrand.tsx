@@ -1,6 +1,7 @@
 "use client";
 
 import { motion } from "framer-motion";
+import type { CSSProperties } from "react";
 
 const easeOut = [0.22, 1, 0.36, 1] as const;
 const TITLE = "IMPACT";
@@ -38,27 +39,19 @@ export function IntroLoaderBrand({
 
       <h1 className="intro-loader__title" aria-label="Impact">
         {TITLE_LETTERS.map(({ id, char, position }) => (
-          <motion.span
+          <span
             key={id}
-            className="intro-loader__letter"
-            initial={
-              animateLetters
-                ? { opacity: 0, y: 18, filter: "blur(10px)" }
-                : false
+            className={`intro-loader__letter${
+              !reducedMotion ? " intro-loader__letter--enter" : ""
+            }${exiting ? " intro-loader__letter--exit" : ""}`}
+            style={
+              {
+                "--letter-i": position,
+              } as CSSProperties
             }
-            animate={
-              exiting
-                ? { opacity: 0, y: -8, filter: "blur(6px)" }
-                : { opacity: 1, y: 0, filter: "blur(0px)" }
-            }
-            transition={{
-              duration: 0.55,
-              delay: animateLetters ? 0.28 + position * 0.07 : 0,
-              ease: easeOut,
-            }}
           >
             {char}
-          </motion.span>
+          </span>
         ))}
       </h1>
 

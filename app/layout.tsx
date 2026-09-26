@@ -21,7 +21,7 @@ export default function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="en" className={orbitron.variable}>
+    <html lang="en" className={orbitron.variable} data-intro-loading="true">
       <body className="antialiased w-full min-w-0 bg-[var(--background)] text-[var(--foreground)]">
         <NavigationProgress />
         <IntroLoader />

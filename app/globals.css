@@ -320,12 +320,16 @@ body {
 	background: var(--intro-bg);
 	color: var(--intro-text);
 	overflow: hidden;
+	contain: layout style paint;
+	isolation: isolate;
+	transform: translateZ(0);
 }
 
 .intro-loader__ambient {
 	position: absolute;
 	inset: 0;
 	pointer-events: none;
+	contain: strict;
 }
 
 .intro-loader__mesh {
@@ -348,6 +352,7 @@ body {
 			transparent 50%
 		);
 	animation: intro-mesh-drift 8s ease-in-out infinite alternate;
+	will-change: transform;
 }
 
 .intro-loader__grid {
@@ -385,6 +390,7 @@ body {
 	);
 	box-shadow: 0 0 20px color-mix(in srgb, var(--intro-blue) 28%, transparent);
 	animation: intro-scan-sweep 3.2s linear infinite;
+	will-change: top, opacity;
 }
 
 .intro-loader__hero {
@@ -394,6 +400,13 @@ body {
 	flex-direction: column;
 	align-items: center;
 	gap: 1.75rem;
+	will-change: transform, opacity;
+	transform: translateZ(0);
+}
+
+.intro-loader__hero--exiting {
+	filter: blur(12px);
+	transition: filter 0.62s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .intro-loader__mark-wrap {
@@ -403,6 +416,7 @@ body {
 	justify-content: center;
 	width: 9.5rem;
 	height: 9.5rem;
+	contain: layout style;
 }
 
 .intro-loader__brand {
@@ -464,6 +478,19 @@ body {
 	animation-delay: 0.15s;
 }
 
+.intro-loader__letter--enter {
+	animation:
+		intro-letter-enter 0.55s cubic-bezier(0.22, 1, 0.36, 1) both,
+		intro-letter-glow 2.6s ease-in-out infinite;
+	animation-delay:
+		calc(0.28s + var(--letter-i, 0) * 0.07s),
+		calc(0.43s + var(--letter-i, 0) * 0.07s);
+}
+
+.intro-loader__letter--exit {
+	animation: intro-letter-exit 0.45s cubic-bezier(0.22, 1, 0.36, 1) forwards !important;
+}
+
 .intro-loader__subtitle {
 	margin: 0.85rem 0 0;
 	font-size: 0.625rem;
@@ -505,6 +532,7 @@ body {
 		transparent
 	);
 	animation: intro-brand-scan 2.8s ease-in-out infinite;
+	will-change: left;
 }
 
 .intro-loader__core-glow {
@@ -519,12 +547,15 @@ body {
 		transparent 70%
 	);
 	animation: intro-core-pulse 2.4s ease-in-out infinite;
+	will-change: transform, opacity;
 }
 
 .intro-loader__orbit {
 	position: absolute;
 	border-radius: 50%;
 	border: 1px solid transparent;
+	will-change: transform;
+	transform: translateZ(0);
 }
 
 .intro-loader__orbit--outer {
@@ -548,6 +579,7 @@ body {
 	border-radius: 50%;
 	border: 1px solid color-mix(in srgb, var(--intro-blue) 32%, transparent);
 	animation: intro-pulse-ring 2.4s ease-out infinite;
+	will-change: transform, opacity;
 }
 
 .intro-loader__pulse--delay {
@@ -584,6 +616,11 @@ body {
 	position: relative;
 	z-index: 2;
 	animation: intro-mark-rotate 2.6s linear infinite;
+	will-change: transform;
+	transform: translateZ(0);
+	/* Promote spin to its own layer so SVG filter isn't re-composited with page */
+	contain: layout style;
+	isolation: isolate;
 }
 
 .intro-mark {
@@ -693,6 +730,32 @@ body {
 	}
 }
 
+@keyframes intro-letter-enter {
+	from {
+		opacity: 0;
+		transform: translateY(18px);
+		filter: blur(8px)
+			drop-shadow(
+				0 0 8px color-mix(in srgb, var(--intro-blue) 28%, transparent)
+			);
+	}
+	to {
+		opacity: 1;
+		transform: translateY(0);
+		filter: blur(0)
+			drop-shadow(
+				0 0 12px color-mix(in srgb, var(--intro-blue) 32%, transparent)
+			);
+	}
+}
+
+@keyframes intro-letter-exit {
+	to {
+		opacity: 0;
+		transform: translateY(-8px);
+	}
+}
+
 @keyframes intro-letter-glow {
 	0%,
 	100% {
@@ -729,8 +792,13 @@ body {
 	.intro-loader__spin,
 	.intro-mark__highlight,
 	.intro-loader__letter,
+	.intro-loader__letter--enter,
 	.intro-loader__brand-scan::after {
 		animation: none;
+	}
+
+	.intro-loader__hero--exiting {
+		filter: none;
 	}
 }
 

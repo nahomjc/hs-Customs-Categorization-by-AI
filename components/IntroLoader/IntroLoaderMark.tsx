@@ -34,6 +34,7 @@ export function IntroLoaderMark() {
             y="-50%"
             width="200%"
             height="200%"
+            colorInterpolationFilters="sRGB"
           >
             <feGaussianBlur stdDeviation="4" result="blur" />
             <feColorMatrix

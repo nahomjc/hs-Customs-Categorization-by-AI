@@ -35,6 +35,14 @@ type RegionDef = {
 /** Face Horn of Africa so Ethiopia is visible on first paint */
 const INITIAL_ROT_Y = -0.68;
 const INITIAL_ROT_X = 0.08;
+/** Soft entrance spin — eases into the resting view */
+const INTRO_ROT_Y = INITIAL_ROT_Y - 0.72;
+const INTRO_ROT_X = INITIAL_ROT_X + 0.1;
+const INTRO_MS = 1600;
+
+function easeOutExpo(t: number) {
+  return t >= 1 ? 1 : 1 - 2 ** (-10 * t);
+}
 
 /** Ethiopian flag colors */
 const FLAG_GREEN = [7, 137, 48] as const;
@@ -509,13 +517,14 @@ export function HeroGlobeVisual({ reduced }: { reduced?: boolean }) {
 
   const wrapRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const rotY = useRef(INITIAL_ROT_Y);
-  const rotX = useRef(INITIAL_ROT_X);
+  const rotY = useRef(noMotion ? INITIAL_ROT_Y : INTRO_ROT_Y);
+  const rotX = useRef(noMotion ? INITIAL_ROT_X : INTRO_ROT_X);
   const dragging = useRef(false);
   const lastPointer = useRef({ x: 0, y: 0 });
   const velocity = useRef({ y: 0, x: 0 });
   const timeRef = useRef(0);
   const vehicleMotion = useRef<Record<string, VehicleMotion>>({});
+  const introStartRef = useRef<number | null>(null);
 
   const light = useMemo(() => {
     const lx = -0.4;
@@ -540,6 +549,8 @@ export function HeroGlobeVisual({ reduced }: { reduced?: boolean }) {
     let dpr = 1;
     let inView = true;
     let pageVisible = document.visibilityState === "visible";
+    let introLoading =
+      document.documentElement.dataset.introLoading === "true";
     let scrolling = false;
     let scrollIdleTimer = 0;
     const visibleBuf: {
@@ -642,6 +653,16 @@ export function HeroGlobeVisual({ reduced }: { reduced?: boolean }) {
     };
     document.addEventListener("visibilitychange", onVis);
 
+    const syncIntroLoading = () => {
+      introLoading =
+        document.documentElement.dataset.introLoading === "true";
+    };
+    const introMo = new MutationObserver(syncIntroLoading);
+    introMo.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ["data-intro-loading"],
+    });
+
     const onScroll = () => {
       scrolling = true;
       window.clearTimeout(scrollIdleTimer);
@@ -654,8 +675,13 @@ export function HeroGlobeVisual({ reduced }: { reduced?: boolean }) {
 
     const tick = (now: number) => {
       raf = requestAnimationFrame(tick);
-      // Freeze during scroll / off-screen so the page stays smooth
-      if (!inView || !pageVisible || (scrolling && !dragging.current)) {
+      // Freeze while intro loader / scroll / off-screen so the page stays smooth
+      if (
+        introLoading ||
+        !inView ||
+        !pageVisible ||
+        (scrolling && !dragging.current)
+      ) {
         last = now;
         return;
       }
@@ -664,13 +690,34 @@ export function HeroGlobeVisual({ reduced }: { reduced?: boolean }) {
       last = now;
       if (!noMotion) timeRef.current += dt;
 
-      if (!dragging.current && !noMotion) {
-        // Steady, constant spin — avoids micro-stutter from velocity noise
-        rotY.current += dt * 0.00011 + velocity.current.y;
-        rotX.current += velocity.current.x;
-        velocity.current.y *= 0.92;
-        velocity.current.x *= 0.9;
-        rotX.current = Math.max(-0.55, Math.min(0.55, rotX.current));
+      // Opening transition: ease rotation from intro angle → resting view
+      // Starts only after the intro loader clears (see introLoading gate above)
+      let introAlpha = 1;
+      if (!noMotion) {
+        if (introStartRef.current === null) introStartRef.current = now;
+        const introT = Math.min(
+          1,
+          (now - introStartRef.current) / INTRO_MS,
+        );
+        const e = easeOutExpo(introT);
+        introAlpha = 0.2 + 0.8 * e;
+
+        if (introT < 1 && !dragging.current) {
+          rotY.current = INTRO_ROT_Y + (INITIAL_ROT_Y - INTRO_ROT_Y) * e;
+          rotX.current = INTRO_ROT_X + (INITIAL_ROT_X - INTRO_ROT_X) * e;
+          // Gentle settle — no free spin until intro finishes
+          velocity.current.y *= 0.85;
+          velocity.current.x *= 0.85;
+        } else if (!dragging.current) {
+          rotY.current += dt * 0.00011 + velocity.current.y;
+          rotX.current += velocity.current.x;
+          velocity.current.y *= 0.92;
+          velocity.current.x *= 0.9;
+          rotX.current = Math.max(-0.55, Math.min(0.55, rotX.current));
+        } else {
+          velocity.current.y *= 0.88;
+          velocity.current.x *= 0.88;
+        }
       } else if (!dragging.current) {
         velocity.current.y *= 0.88;
         velocity.current.x *= 0.88;
@@ -702,6 +749,7 @@ export function HeroGlobeVisual({ reduced }: { reduced?: boolean }) {
 
       ctx.setTransform(1, 0, 0, 1, 0, 0);
       ctx.clearRect(0, 0, w, h);
+      ctx.globalAlpha = introAlpha;
 
       ctx.fillStyle = bloom;
       ctx.beginPath();
@@ -1003,6 +1051,7 @@ export function HeroGlobeVisual({ reduced }: { reduced?: boolean }) {
       ctx.arc(cx, cy, radius, 0, Math.PI * 2);
       ctx.fill();
       ctx.globalCompositeOperation = "source-over";
+      ctx.globalAlpha = 1;
     };
 
     raf = requestAnimationFrame(tick);
@@ -1010,6 +1059,7 @@ export function HeroGlobeVisual({ reduced }: { reduced?: boolean }) {
       cancelAnimationFrame(raf);
       ro.disconnect();
       io.disconnect();
+      introMo.disconnect();
       document.removeEventListener("visibilitychange", onVis);
       window.removeEventListener("scroll", onScroll);
       window.clearTimeout(scrollIdleTimer);
