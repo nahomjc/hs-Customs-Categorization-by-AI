@@ -443,6 +443,7 @@ type PendingFlagPopup = {
   label: string;
   strength: number;
   alpha: number;
+  phase: number;
 };
 
 const PENDING_FLAGS: PendingFlagPopup[] = [];
@@ -478,6 +479,77 @@ function preloadFlagImages(codes: string[]) {
   return map;
 }
 
+/** Water-drop on water — soft droplet + expanding circular rings */
+function drawLandingWaterGlow(
+  ctx: CanvasRenderingContext2D,
+  dpr: number,
+  sx: number,
+  sy: number,
+  strength: number,
+  alpha: number,
+  time: number,
+  phase: number,
+) {
+  const a = alpha * strength;
+  if (a < 0.05) return;
+
+  ctx.save();
+  ctx.globalCompositeOperation = "lighter";
+
+  // Soft contact pool
+  const poolR = (8 + 6 * strength) * dpr;
+  const pool = ctx.createRadialGradient(sx, sy, 0, sx, sy, poolR);
+  pool.addColorStop(0, `rgba(186,230,253,${a * 0.4})`);
+  pool.addColorStop(0.6, `rgba(56,189,248,${a * 0.12})`);
+  pool.addColorStop(1, "rgba(14,165,233,0)");
+  ctx.fillStyle = pool;
+  ctx.beginPath();
+  ctx.arc(sx, sy, poolR, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Small water drop at the center
+  const dropR = (3.5 + 1.5 * strength) * dpr;
+  const dropY = sy - dropR * 0.35;
+  const drop = ctx.createRadialGradient(
+    sx - dropR * 0.25,
+    dropY - dropR * 0.3,
+    0,
+    sx,
+    dropY,
+    dropR * 1.4,
+  );
+  drop.addColorStop(0, `rgba(255,255,255,${a * 0.9})`);
+  drop.addColorStop(0.45, `rgba(186,230,253,${a * 0.55})`);
+  drop.addColorStop(1, "rgba(56,189,248,0)");
+  ctx.fillStyle = drop;
+  ctx.beginPath();
+  ctx.arc(sx, dropY, dropR, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Circular rings — like a drop hitting water
+  const ringCount = 3;
+  for (let i = 0; i < ringCount; i++) {
+    const cycle = (time * 0.00085 + phase * 1.4 + i / ringCount) % 1;
+    const radius = (4 + cycle * (20 + 8 * strength)) * dpr;
+    const ringA = a * (1 - cycle) * (1 - cycle) * 0.7;
+
+    ctx.strokeStyle = `rgba(56,189,248,${ringA})`;
+    ctx.lineWidth = Math.max(0.8, (2 - cycle * 1.2) * dpr);
+    ctx.beginPath();
+    ctx.arc(sx, sy, radius, 0, Math.PI * 2);
+    ctx.stroke();
+
+    // Softer outer halo on each ring
+    ctx.strokeStyle = `rgba(186,230,253,${ringA * 0.45})`;
+    ctx.lineWidth = Math.max(0.6, (1.2 - cycle * 0.6) * dpr);
+    ctx.beginPath();
+    ctx.arc(sx, sy, radius + 1.5 * dpr, 0, Math.PI * 2);
+    ctx.stroke();
+  }
+
+  ctx.restore();
+}
+
 function drawFlagPopup(
   ctx: CanvasRenderingContext2D,
   dpr: number,
@@ -509,12 +581,6 @@ function drawFlagPopup(
   const r = 8 * dpr;
 
   ctx.globalAlpha = a;
-
-  // Soft ground pulse
-  ctx.beginPath();
-  ctx.ellipse(sx, sy, 10 * dpr * strength, 4 * dpr * strength, 0, 0, Math.PI * 2);
-  ctx.fillStyle = `rgba(0,123,255,${0.18 * strength})`;
-  ctx.fill();
 
   // Card shadow
   ctx.shadowColor = "rgba(15, 23, 42, 0.18)";
@@ -1464,13 +1530,13 @@ export function HeroGlobeVisual({ reduced }: { reduced?: boolean }) {
         }
         ctx.restore();
 
-        // Flag popup only when landing (arriving at an endpoint)
-        const landingTo = outbound && rawU >= 0.78;
-        const landingFrom = !outbound && rawU <= 0.22;
+        // Flag + water-drop glow when landing (longer window so the splash reads)
+        const landingTo = outbound && rawU >= 0.7;
+        const landingFrom = !outbound && rawU <= 0.3;
         if ((landingTo || landingFrom) && pos.z > -radius * 0.05) {
           const land = landingTo
-            ? (rawU - 0.78) / 0.22
-            : (0.22 - rawU) / 0.22;
+            ? (rawU - 0.7) / 0.3
+            : (0.3 - rawU) / 0.3;
           const code = landingTo ? v.toCode : v.fromCode;
           const label = FLAG_LABELS[code] ?? code.toUpperCase();
           const endLat = landingTo ? v.toLat : v.fromLat;
@@ -1491,6 +1557,7 @@ export function HeroGlobeVisual({ reduced }: { reduced?: boolean }) {
               label,
               strength: Math.min(1, land),
               alpha: motion.alpha,
+              phase: v.phase,
             });
           }
         }
@@ -1509,10 +1576,21 @@ export function HeroGlobeVisual({ reduced }: { reduced?: boolean }) {
       ctx.globalCompositeOperation = "source-over";
       ctx.globalAlpha = 1;
 
-      // Landing flag popups — on top, front-to-back
+      // Landing water glow + flag popups — on top, front-to-back
       if (PENDING_FLAGS.length > 0) {
         PENDING_FLAGS.sort((a, b) => a.z - b.z);
         for (const pop of PENDING_FLAGS) {
+          const popAlpha = pop.alpha * introAlpha;
+          drawLandingWaterGlow(
+            ctx,
+            dpr,
+            pop.sx,
+            pop.sy,
+            pop.strength,
+            popAlpha,
+            t,
+            pop.phase,
+          );
           drawFlagPopup(
             ctx,
             dpr,
@@ -1521,7 +1599,7 @@ export function HeroGlobeVisual({ reduced }: { reduced?: boolean }) {
             flagImages.get(pop.code),
             pop.label,
             pop.strength,
-            pop.alpha * introAlpha,
+            popAlpha,
           );
         }
       }
