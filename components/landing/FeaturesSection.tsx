@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { LandingWrap } from "./LandingWrap";
 import { FadeInView, MotionSection, easeOut, fadeUp } from "./motion";
@@ -157,6 +157,7 @@ const features = [
 ];
 
 const VISIBLE_DEPTH = 3;
+const AUTO_ADVANCE_MS = 4200;
 
 function stackOffset(distance: number) {
   if (distance === 0) {
@@ -191,31 +192,55 @@ function FeatureCardStack() {
   const reduced = useReducedMotion();
   const [activeIndex, setActiveIndex] = useState(0);
   const [direction, setDirection] = useState(0);
+  const [paused, setPaused] = useState(false);
+  const draggingRef = useRef(false);
 
   const goTo = useCallback(
     (index: number) => {
-      setDirection(index > activeIndex ? 1 : -1);
+      setDirection(index > activeIndex ? 1 : index < activeIndex ? -1 : 1);
       setActiveIndex(index);
     },
     [activeIndex],
   );
 
   const goPrev = useCallback(() => {
-    const next = (activeIndex - 1 + features.length) % features.length;
     setDirection(-1);
-    setActiveIndex(next);
-  }, [activeIndex]);
+    setActiveIndex((i) => (i - 1 + features.length) % features.length);
+  }, []);
 
   const goNext = useCallback(() => {
-    const next = (activeIndex + 1) % features.length;
     setDirection(1);
-    setActiveIndex(next);
-  }, [activeIndex]);
+    setActiveIndex((i) => (i + 1) % features.length);
+  }, []);
+
+  // Auto-advance through the stack
+  useEffect(() => {
+    if (reduced || paused) return;
+    const id = window.setInterval(() => {
+      if (draggingRef.current) return;
+      setDirection(1);
+      setActiveIndex((i) => (i + 1) % features.length);
+    }, AUTO_ADVANCE_MS);
+    return () => window.clearInterval(id);
+  }, [reduced, paused]);
+
+  const pause = useCallback(() => setPaused(true), []);
+  const resume = useCallback(() => setPaused(false), []);
 
   const activeFeature = features[activeIndex];
 
   return (
-    <div className="lg:grid lg:grid-cols-[minmax(0,1fr)_minmax(0,1.05fr)] lg:gap-14 lg:items-center">
+    <div
+      className="lg:grid lg:grid-cols-[minmax(0,1fr)_minmax(0,1.05fr)] lg:gap-14 lg:items-center"
+      onMouseEnter={pause}
+      onMouseLeave={resume}
+      onFocusCapture={pause}
+      onBlurCapture={(e) => {
+        if (!e.currentTarget.contains(e.relatedTarget as Node | null)) {
+          resume();
+        }
+      }}
+    >
       {/* Feature list — quick nav (desktop) */}
       <div className="order-2 lg:order-1 hidden lg:block">
         <div className="flex items-center justify-between mb-5">
@@ -324,10 +349,16 @@ function FeatureCardStack() {
                   drag={isTop && !reduced ? "x" : false}
                   dragConstraints={{ left: 0, right: 0 }}
                   dragElastic={0.12}
+                  onDragStart={() => {
+                    draggingRef.current = true;
+                    pause();
+                  }}
                   onDragEnd={(_, info) => {
+                    draggingRef.current = false;
                     if (info.offset.x < -80 || info.velocity.x < -400) goNext();
                     else if (info.offset.x > 80 || info.velocity.x > 400)
                       goPrev();
+                    resume();
                   }}
                 >
                   <div
@@ -401,7 +432,7 @@ function FeatureCardStack() {
                     {isTop && (
                       <div className="relative mt-auto pt-4 flex items-center justify-between border-t border-gray-100">
                         <p className="text-xs text-gray-400">
-                          Swipe or use arrows to explore
+                          Auto-plays · swipe or arrows to explore
                         </p>
                         <div className="flex gap-1">
                           {features.map((item, dotIndex) => (
