@@ -11,6 +11,7 @@ import { useReducedMotion } from "framer-motion";
 import landDotsRaw from "@/lib/land-dots.json";
 import ethiopiaDotsRaw from "@/lib/ethiopia-dots.json";
 import ethiopiaRings from "@/lib/ethiopia-rings.json";
+import { getCountryFlagUrl } from "@/lib/countries";
 
 type LandDot = {
   lat: number;
@@ -180,6 +181,9 @@ type RouteVehicle = {
   fromLon: number;
   toLat: number;
   toLon: number;
+  /** ISO 3166-1 alpha-2 */
+  fromCode: string;
+  toCode: string;
   /** Progress units per ms (full loop = 1) */
   speed: number;
   phase: number;
@@ -187,6 +191,26 @@ type RouteVehicle = {
   scale: number;
   /** Trail hue in degrees — planes get a colorful light wake */
   trailHue: number;
+};
+
+/** Short labels for landing popups */
+const FLAG_LABELS: Record<string, string> = {
+  et: "Ethiopia",
+  gb: "United Kingdom",
+  us: "United States",
+  ae: "UAE",
+  sg: "Singapore",
+  jp: "Japan",
+  au: "Australia",
+  br: "Brazil",
+  za: "South Africa",
+  cn: "China",
+  in: "India",
+  de: "Germany",
+  nl: "Netherlands",
+  eg: "Egypt",
+  dj: "Djibouti",
+  pa: "Panama",
 };
 
 /** Global planes & ships — routes span every major region */
@@ -199,6 +223,8 @@ const VEHICLES: RouteVehicle[] = [
     fromLon: ETH_HUB_LON,
     toLat: deg(51.5),
     toLon: deg(-0.1),
+    fromCode: "et",
+    toCode: "gb",
     speed: 0.00028,
     phase: 0,
     altitude: 1.14,
@@ -212,6 +238,8 @@ const VEHICLES: RouteVehicle[] = [
     fromLon: deg(-74),
     toLat: deg(51.5),
     toLon: deg(-0.1),
+    fromCode: "us",
+    toCode: "gb",
     speed: 0.00026,
     phase: 0.25,
     altitude: 1.15,
@@ -225,6 +253,8 @@ const VEHICLES: RouteVehicle[] = [
     fromLon: deg(55.3),
     toLat: deg(1.35),
     toLon: deg(103.8),
+    fromCode: "ae",
+    toCode: "sg",
     speed: 0.0003,
     phase: 0.5,
     altitude: 1.14,
@@ -238,6 +268,8 @@ const VEHICLES: RouteVehicle[] = [
     fromLon: deg(139.7),
     toLat: deg(34.0),
     toLon: deg(-118.2),
+    fromCode: "jp",
+    toCode: "us",
     speed: 0.0002,
     phase: 0.85,
     altitude: 1.16,
@@ -251,6 +283,8 @@ const VEHICLES: RouteVehicle[] = [
     fromLon: deg(151.2),
     toLat: deg(1.35),
     toLon: deg(103.8),
+    fromCode: "au",
+    toCode: "sg",
     speed: 0.00024,
     phase: 1.15,
     altitude: 1.15,
@@ -264,6 +298,8 @@ const VEHICLES: RouteVehicle[] = [
     fromLon: deg(-46.6),
     toLat: deg(-26.2),
     toLon: deg(28.0),
+    fromCode: "br",
+    toCode: "za",
     speed: 0.00022,
     phase: 1.45,
     altitude: 1.14,
@@ -277,6 +313,8 @@ const VEHICLES: RouteVehicle[] = [
     fromLon: ETH_HUB_LON,
     toLat: deg(39.9),
     toLon: deg(116.4),
+    fromCode: "et",
+    toCode: "cn",
     speed: 0.0002,
     phase: 1.75,
     altitude: 1.15,
@@ -290,6 +328,8 @@ const VEHICLES: RouteVehicle[] = [
     fromLon: deg(77.2),
     toLat: deg(50.1),
     toLon: deg(8.7),
+    fromCode: "in",
+    toCode: "de",
     speed: 0.00025,
     phase: 0.1,
     altitude: 1.14,
@@ -304,6 +344,8 @@ const VEHICLES: RouteVehicle[] = [
     fromLon: deg(121.5),
     toLat: deg(33.7),
     toLon: deg(-118.2),
+    fromCode: "cn",
+    toCode: "us",
     speed: 0.000055,
     phase: 0.2,
     altitude: 1.02,
@@ -317,6 +359,8 @@ const VEHICLES: RouteVehicle[] = [
     fromLon: deg(4.5),
     toLat: deg(40.7),
     toLon: deg(-74),
+    fromCode: "nl",
+    toCode: "us",
     speed: 0.00006,
     phase: 0.7,
     altitude: 1.02,
@@ -330,6 +374,8 @@ const VEHICLES: RouteVehicle[] = [
     fromLon: deg(103.8),
     toLat: deg(30.0),
     toLon: deg(32.5),
+    fromCode: "sg",
+    toCode: "eg",
     speed: 0.00005,
     phase: 1.1,
     altitude: 1.02,
@@ -343,6 +389,8 @@ const VEHICLES: RouteVehicle[] = [
     fromLon: deg(18.4),
     toLat: deg(-22.9),
     toLon: deg(-43.2),
+    fromCode: "za",
+    toCode: "br",
     speed: 0.000048,
     phase: 1.5,
     altitude: 1.015,
@@ -356,6 +404,8 @@ const VEHICLES: RouteVehicle[] = [
     fromLon: deg(43.15),
     toLat: deg(18.9),
     toLon: deg(72.8),
+    fromCode: "dj",
+    toCode: "in",
     speed: 0.000055,
     phase: 0.4,
     altitude: 1.02,
@@ -369,6 +419,8 @@ const VEHICLES: RouteVehicle[] = [
     fromLon: deg(-79.5),
     toLat: deg(35.4),
     toLon: deg(139.8),
+    fromCode: "pa",
+    toCode: "jp",
     speed: 0.000042,
     phase: 1.85,
     altitude: 1.02,
@@ -382,6 +434,18 @@ const TRAIL_PTS: { x: number; y: number; z: number }[] = Array.from(
   { length: 28 },
   () => ({ x: 0, y: 0, z: 0 }),
 );
+
+type PendingFlagPopup = {
+  sx: number;
+  sy: number;
+  z: number;
+  code: string;
+  label: string;
+  strength: number;
+  alpha: number;
+};
+
+const PENDING_FLAGS: PendingFlagPopup[] = [];
 
 type VehicleMotion = {
   angle: number;
@@ -399,6 +463,117 @@ function lerpAngle(from: number, to: number, t: number) {
 /** Soft ease for plane route progress — slows at hubs, glides in the middle */
 function easeInOutCubic(t: number) {
   return t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2;
+}
+
+function preloadFlagImages(codes: string[]) {
+  const map = new Map<string, HTMLImageElement>();
+  for (const code of codes) {
+    const url = getCountryFlagUrl(code, 40);
+    if (!url || map.has(code)) continue;
+    const img = new Image();
+    img.decoding = "async";
+    img.src = url;
+    map.set(code, img);
+  }
+  return map;
+}
+
+function drawFlagPopup(
+  ctx: CanvasRenderingContext2D,
+  dpr: number,
+  sx: number,
+  sy: number,
+  img: HTMLImageElement | undefined,
+  label: string,
+  strength: number,
+  alpha: number,
+) {
+  const a = alpha * strength;
+  if (a < 0.04) return;
+
+  const rise = (10 + 14 * strength) * dpr;
+  const px = sx;
+  const py = sy - rise;
+  const flagW = 22 * dpr;
+  const flagH = 15 * dpr;
+  const padX = 8 * dpr;
+  const padY = 6 * dpr;
+  const gap = 6 * dpr;
+  ctx.save();
+  ctx.font = `600 ${Math.max(9, 10 * dpr)}px ui-sans-serif, system-ui, sans-serif`;
+  const textW = ctx.measureText(label).width;
+  const cardW = padX + flagW + gap + textW + padX;
+  const cardH = padY + Math.max(flagH, 12 * dpr) + padY;
+  const cardX = px - cardW / 2;
+  const cardY = py - cardH - 8 * dpr;
+  const r = 8 * dpr;
+
+  ctx.globalAlpha = a;
+
+  // Soft ground pulse
+  ctx.beginPath();
+  ctx.ellipse(sx, sy, 10 * dpr * strength, 4 * dpr * strength, 0, 0, Math.PI * 2);
+  ctx.fillStyle = `rgba(0,123,255,${0.18 * strength})`;
+  ctx.fill();
+
+  // Card shadow
+  ctx.shadowColor = "rgba(15, 23, 42, 0.18)";
+  ctx.shadowBlur = 12 * dpr;
+  ctx.shadowOffsetY = 4 * dpr;
+  ctx.fillStyle = "rgba(255,255,255,0.96)";
+  ctx.beginPath();
+  ctx.roundRect(cardX, cardY, cardW, cardH, r);
+  ctx.fill();
+  ctx.shadowColor = "transparent";
+  ctx.shadowBlur = 0;
+  ctx.shadowOffsetY = 0;
+
+  // Card border
+  ctx.strokeStyle = "rgba(226,232,240,0.95)";
+  ctx.lineWidth = Math.max(1, 1 * dpr);
+  ctx.stroke();
+
+  // Pointer
+  ctx.fillStyle = "rgba(255,255,255,0.96)";
+  ctx.beginPath();
+  ctx.moveTo(px - 5 * dpr, cardY + cardH - 0.5);
+  ctx.lineTo(px, cardY + cardH + 6 * dpr);
+  ctx.lineTo(px + 5 * dpr, cardY + cardH - 0.5);
+  ctx.closePath();
+  ctx.fill();
+  ctx.strokeStyle = "rgba(226,232,240,0.95)";
+  ctx.beginPath();
+  ctx.moveTo(px - 5 * dpr, cardY + cardH);
+  ctx.lineTo(px, cardY + cardH + 6 * dpr);
+  ctx.lineTo(px + 5 * dpr, cardY + cardH);
+  ctx.stroke();
+
+  // Flag
+  const flagX = cardX + padX;
+  const flagY = cardY + (cardH - flagH) / 2;
+  ctx.save();
+  ctx.beginPath();
+  ctx.roundRect(flagX, flagY, flagW, flagH, 2.5 * dpr);
+  ctx.clip();
+  if (img?.complete && img.naturalWidth > 0) {
+    ctx.drawImage(img, flagX, flagY, flagW, flagH);
+  } else {
+    ctx.fillStyle = "#e2e8f0";
+    ctx.fillRect(flagX, flagY, flagW, flagH);
+  }
+  ctx.restore();
+  ctx.strokeStyle = "rgba(15,23,42,0.08)";
+  ctx.lineWidth = Math.max(1, 0.75 * dpr);
+  ctx.beginPath();
+  ctx.roundRect(flagX, flagY, flagW, flagH, 2.5 * dpr);
+  ctx.stroke();
+
+  // Label
+  ctx.fillStyle = "#334155";
+  ctx.textBaseline = "middle";
+  ctx.fillText(label, flagX + flagW + gap, cardY + cardH / 2);
+
+  ctx.restore();
 }
 
 function smoothToward(
@@ -647,7 +822,7 @@ function drawShipSmoke(
     const g = ctx.createRadialGradient(x, y, 0, x, y, r);
     g.addColorStop(0, `rgba(148,163,184,${a * 0.85})`);
     g.addColorStop(0.45, `rgba(100,116,139,${a * 0.45})`);
-    g.addColorStop(1, `rgba(71,85,105,0)`);
+    g.addColorStop(1, "rgba(71,85,105,0)");
     ctx.fillStyle = g;
     ctx.beginPath();
     ctx.arc(x, y, r, 0, Math.PI * 2);
@@ -691,6 +866,11 @@ export function HeroGlobeVisual({ reduced }: { reduced?: boolean }) {
     // Avoid opaque black fallback on mobile WebViews
     canvas.style.backgroundColor = "transparent";
     canvas.style.background = "transparent";
+
+    const flagCodes = Array.from(
+      new Set(VEHICLES.flatMap((v) => [v.fromCode, v.toCode])),
+    );
+    const flagImages = preloadFlagImages(flagCodes);
 
     let raf = 0;
     let last = performance.now();
@@ -1104,7 +1284,8 @@ export function HeroGlobeVisual({ reduced }: { reduced?: boolean }) {
         ctx.fill();
       }
 
-      // Vehicles — fast in/out of Ethiopia (ping-pong, no teleport stack)
+      // Vehicles — global routes (ping-pong)
+      PENDING_FLAGS.length = 0;
       for (const v of VEHICLES) {
         // Round trip: 0→1 outbound, 1→2 inbound
         const cycle = noMotion ? v.phase % 2 : (t * v.speed + v.phase) % 2;
@@ -1282,6 +1463,37 @@ export function HeroGlobeVisual({ reduced }: { reduced?: boolean }) {
           }
         }
         ctx.restore();
+
+        // Flag popup only when landing (arriving at an endpoint)
+        const landingTo = outbound && rawU >= 0.78;
+        const landingFrom = !outbound && rawU <= 0.22;
+        if ((landingTo || landingFrom) && pos.z > -radius * 0.05) {
+          const land = landingTo
+            ? (rawU - 0.78) / 0.22
+            : (0.22 - rawU) / 0.22;
+          const code = landingTo ? v.toCode : v.fromCode;
+          const label = FLAG_LABELS[code] ?? code.toUpperCase();
+          const endLat = landingTo ? v.toLat : v.fromLat;
+          const endLon = landingTo ? v.toLon : v.fromLon;
+          const endPos = project(
+            endLat,
+            endLon,
+            rotYNow,
+            rotXNow,
+            radius * (v.altitude + 0.01),
+          );
+          if (endPos.z > 0) {
+            PENDING_FLAGS.push({
+              sx: cx + endPos.x,
+              sy: cy - endPos.y,
+              z: endPos.z,
+              code,
+              label,
+              strength: Math.min(1, land),
+              alpha: motion.alpha,
+            });
+          }
+        }
       }
 
       ctx.fillStyle = fade;
@@ -1296,6 +1508,23 @@ export function HeroGlobeVisual({ reduced }: { reduced?: boolean }) {
       ctx.fill();
       ctx.globalCompositeOperation = "source-over";
       ctx.globalAlpha = 1;
+
+      // Landing flag popups — on top, front-to-back
+      if (PENDING_FLAGS.length > 0) {
+        PENDING_FLAGS.sort((a, b) => a.z - b.z);
+        for (const pop of PENDING_FLAGS) {
+          drawFlagPopup(
+            ctx,
+            dpr,
+            pop.sx,
+            pop.sy,
+            flagImages.get(pop.code),
+            pop.label,
+            pop.strength,
+            pop.alpha * introAlpha,
+          );
+        }
+      }
     };
 
     raf = requestAnimationFrame(tick);
