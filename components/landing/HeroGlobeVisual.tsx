@@ -15,6 +15,8 @@ import ethiopiaRings from "@/lib/ethiopia-rings.json";
 type LandDot = {
   lat: number;
   lon: number;
+  cosLat: number;
+  sinLat: number;
   inland: number;
   region: number;
   /** Ethiopian flag band: 0 none, 1 green, 2 yellow, 3 red */
@@ -46,7 +48,10 @@ function pointInRing(lon: number, lat: number, ring: LonLat[]): boolean {
   for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
     const [xi, yi] = ring[i];
     const [xj, yj] = ring[j];
-    if (yi > lat !== yj > lat && lon < ((xj - xi) * (lat - yi)) / (yj - yi + Number.EPSILON) + xi) {
+    if (
+      yi > lat !== yj > lat &&
+      lon < ((xj - xi) * (lat - yi)) / (yj - yi + Number.EPSILON) + xi
+    ) {
       inside = !inside;
     }
   }
@@ -290,7 +295,12 @@ function lerpAngle(from: number, to: number, t: number) {
   return from + diff * t;
 }
 
-function smoothToward(current: number, target: number, dt: number, rate: number) {
+function smoothToward(
+  current: number,
+  target: number,
+  dt: number,
+  rate: number,
+) {
   const k = 1 - Math.exp(-rate * dt);
   return current + (target - current) * k;
 }
@@ -304,25 +314,34 @@ const LAND_DOTS: LandDot[] = (() => {
       return {
         lat,
         lon,
+        cosLat: Math.cos(lat),
+        sinLat: Math.sin(lat),
         inland,
         region: regionIndexFor(lonDeg, latDeg),
         flag: 0 as const,
       };
     })
-    .filter((d) => !isEthiopia((d.lon * 180) / Math.PI, (d.lat * 180) / Math.PI));
+    .filter(
+      (d) => !isEthiopia((d.lon * 180) / Math.PI, (d.lat * 180) / Math.PI),
+    );
 
-  const ethiopia: LandDot[] = (ethiopiaDotsRaw as [number, number, number, number][]).map(
-    ([lat, lon, inland, flag]) => ({
-      lat,
-      lon,
-      inland,
-      region: -1,
-      flag: flag as 1 | 2 | 3,
-    }),
-  );
+  const ethiopia: LandDot[] = (
+    ethiopiaDotsRaw as [number, number, number, number][]
+  ).map(([lat, lon, inland, flag]) => ({
+    lat,
+    lon,
+    cosLat: Math.cos(lat),
+    sinLat: Math.sin(lat),
+    inland,
+    region: -1,
+    flag: flag as 1 | 2 | 3,
+  }));
 
   return world.concat(ethiopia);
 })();
+
+/** Region glow lookup — filled each frame, avoids closures in the hot loop */
+const REGION_GLOW = new Float32Array(REGIONS.length);
 
 function project(
   lat: number,
@@ -346,6 +365,28 @@ function project(
   const z2 = y0 * sinX + z1 * cosX;
 
   return { x: x1, y: y2, z: z2 };
+}
+
+/** Same math as project(), writes into `out` to avoid per-dot allocations */
+function projectInto(
+  cosLat: number,
+  sinLat: number,
+  lon: number,
+  cosY: number,
+  sinY: number,
+  cosX: number,
+  sinX: number,
+  radius: number,
+  out: { x: number; y: number; z: number },
+) {
+  const x0 = radius * cosLat * Math.sin(lon);
+  const y0 = radius * sinLat;
+  const z0 = radius * cosLat * Math.cos(lon);
+  const x1 = x0 * cosY + z0 * sinY;
+  const z1 = -x0 * sinY + z0 * cosY;
+  out.x = x1;
+  out.y = y0 * cosX - z1 * sinX;
+  out.z = y0 * sinX + z1 * cosX;
 }
 
 /**
@@ -409,11 +450,7 @@ function drawPlane(
   ctx.restore();
 }
 
-function drawShip(
-  ctx: CanvasRenderingContext2D,
-  scale: number,
-  alpha: number,
-) {
+function drawShip(ctx: CanvasRenderingContext2D, scale: number, alpha: number) {
   const s = 12 * scale;
   ctx.save();
   ctx.globalAlpha = alpha;
@@ -493,12 +530,16 @@ export function HeroGlobeVisual({ reduced }: { reduced?: boolean }) {
     const wrap = wrapRef.current;
     if (!canvas || !wrap) return;
 
-    const ctx = canvas.getContext("2d", { alpha: true });
+    const ctx =
+      canvas.getContext("2d", { alpha: true, desynchronized: true }) ??
+      canvas.getContext("2d", { alpha: true });
     if (!ctx) return;
 
     let raf = 0;
     let last = performance.now();
     let dpr = 1;
+    let inView = true;
+    let pageVisible = document.visibilityState === "visible";
     const visibleBuf: {
       p: LandDot;
       x: number;
@@ -507,6 +548,7 @@ export function HeroGlobeVisual({ reduced }: { reduced?: boolean }) {
       glow: number;
     }[] = [];
     let visibleCount = 0;
+    const proj = { x: 0, y: 0, z: 0 };
 
     // Cache gradients — recreating every frame was a big source of jank
     let bloomGrad: CanvasGradient | null = null;
@@ -546,7 +588,14 @@ export function HeroGlobeVisual({ reduced }: { reduced?: boolean }) {
       oceanGrad.addColorStop(0.55, "rgba(226,232,240,0.72)");
       oceanGrad.addColorStop(1, "rgba(203,213,225,0.55)");
 
-      fadeGrad = ctx.createRadialGradient(cx, cy, radius * 0.72, cx, cy, radius * 1.02);
+      fadeGrad = ctx.createRadialGradient(
+        cx,
+        cy,
+        radius * 0.72,
+        cx,
+        cy,
+        radius * 1.02,
+      );
       fadeGrad.addColorStop(0, "rgba(248,249,250,0)");
       fadeGrad.addColorStop(0.7, "rgba(248,249,250,0)");
       fadeGrad.addColorStop(1, "rgba(248,249,250,0.55)");
@@ -566,7 +615,7 @@ export function HeroGlobeVisual({ reduced }: { reduced?: boolean }) {
 
     const resize = () => {
       const rect = wrap.getBoundingClientRect();
-      dpr = Math.min(2, window.devicePixelRatio || 1);
+      dpr = Math.min(1.75, window.devicePixelRatio || 1);
       canvas.width = Math.max(1, Math.floor(rect.width * dpr));
       canvas.height = Math.max(1, Math.floor(rect.height * dpr));
       canvas.style.width = `${rect.width}px`;
@@ -578,7 +627,26 @@ export function HeroGlobeVisual({ reduced }: { reduced?: boolean }) {
     const ro = new ResizeObserver(resize);
     ro.observe(wrap);
 
+    const io = new IntersectionObserver(
+      ([entry]) => {
+        inView = entry.isIntersecting && entry.intersectionRatio > 0.05;
+      },
+      { threshold: [0, 0.05, 0.2] },
+    );
+    io.observe(wrap);
+
+    const onVis = () => {
+      pageVisible = document.visibilityState === "visible";
+    };
+    document.addEventListener("visibilitychange", onVis);
+
     const tick = (now: number) => {
+      raf = requestAnimationFrame(tick);
+      if (!inView || !pageVisible) {
+        last = now;
+        return;
+      }
+
       const dt = Math.min(32, now - last);
       last = now;
       if (!noMotion) timeRef.current += dt;
@@ -613,17 +681,23 @@ export function HeroGlobeVisual({ reduced }: { reduced?: boolean }) {
         rebuildGradients(cx, cy, radius);
       }
 
+      const bloom = bloomGrad;
+      const ocean = oceanGrad;
+      const fade = fadeGrad;
+      const rim = rimGrad;
+      if (!bloom || !ocean || !fade || !rim) return;
+
       ctx.setTransform(1, 0, 0, 1, 0, 0);
       ctx.clearRect(0, 0, w, h);
 
-      ctx.fillStyle = bloomGrad;
+      ctx.fillStyle = bloom;
       ctx.beginPath();
       ctx.arc(cx, cy, radius * 1.2, 0, Math.PI * 2);
       ctx.fill();
 
       ctx.beginPath();
       ctx.arc(cx, cy, radius, 0, Math.PI * 2);
-      ctx.fillStyle = oceanGrad;
+      ctx.fillStyle = ocean;
       ctx.fill();
       ctx.strokeStyle = "rgba(148,163,184,0.28)";
       ctx.lineWidth = 1.25 * dpr;
@@ -648,46 +722,52 @@ export function HeroGlobeVisual({ reduced }: { reduced?: boolean }) {
       ctx.setLineDash([4 * dpr, 6 * dpr]);
       ctx.strokeStyle = "rgba(0,123,255,0.12)";
       ctx.beginPath();
-      ctx.ellipse(cx, cy + radius * 0.02, radius * 0.98, radius * 0.24, 0, 0, Math.PI * 2);
+      ctx.ellipse(
+        cx,
+        cy + radius * 0.02,
+        radius * 0.98,
+        radius * 0.24,
+        0,
+        0,
+        Math.PI * 2,
+      );
       ctx.stroke();
       ctx.setLineDash([]);
 
       // Land dots — regional colors + soft pulse glow cycling nations
       const rotYNow = rotY.current;
       const rotXNow = rotX.current;
+      const cosY = Math.cos(rotYNow);
+      const sinY = Math.sin(rotYNow);
+      const cosX = Math.cos(rotXNow);
+      const sinX = Math.sin(rotXNow);
       const lx = light.x;
       const ly = light.y;
       const lz = light.z;
       const t = timeRef.current;
       const frontLon = -rotYNow;
 
-      // Cycle which region is "active", with a smooth sine breath
       const cyclePos = noMotion ? 0 : t / REGION_CYCLE_MS;
       const activeIdx = Math.floor(cyclePos) % REGIONS.length;
       const nextIdx = (activeIdx + 1) % REGIONS.length;
-      const phase = cyclePos - Math.floor(cyclePos); // 0..1 within cycle
-      // Ease: glow up mid-cycle, soft handoff near the end
-      const breath = Math.sin(phase * Math.PI); // 0→1→0
+      const phase = cyclePos - Math.floor(cyclePos);
+      const breath = Math.sin(phase * Math.PI);
       const handoff = phase > 0.78 ? (phase - 0.78) / 0.22 : 0;
 
-      // Camera boost: regions facing us glow a bit more
-      const faceBoost = (regionIdx: number) => {
-        if (regionIdx < 0) return 0;
-        const d = Math.abs(shortestLonDelta(REGIONS[regionIdx].centerLon, frontLon));
-        return Math.max(0, 1 - d / 1.1);
-      };
-
-      const glowOf = (regionIdx: number) => {
-        if (regionIdx < 0 || noMotion) return 0;
+      for (let ri = 0; ri < REGIONS.length; ri++) {
+        if (noMotion) {
+          REGION_GLOW[ri] = 0;
+          continue;
+        }
         let g = 0;
-        if (regionIdx === activeIdx) g = breath * (1 - handoff * 0.85);
-        if (regionIdx === nextIdx) g = Math.max(g, handoff * breath);
-        // Blend with facing so rotation feels connected
-        g = Math.max(g * 0.75, g * 0.45 + faceBoost(regionIdx) * 0.55 * 0.35);
-        return Math.min(1, g);
-      };
+        if (ri === activeIdx) g = breath * (1 - handoff * 0.85);
+        if (ri === nextIdx) g = Math.max(g, handoff * breath);
+        const d = Math.abs(shortestLonDelta(REGIONS[ri].centerLon, frontLon));
+        const face = Math.max(0, 1 - d / 1.1);
+        g = Math.max(g * 0.75, g * 0.45 + face * 0.55 * 0.35);
+        REGION_GLOW[ri] = Math.min(1, g);
+      }
 
-      // Ethiopia always pulses noticeably (flag spotlight)
       const ethPulse = noMotion
         ? 0.85
         : 0.55 + 0.45 * (0.5 + 0.5 * Math.sin(t * 0.0024));
@@ -697,21 +777,41 @@ export function HeroGlobeVisual({ reduced }: { reduced?: boolean }) {
       );
       const ethGlow = Math.min(1, ethPulse * (0.65 + ethFace * 0.5));
 
-      // Project once, then draw glow + cores
       visibleCount = 0;
-      for (const p of LAND_DOTS) {
-        const { x, y, z } = project(p.lat, p.lon, rotYNow, rotXNow, radius);
-        if (z <= 0) continue;
-        const glow = p.flag ? ethGlow : glowOf(p.region);
+      for (let di = 0; di < LAND_DOTS.length; di++) {
+        const p = LAND_DOTS[di];
+        projectInto(
+          p.cosLat,
+          p.sinLat,
+          p.lon,
+          cosY,
+          sinY,
+          cosX,
+          sinX,
+          radius,
+          proj,
+        );
+        if (proj.z <= 0) continue;
+        const glow = p.flag
+          ? ethGlow
+          : p.region >= 0
+            ? REGION_GLOW[p.region]
+            : 0;
         const slot = visibleBuf[visibleCount];
         if (slot) {
           slot.p = p;
-          slot.x = x;
-          slot.y = y;
-          slot.z = z;
+          slot.x = proj.x;
+          slot.y = proj.y;
+          slot.z = proj.z;
           slot.glow = glow;
         } else {
-          visibleBuf[visibleCount] = { p, x, y, z, glow };
+          visibleBuf[visibleCount] = {
+            p,
+            x: proj.x,
+            y: proj.y,
+            z: proj.z,
+            glow,
+          };
         }
         visibleCount++;
       }
@@ -737,7 +837,8 @@ export function HeroGlobeVisual({ reduced }: { reduced?: boolean }) {
           dpr *
           (0.7 + glow * 0.95);
         const gaq =
-          Math.round((isEth ? 0.16 : 0.1) * glow * (0.5 + depth * 0.5) * 25) / 25;
+          Math.round((isEth ? 0.16 : 0.1) * glow * (0.5 + depth * 0.5) * 25) /
+          25;
         if (gaq < 0.02) continue;
         ctx.fillStyle = `rgba(${cr},${cg},${cb},${gaq})`;
         ctx.beginPath();
@@ -750,7 +851,10 @@ export function HeroGlobeVisual({ reduced }: { reduced?: boolean }) {
       for (let i = 0; i < visibleCount; i++) {
         const v = visibleBuf[i];
         const invR = 1 / radius;
-        const lit = Math.max(0, v.x * invR * lx + v.y * invR * ly + v.z * invR * lz);
+        const lit = Math.max(
+          0,
+          v.x * invR * lx + v.y * invR * ly + v.z * invR * lz,
+        );
         const depth = v.z * invR;
         const shade = 0.42 + lit * 0.58;
         const { glow, p } = v;
@@ -762,7 +866,9 @@ export function HeroGlobeVisual({ reduced }: { reduced?: boolean }) {
         const r = Math.max(0.65 * dpr, baseR * (0.7 + depth * 0.45) * dpr);
         const aq =
           Math.round(
-            (isEth ? 0.78 + depth * 0.22 + glow * 0.15 : 0.38 + depth * 0.55 + glow * 0.35) *
+            (isEth
+              ? 0.78 + depth * 0.22 + glow * 0.15
+              : 0.38 + depth * 0.55 + glow * 0.35) *
               shade *
               20,
           ) / 20;
@@ -811,7 +917,10 @@ export function HeroGlobeVisual({ reduced }: { reduced?: boolean }) {
         const targetAlpha =
           pos.z < -radius * 0.15
             ? 0
-            : Math.max(0, Math.min(1, (pos.z + radius * 0.12) / (radius * 0.55))) *
+            : Math.max(
+                0,
+                Math.min(1, (pos.z + radius * 0.12) / (radius * 0.55)),
+              ) *
               (0.7 + depth * 0.3);
 
         let motion = vehicleMotion.current[v.id];
@@ -829,7 +938,11 @@ export function HeroGlobeVisual({ reduced }: { reduced?: boolean }) {
             motion.angle = targetAngle;
             motion.initialized = true;
           } else {
-            motion.angle = lerpAngle(motion.angle, targetAngle, 1 - Math.exp(-0.02 * dt));
+            motion.angle = lerpAngle(
+              motion.angle,
+              targetAngle,
+              1 - Math.exp(-0.02 * dt),
+            );
           }
         }
 
@@ -845,7 +958,8 @@ export function HeroGlobeVisual({ reduced }: { reduced?: boolean }) {
           const tLat = v.fromLat + (v.toLat - v.fromLat) * tu;
           const tLon = lerpLon(v.fromLon, v.toLon, tu);
           const tAlt =
-            v.altitude + (v.type === "plane" ? Math.sin(tu * Math.PI) * 0.04 : 0);
+            v.altitude +
+            (v.type === "plane" ? Math.sin(tu * Math.PI) * 0.04 : 0);
           const tp = project(tLat, tLon, rotYNow, rotXNow, radius * tAlt);
           if (tp.z <= 0) continue;
           const fade = (1 - s / trailSteps) * motion.alpha * 0.4;
@@ -865,25 +979,25 @@ export function HeroGlobeVisual({ reduced }: { reduced?: boolean }) {
         ctx.restore();
       }
 
-      ctx.fillStyle = fadeGrad;
+      ctx.fillStyle = fade;
       ctx.beginPath();
       ctx.arc(cx, cy, radius * 1.05, 0, Math.PI * 2);
       ctx.fill();
 
       ctx.globalCompositeOperation = "screen";
-      ctx.fillStyle = rimGrad;
+      ctx.fillStyle = rim;
       ctx.beginPath();
       ctx.arc(cx, cy, radius, 0, Math.PI * 2);
       ctx.fill();
       ctx.globalCompositeOperation = "source-over";
-
-      raf = requestAnimationFrame(tick);
     };
 
     raf = requestAnimationFrame(tick);
     return () => {
       cancelAnimationFrame(raf);
       ro.disconnect();
+      io.disconnect();
+      document.removeEventListener("visibilitychange", onVis);
     };
   }, [noMotion, light]);
 
