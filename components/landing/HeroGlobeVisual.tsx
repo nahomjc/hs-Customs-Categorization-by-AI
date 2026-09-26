@@ -699,6 +699,9 @@ export function HeroGlobeVisual({ reduced }: { reduced?: boolean }) {
     const resize = () => {
       const rect = wrap.getBoundingClientRect();
       dpr = Math.min(1.75, window.devicePixelRatio || 1);
+      // Planes/ships read small on phones — bump icon size a bit
+      vehicleBoost =
+        rect.width < 480 ? 1.38 : rect.width < 768 ? 1.22 : 1;
       canvas.width = Math.max(1, Math.floor(rect.width * dpr));
       canvas.height = Math.max(1, Math.floor(rect.height * dpr));
       canvas.style.width = `${rect.width}px`;
@@ -1184,7 +1187,7 @@ export function HeroGlobeVisual({ reduced }: { reduced?: boolean }) {
           }
         }
 
-        const scale = v.scale * (0.9 + depth * 0.35);
+        const scale = v.scale * (0.9 + depth * 0.35) * vehicleBoost;
         ctx.save();
         ctx.translate(cx + pos.x, cy - pos.y);
         ctx.rotate(motion.angle);
