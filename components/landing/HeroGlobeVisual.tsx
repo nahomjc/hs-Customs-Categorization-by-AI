@@ -530,20 +530,20 @@ function drawLandingWaterGlow(
   const ringCount = 3;
   for (let i = 0; i < ringCount; i++) {
     const cycle = (time * 0.00085 + phase * 1.4 + i / ringCount) % 1;
-    const radius = (4 + cycle * (20 + 8 * strength)) * dpr;
+    const radius = (6 + cycle * (38 + 14 * strength)) * dpr;
     const ringA = a * (1 - cycle) * (1 - cycle) * 0.7;
 
     ctx.strokeStyle = `rgba(56,189,248,${ringA})`;
-    ctx.lineWidth = Math.max(0.8, (2 - cycle * 1.2) * dpr);
+    ctx.lineWidth = Math.max(0.8, (2.2 - cycle * 1.3) * dpr);
     ctx.beginPath();
     ctx.arc(sx, sy, radius, 0, Math.PI * 2);
     ctx.stroke();
 
     // Softer outer halo on each ring
     ctx.strokeStyle = `rgba(186,230,253,${ringA * 0.45})`;
-    ctx.lineWidth = Math.max(0.6, (1.2 - cycle * 0.6) * dpr);
+    ctx.lineWidth = Math.max(0.6, (1.3 - cycle * 0.6) * dpr);
     ctx.beginPath();
-    ctx.arc(sx, sy, radius + 1.5 * dpr, 0, Math.PI * 2);
+    ctx.arc(sx, sy, radius + 2 * dpr, 0, Math.PI * 2);
     ctx.stroke();
   }
 
