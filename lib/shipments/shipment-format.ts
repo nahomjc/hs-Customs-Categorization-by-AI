@@ -15,16 +15,29 @@ function toDate(value: DateLike): Date | null {
   return Number.isNaN(d.getTime()) ? null : d;
 }
 
-/** "24 Oct 2026", or null when there is no valid date. */
+const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+
+const DATE_PARTS = new Intl.DateTimeFormat("en-US", {
+  day: "numeric",
+  month: "numeric",
+  year: "numeric",
+  timeZone: SHIPMENT_TIME_ZONE,
+});
+
+/**
+ * "24 Oct 2026", or null when there is no valid date. Month names come from
+ * our own list (not Intl) so Node and every browser print the same text.
+ */
 export function formatShipmentDate(value: DateLike): string | null {
   const d = toDate(value);
   if (!d) return null;
-  return new Intl.DateTimeFormat("en-GB", {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-    timeZone: SHIPMENT_TIME_ZONE,
-  }).format(d);
+  const parts = DATE_PARTS.formatToParts(d);
+  const get = (type: string) => parts.find((p) => p.type === type)?.value;
+  const day = Number(get("day"));
+  const month = Number(get("month"));
+  const year = Number(get("year"));
+  if (!day || !month || !year) return null;
+  return `${day} ${MONTHS[month - 1]} ${year}`;
 }
 
 /** Money as "$1,234.50" style via Intl, or the plain number plus code when the code is unknown. */

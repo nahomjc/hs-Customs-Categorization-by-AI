@@ -17,7 +17,8 @@
 		"test:column-mapping": "npx tsx scripts/test-column-mapping.ts",
 		"test:dashboard-map": "npx tsx scripts/test-dashboard-map.ts",
 		"test:progress-pagination": "npx tsx scripts/test-progress-pagination.ts",
-		"test:settings-nav": "npx tsx scripts/test-settings-nav.ts"
+		"test:settings-nav": "npx tsx scripts/test-settings-nav.ts",
+		"test:my-shipments": "npx tsx scripts/test-my-shipments.ts"
 	},
 	"dependencies": {
 		"@aws-sdk/client-s3": "^3.1121.0",
