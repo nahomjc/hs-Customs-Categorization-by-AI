@@ -19,9 +19,14 @@ import {
 import type { TrackingNotificationDelivery } from "@/lib/notifications/notify-tracking";
 import {
   TRACKING_STATUSES,
+  TRACKING_STATUS_DEFAULT_NOTES,
   TRACKING_STATUS_LABELS,
   type TrackingStatus,
 } from "@/lib/tracking/constants";
+
+const ALL_DEFAULT_NOTES = new Set(
+  Object.values(TRACKING_STATUS_DEFAULT_NOTES),
+);
 
 function toastForTrackingDelivery(
   notifications: TrackingNotificationDelivery | null | undefined,
@@ -95,10 +100,29 @@ export function ClientShipmentTrackingHeaderAction({
     setTrackingNote(trackingNoteProp ?? "");
   }, [trackingStatusProp, trackingNoteProp]);
 
+  useEffect(() => {
+    if (!open) return;
+    setTrackingNote((note) => {
+      const trimmed = note.trim();
+      if (!trimmed || ALL_DEFAULT_NOTES.has(trimmed)) {
+        return TRACKING_STATUS_DEFAULT_NOTES[trackingStatus];
+      }
+      return note;
+    });
+  }, [open, trackingStatus]);
+
   const statusLabel =
     TRACKING_STATUS_LABELS[
       (trackingStatusProp as TrackingStatus) || "received"
     ];
+
+  function selectTrackingStatus(next: TrackingStatus) {
+    setTrackingStatus(next);
+    const trimmed = trackingNote.trim();
+    if (!trimmed || ALL_DEFAULT_NOTES.has(trimmed)) {
+      setTrackingNote(TRACKING_STATUS_DEFAULT_NOTES[next]);
+    }
+  }
 
   async function handleSubmit() {
     setLoading(true);
@@ -179,7 +203,7 @@ export function ClientShipmentTrackingHeaderAction({
               <select
                 value={trackingStatus}
                 onChange={(e) =>
-                  setTrackingStatus(e.target.value as TrackingStatus)
+                  selectTrackingStatus(e.target.value as TrackingStatus)
                 }
                 className={`w-full ${dashSelectClass}`}
               >
@@ -195,12 +219,17 @@ export function ClientShipmentTrackingHeaderAction({
               <span className="mb-1 block font-medium text-slate-700">
                 Note for client
               </span>
-              <input
+              <textarea
                 value={trackingNote}
                 onChange={(e) => setTrackingNote(e.target.value)}
-                placeholder="Optional message shown with this update"
-                className={`w-full ${dashInputClass}`}
+                rows={3}
+                placeholder={TRACKING_STATUS_DEFAULT_NOTES[trackingStatus]}
+                className={`w-full resize-y ${dashInputClass}`}
               />
+              <p className="mt-1 text-xs text-slate-500">
+                Prefilled when you change status; edit before notifying the
+                client.
+              </p>
             </label>
           </div>
 
