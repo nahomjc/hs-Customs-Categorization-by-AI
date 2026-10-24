@@ -5,7 +5,7 @@ import { ShipmentWorkflowStepper } from "@/components/dashboard/client/ShipmentW
 import { db } from "@/db";
 import { importCases, trackingStatusEvents } from "@/db/schema";
 import { getSessionUserProfile } from "@/lib/auth/require-admin";
-import { isClientRole } from "@/lib/auth/roles";
+import { canAccessPersonalShipments } from "@/lib/auth/roles";
 import { getAuthUser } from "@/lib/auth/session";
 import { getTenantId } from "@/lib/import-cases/queries";
 import { getTrackingLabel } from "@/lib/tracking/workflow";
@@ -23,7 +23,8 @@ export default async function MyShipmentDetailPage({ params }: PageProps) {
   if (!user?.id) redirect("/login?redirect=/dashboard/my-shipments");
 
   const session = await getSessionUserProfile();
-  if (!isClientRole(session?.profile?.role)) {
+  const role = session?.profile?.role;
+  if (!canAccessPersonalShipments(role)) {
     redirect(`/dashboard/import-cases/${caseId}`);
   }
 
@@ -60,7 +61,9 @@ export default async function MyShipmentDetailPage({ params }: PageProps) {
         title={shipment.caseNumber}
         description="Clearance workflow for this shipment"
         breadcrumbs={[
-          { label: "Dashboard", href: "/dashboard" },
+          role === "client"
+            ? { label: "Track order", href: "/dashboard" }
+            : { label: "Dashboard", href: "/dashboard" },
           { label: "My shipments", href: "/dashboard/my-shipments" },
           { label: shipment.caseNumber },
         ]}

@@ -26,9 +26,17 @@ function getInitials(name?: string, email?: string) {
 type UserMenuProps = {
   user: UserMenuUser;
   variant?: "default" | "landing-pill";
+  isClient?: boolean;
+  /** Client + admin: cases where this user is the linked recipient. */
+  showMyShipmentsLink?: boolean;
 };
 
-export function UserMenu({ user, variant = "default" }: UserMenuProps) {
+export function UserMenu({
+  user,
+  variant = "default",
+  isClient = false,
+  showMyShipmentsLink = false,
+}: UserMenuProps) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
@@ -152,9 +160,20 @@ export function UserMenu({ user, variant = "default" }: UserMenuProps) {
             onClick={() => setOpen(false)}
             className="flex items-center gap-2 px-3 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
           >
-            <DashboardIcon />
-            Dashboard
+            {isClient ? <TrackOrderIcon /> : <DashboardIcon />}
+            {isClient ? "Track order" : "Dashboard"}
           </Link>
+          {showMyShipmentsLink ? (
+            <Link
+              href="/dashboard/my-shipments"
+              role="menuitem"
+              onClick={() => setOpen(false)}
+              className="flex items-center gap-2 px-3 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+            >
+              <ShipmentsIcon />
+              My shipments
+            </Link>
+          ) : null}
           <button
             type="button"
             role="menuitem"
@@ -190,6 +209,46 @@ function AccountIcon() {
         strokeLinejoin="round"
         strokeWidth={2}
         d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"
+      />
+    </svg>
+  );
+}
+
+function ShipmentsIcon() {
+  return (
+    <svg
+      className="w-4 h-4 text-gray-400"
+      fill="none"
+      stroke="currentColor"
+      viewBox="0 0 24 24"
+      aria-hidden
+    >
+      <title>My shipments</title>
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth={2}
+        d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"
+      />
+    </svg>
+  );
+}
+
+function TrackOrderIcon() {
+  return (
+    <svg
+      className="w-4 h-4 text-gray-400"
+      fill="none"
+      stroke="currentColor"
+      viewBox="0 0 24 24"
+      aria-hidden
+    >
+      <title>Track order</title>
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth={2}
+        d="M8.25 18.75a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m3 0h6m-9 0H3.375a1.125 1.125 0 01-1.125-1.125V14.25m17.25 4.5a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m3 0h1.125c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9m9 9v.75m-9-.75H4.125A1.125 1.125 0 013 14.25v2.25m16.875-11.25v7.5"
       />
     </svg>
   );

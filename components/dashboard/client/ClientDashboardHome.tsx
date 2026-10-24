@@ -21,12 +21,15 @@ import {
   PageHeader,
   StatusBadge,
 } from "@/components/dashboard/ui";
+import { SourceCountryMap } from "@/components/dashboard/map/SourceCountryMap";
+import type { SourceCountrySummary } from "@/lib/dashboard-map-utils";
 import { getTrackingLabel } from "@/lib/tracking/workflow";
 
 type ClientDashboardHomeProps = {
   displayName: string;
   shipments: ClientShipmentSummary[];
   notifications: ClientNotificationItem[];
+  sourceSummary: SourceCountrySummary;
 };
 
 function formatUpdated(shipment: ClientShipmentSummary) {
@@ -77,6 +80,7 @@ export function ClientDashboardHome({
   displayName,
   shipments,
   notifications,
+  sourceSummary,
 }: ClientDashboardHomeProps) {
   const active = shipments.filter(
     (s) => s.trackingStatus !== "delivered" && s.trackingStatus !== "cancelled",
@@ -92,8 +96,8 @@ export function ClientDashboardHome({
   return (
     <div className="w-full min-w-0 space-y-6 sm:space-y-8">
       <PageHeader
-        title={`Welcome${displayName ? `, ${displayName}` : ""}`}
-        description="Track every shipment from documents through customs to pickup."
+        title={`Track order${displayName ? ` · ${displayName}` : ""}`}
+        description="Follow your shipments from documents through customs to pickup."
         action={
           <Link
             href="/dashboard/my-shipments"
@@ -126,6 +130,12 @@ export function ClientDashboardHome({
           hint="Completed shipments"
         />
       </div>
+
+      <SourceCountryMap
+        summary={sourceSummary}
+        title="Your shipments by source country"
+        periodLabel="Linked to you"
+      />
 
       {ready.length > 0 ? (
         <div className="rounded-2xl border border-amber-200/80 bg-amber-50/60 px-4 py-3 sm:px-5 sm:py-3.5">

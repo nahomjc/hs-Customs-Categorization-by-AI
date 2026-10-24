@@ -273,6 +273,30 @@ export async function fetchCasesBySourceCountry(
   }
 }
 
+export async function fetchClientCasesBySourceCountry(
+  tenantId: string,
+  clientUserId: string,
+): Promise<{ code: string | null; count: number }[] | null> {
+  try {
+    const rows = await db
+      .select({
+        code: SOURCE_COUNTRY_SQL,
+        count: sql<number>`count(*)::int`,
+      })
+      .from(importCases)
+      .where(
+        and(
+          eq(importCases.tenantId, tenantId),
+          eq(importCases.clientUserId, clientUserId),
+        ),
+      )
+      .groupBy(SOURCE_COUNTRY_SQL);
+    return rows.map((r) => ({ code: r.code ?? null, count: r.count }));
+  } catch {
+    return null;
+  }
+}
+
 /**
  * Cases created per rolling 7-day window (0 = the last 7 days) over the last
  * `weeks` windows, per raw source-country code. Null when the query fails.

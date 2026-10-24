@@ -29,3 +29,10 @@ export function isImportCaseRecipientRole(
 ): boolean {
   return role === "client" || role === "admin";
 }
+
+/** Client-style shipment list & tracking (cases where you are the linked recipient). */
+export function canAccessPersonalShipments(
+  role: string | null | undefined,
+): boolean {
+  return role === "client" || role === "admin";
+}

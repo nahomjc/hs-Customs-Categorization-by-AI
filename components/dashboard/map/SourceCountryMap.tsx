@@ -47,9 +47,11 @@ function tooltipPosition(xPct: number, yPct: number): string {
 export function SourceCountryMap({
   summary,
   periodLabel = "All time",
+  title = "Cases by source country",
 }: {
   summary: SourceCountrySummary;
   periodLabel?: string;
+  title?: string;
 }) {
   const { countries, total, unknownCount, max } = summary;
   const { width: W, height: H } = WORLD;
@@ -74,9 +76,9 @@ export function SourceCountryMap({
   const destinationShapes = WORLD.paths.filter((p) => p.c === DESTINATION_ISO2);
 
   return (
-    <BentoCard label="Cases by source country" className="flex flex-col">
+    <BentoCard label={title} className="flex flex-col">
       <BentoCardHeader
-        title="Cases by source country"
+        title={title}
         action={<PeriodPill>{periodLabel}</PeriodPill>}
       />
 

@@ -96,7 +96,7 @@ export function ClientNotificationBell({
               onClick={() => setOpen(false)}
               className="text-xs font-semibold text-[#007bff] hover:text-[#0069d9]"
             >
-              View all on dashboard
+              Open track order
             </Link>
           </div>
         </div>

@@ -8,6 +8,9 @@ import {
   listClientNotifications,
   listClientShipments,
 } from "@/lib/dashboard/client-shipments";
+import { summarizeSourceCountries } from "@/lib/dashboard-map-utils";
+import { fetchClientCasesBySourceCountry } from "@/lib/import-cases-analytics";
+import { getTenantId } from "@/lib/import-cases/queries";
 
 export const dynamic = "force-dynamic";
 
@@ -18,10 +21,13 @@ export default async function DashboardPage() {
     const user = await getAuthUser();
     if (!user?.id) redirect("/login?redirect=/dashboard");
 
-    const [shipments, notifications] = await Promise.all([
+    const tenantId = getTenantId();
+    const [shipments, notifications, sourceRows] = await Promise.all([
       listClientShipments(user.id),
       listClientNotifications(user.id),
+      fetchClientCasesBySourceCountry(tenantId, user.id),
     ]);
+    const sourceSummary = summarizeSourceCountries(sourceRows ?? []);
 
     const displayName =
       session?.profile?.fullName?.split(" ")[0] ??
@@ -33,6 +39,7 @@ export default async function DashboardPage() {
         displayName={displayName}
         shipments={shipments}
         notifications={notifications}
+        sourceSummary={sourceSummary}
       />
     );
   }

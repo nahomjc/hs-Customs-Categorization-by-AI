@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 import { MyShipmentsView } from "@/components/dashboard/client/MyShipmentsView";
 import { PageHeader } from "@/components/dashboard/ui";
 import { getSessionUserProfile } from "@/lib/auth/require-admin";
-import { isClientRole } from "@/lib/auth/roles";
+import { canAccessPersonalShipments } from "@/lib/auth/roles";
 import { getAuthUser } from "@/lib/auth/session";
 import { listClientShipments } from "@/lib/dashboard/client-shipments";
 
@@ -13,7 +13,8 @@ export default async function MyShipmentsPage() {
   if (!user?.id) redirect("/login?redirect=/dashboard/my-shipments");
 
   const session = await getSessionUserProfile();
-  if (!isClientRole(session?.profile?.role)) {
+  const role = session?.profile?.role;
+  if (!canAccessPersonalShipments(role)) {
     redirect("/dashboard/import-cases");
   }
 
@@ -25,7 +26,9 @@ export default async function MyShipmentsPage() {
         title="My shipments"
         description="Follow each case through the clearance workflow."
         breadcrumbs={[
-          { label: "Dashboard", href: "/dashboard" },
+          role === "client"
+            ? { label: "Track order", href: "/dashboard" }
+            : { label: "Dashboard", href: "/dashboard" },
           { label: "My shipments" },
         ]}
       />

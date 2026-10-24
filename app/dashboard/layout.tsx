@@ -11,7 +11,7 @@ import {
   SET_PASSWORD_PATH,
 } from "@/lib/auth/must-change-password";
 import { getSessionUserProfile } from "@/lib/auth/require-admin";
-import { isClientRole } from "@/lib/auth/roles";
+import { canAccessPersonalShipments, isClientRole } from "@/lib/auth/roles";
 import { toUserMenuUser } from "@/lib/auth/user-display";
 import { getAuthUser } from "@/lib/auth/session";
 import { listClientNotifications } from "@/lib/dashboard/client-shipments";
@@ -55,9 +55,11 @@ export default async function DashboardLayout({
     }
   }
 
-  const isClient = isClientRole(profileSession?.profile?.role);
+  const role = profileSession?.profile?.role;
+  const isClient = isClientRole(role);
+  const personalShipments = canAccessPersonalShipments(role);
   const clientNotifications =
-    isClient && user?.id
+    personalShipments && user?.id
       ? await listClientNotifications(user.id, 12)
       : [];
 
@@ -70,11 +72,13 @@ export default async function DashboardLayout({
           <BrandLogo href="/" size="md" className="shrink-0" />
           {user ? (
             <div className="flex items-center gap-2">
-              {isClient ? (
+              {personalShipments ? (
                 <ClientNotificationBell initialItems={clientNotifications} />
               ) : null}
               <DashboardNav
                 user={toUserMenuUser(user, profileSession?.profile)}
+                isClient={isClient}
+                showMyShipmentsLink={role === "admin"}
               />
             </div>
           ) : null}
