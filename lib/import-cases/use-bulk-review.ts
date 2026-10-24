@@ -9,7 +9,9 @@ type UseBulkReviewOptions = {
   caseId: string;
   endpoint: string;
   itemLabel: string;
-  onSuccess?: () => void | Promise<void>;
+  onSuccess?: (
+    result: { action: BulkReviewAction; affectedCount: number },
+  ) => void | Promise<void>;
 };
 
 const ACTION_MESSAGES: Record<
@@ -70,11 +72,12 @@ export function useBulkReview({
       };
       if (!res.ok) throw new Error(data.error ?? "Bulk action failed");
 
+      const affectedCount = data.affectedCount ?? 0;
       toast.success(
-        `${ACTION_MESSAGES[action].success} (${data.affectedCount ?? 0} ${itemLabel})`,
+        `${ACTION_MESSAGES[action].success} (${affectedCount} ${itemLabel})`,
       );
       setModalAction(null);
-      await onSuccess?.();
+      await onSuccess?.({ action, affectedCount });
       router.refresh();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Bulk action failed");

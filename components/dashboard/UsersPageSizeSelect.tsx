@@ -2,13 +2,11 @@
 
 import { useRouter } from "next/navigation";
 import { USER_LIST_PAGE_SIZES } from "@/lib/dashboard/users-list-constants";
+import { DashSelect } from "@/components/dashboard/ui";
 import {
   buildUsersHref,
   type UsersFilters,
 } from "@/lib/dashboard/users-list-href";
-
-const selectClass =
-  "py-1.5 pl-2.5 pr-7 text-sm text-gray-900 bg-white border border-gray-200 rounded-lg focus:outline-none focus:border-[#007bff] focus:ring-[3px] focus:ring-[#007bff]/12";
 
 export function UsersPageSizeSelect({ filters }: { filters: UsersFilters }) {
   const router = useRouter();
@@ -16,12 +14,12 @@ export function UsersPageSizeSelect({ filters }: { filters: UsersFilters }) {
   return (
     <label className="flex items-center gap-2 text-xs text-gray-500">
       <span className="whitespace-nowrap">Per page</span>
-      <select
+      <DashSelect
         aria-label="Rows per page"
-        value={filters.pageSize}
-        className={selectClass}
-        onChange={(e) => {
-          const pageSize = Number(e.target.value);
+        className="min-w-[4.5rem]"
+        value={String(filters.pageSize)}
+        onChange={(v) => {
+          const pageSize = Number(v);
           router.push(
             buildUsersHref(filters, {
               pageSize: Number.isFinite(pageSize) ? pageSize : 25,
@@ -29,13 +27,11 @@ export function UsersPageSizeSelect({ filters }: { filters: UsersFilters }) {
             }),
           );
         }}
-      >
-        {USER_LIST_PAGE_SIZES.map((size) => (
-          <option key={size} value={size}>
-            {size}
-          </option>
-        ))}
-      </select>
+        options={USER_LIST_PAGE_SIZES.map((size) => ({
+          value: String(size),
+          label: String(size),
+        }))}
+      />
     </label>
   );
 }

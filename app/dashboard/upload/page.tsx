@@ -1,6 +1,8 @@
+import { redirect } from "next/navigation";
 import { PageHeader } from "@/components/dashboard/ui";
 import { clampPreferencesForRole } from "@/lib/auth/settings-meta";
 import { getSessionUserProfile } from "@/lib/auth/require-admin";
+import { isClientRole, isStaffRole } from "@/lib/auth/roles";
 import { getUserPreferences } from "@/lib/settings/user-settings";
 import { UploadForm } from "./UploadForm";
 
@@ -8,6 +10,12 @@ export const dynamic = "force-dynamic";
 
 export default async function UploadPage() {
   const session = await getSessionUserProfile();
+  if (isClientRole(session?.profile?.role)) {
+    redirect("/dashboard/my-shipments");
+  }
+  if (!isStaffRole(session?.profile?.role)) {
+    redirect("/dashboard");
+  }
   const userId = session?.authUser?.id;
   const prefs = userId
     ? clampPreferencesForRole(

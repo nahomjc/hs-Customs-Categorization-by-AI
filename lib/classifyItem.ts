@@ -5,8 +5,18 @@ import {
   formatReferenceCandidate,
   loadHsReferenceCache,
   searchDescriptions,
+  searchDescriptionsInChapters,
 } from "./hsReference";
-import { isReferencePopulated } from "./hsReferenceCache";
+import {
+  isReferencePopulated,
+  type HsReferenceCacheRow,
+} from "./hsReferenceCache";
+import {
+  buildChapterNotesPromptBlock,
+  PROMPT_MAX_CHAPTERS,
+  type ChapterNotesPromptBlock,
+} from "./hs-chapter-notes";
+import { normalizeChapter } from "./hs-chapter-notes-schema";
 import { fetchOpenRouter } from "./openrouterFetch";
 
 const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
@@ -17,6 +27,11 @@ export interface ClassificationResult {
   hsCode: string;
   cleanDescription: string;
   confidence?: number;
+  /**
+   * Import (tariff) mode: Chapter/Section note that decided the outcome,
+   * e.g. "Chapter 4 Note 1(a)". Only set when a note was applied.
+   */
+  noteReference?: string;
 }
 
 export type ClassifyItemMode = "furniture" | "tariff";
@@ -69,6 +84,9 @@ Return ONLY valid JSON, no markdown:
 function buildTariffSystemPrompt(
   allowedList: string,
   hasReferenceCandidates: boolean,
+  /** Legal chapter/section notes block (import classification). Omitted = unchanged prompt. */
+  notesText?: string,
+  allowRedirect = true,
 ): string {
   const step4 = hasReferenceCandidates
     ? `Step 4 — Pick the BEST matching HS code from the tariff reference candidates below.
@@ -84,6 +102,27 @@ Use 9999 only when truly unknown. Use EXCLUDE for non-items.
 
 ${allowedList}`;
 
+  const notesSection = notesText
+    ? `
+
+Legal chapter and section notes (authoritative - they override guessing from the product name):
+${notesText}
+
+How to use the notes:
+- Check the item against the notes' exclusions ("does not cover") and inclusions before choosing a code.
+- If a note excludes the item from a chapter, do NOT choose a code from that chapter.${
+        allowRedirect
+          ? `
+- If a note sends the item to a different chapter and no candidate above belongs to that chapter, set "hsCode" to "9999" and set "redirectChapter" to that two-digit chapter number (e.g. "17"). Otherwise leave "redirectChapter" empty.`
+          : ""
+      }
+- When a note decided the outcome (excluded the item, redirected it, or confirmed the chapter), set "noteReference" to a short citation such as "Chapter 4 Note 1(a)" or "Section XI Note 2(a)". Otherwise set it to "".
+- The notes never allow inventing codes: still choose only from the candidates above (or the allowed format).`
+    : "";
+  const jsonFormat = notesText
+    ? `{"isImportItem":true|false,"category":"Category Name","hsCode":"####.## or EXCLUDE or 9999","cleanDescription":"Short product description","noteReference":""${allowRedirect ? ',"redirectChapter":""' : ""}}`
+    : `{"isImportItem":true|false,"category":"Category Name","hsCode":"####.## or EXCLUDE or 9999","cleanDescription":"Short product description"}`;
+
   return `You are a customs HS classifier for import shipments (WCO Harmonized System / Ethiopian tariff).
 
 Step 1 — Is this a physical import product (food, oil, machinery, textile, chemical, etc.)?
@@ -96,17 +135,22 @@ Step 3 — Assign a product category (e.g. Vegetable oils, Tea, Sugar, Prepared 
 
 ${step4}
 
-Never use 0000.00 or 9999.99.
+Never use 0000.00 or 9999.99.${notesSection}
 
 Return ONLY valid JSON, no markdown:
-{"isImportItem":true|false,"category":"Category Name","hsCode":"####.## or EXCLUDE or 9999","cleanDescription":"Short product description"}`;
+${jsonFormat}`;
 }
 
 async function buildAllowedListForItem(
   description: string,
   features: HsFeatures & { isImportItem?: boolean },
   mode: ClassifyItemMode,
-): Promise<{ list: string; hasReferenceCandidates: boolean }> {
+): Promise<{
+  list: string;
+  hasReferenceCandidates: boolean;
+  /** Tariff reference rows offered to the model (when the reference table is populated). */
+  candidates?: HsReferenceCacheRow[];
+}> {
   await loadHsReferenceCache();
 
   const keywords = Array.isArray(features.keywords) ? features.keywords : [];
@@ -127,6 +171,7 @@ async function buildAllowedListForItem(
       return {
         list: [...fromReference, "9999", "EXCLUDE"].join("\n"),
         hasReferenceCandidates: true,
+        candidates,
       };
     }
   }
@@ -162,6 +207,7 @@ function extractJson<T>(content: string): T {
 
 async function callOpenRouter(
   messages: Array<{ role: "system" | "user"; content: string }>,
+  maxTokens = 256,
 ) {
   const apiKey = process.env.OPENROUTER_API_KEY;
   if (!apiKey) {
@@ -181,7 +227,7 @@ async function callOpenRouter(
       model: "openai/gpt-4o-mini",
       messages,
       temperature: 0.2,
-      max_tokens: 256,
+      max_tokens: maxTokens,
     }),
   });
 
@@ -201,6 +247,115 @@ async function callOpenRouter(
   const content = data.choices?.[0]?.message?.content?.trim();
   if (!content) throw new Error("Empty response from OpenRouter");
   return content;
+}
+
+/** Larger completion budget when the notes fields (noteReference/redirectChapter) are requested. */
+const NOTES_MAX_TOKENS = 400;
+
+type NotedClassification = ClassificationResult & { redirectChapter?: string };
+
+function chapterFromCode(code: string | null | undefined): string | null {
+  const digits = (code ?? "").replace(/\D/g, "");
+  return digits.length >= 2 ? normalizeChapter(digits.slice(0, 2)) : null;
+}
+
+/**
+ * Chapters most likely to apply to the item: GRI rule-engine suggestions
+ * first, then the best-ranked tariff reference candidates. Max 3.
+ */
+function pickCandidateChapters(
+  candidates: HsReferenceCacheRow[] | undefined,
+  griCodes: string[],
+  max = PROMPT_MAX_CHAPTERS,
+): string[] {
+  const scores = new Map<string, number>();
+  const add = (chapter: string | null, weight: number) => {
+    if (chapter) scores.set(chapter, (scores.get(chapter) ?? 0) + weight);
+  };
+  griCodes.forEach((code, i) => add(chapterFromCode(code), Math.max(1, 12 - i)));
+  (candidates ?? []).forEach((row, i) =>
+    add(
+      normalizeChapter(row.chapter) ??
+        chapterFromCode(row.hsCode ?? row.tariffNo),
+      Math.max(1, 30 - i),
+    ),
+  );
+  return [...scores.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, max)
+    .map(([chapter]) => chapter);
+}
+
+/**
+ * When the notes send the item to a chapter that was not among the first-pass
+ * candidates, re-run the reasoning once with that chapter's candidates + notes.
+ * Returns null (keep first pass) when there is no redirect or anything fails.
+ */
+async function applyNoteRedirect(args: {
+  features: HsFeatures;
+  userContent: string;
+  description: string;
+  first: NotedClassification;
+  consideredChapters: string[];
+}): Promise<{ parsed: NotedClassification; content: string } | null> {
+  const { first, features } = args;
+  const target = normalizeChapter(first.redirectChapter);
+  if (!target || first.isImportItem === false) return null;
+  if (args.consideredChapters.includes(target)) return null;
+
+  try {
+    const query = [
+      args.description,
+      features.itemType,
+      features.material,
+      features.use,
+      ...(Array.isArray(features.keywords) ? features.keywords : []),
+    ]
+      .filter(Boolean)
+      .join(" ");
+    const rows = isReferencePopulated()
+      ? await searchDescriptionsInChapters(query, [target], 30)
+      : [];
+    const notes = await buildChapterNotesPromptBlock([target]);
+    const list =
+      rows.length > 0
+        ? [...rows.map((row) => formatReferenceCandidate(row)), "9999", "EXCLUDE"].join("\n")
+        : `Assign the correct WCO HS code within chapter ${target} (format #### or ####.##). Use 9999 if unknown. EXCLUDE for non-items.`;
+    const systemPrompt = buildTariffSystemPrompt(
+      list,
+      rows.length > 0,
+      notes?.text,
+      false,
+    );
+    const content = await callOpenRouter(
+      [
+        { role: "system", content: systemPrompt },
+        {
+          role: "user",
+          content: `${args.userContent}\n\nThe legal notes redirected this item to Chapter ${target}${first.noteReference ? ` (${first.noteReference})` : ""}. Choose the best code in Chapter ${target}.`,
+        },
+      ],
+      NOTES_MAX_TOKENS,
+    );
+    const second = extractJson<NotedClassification>(content);
+    if (!second.hsCode) return null;
+    const firstRef =
+      typeof first.noteReference === "string" ? first.noteReference.trim() : "";
+    const secondRef =
+      typeof second.noteReference === "string" ? second.noteReference.trim() : "";
+    second.noteReference =
+      firstRef && secondRef && firstRef !== secondRef
+        ? `${firstRef}; ${secondRef}`
+        : secondRef || firstRef;
+    console.log("[HS classifyItem] notes redirected to chapter", target);
+    return { parsed: second, content };
+  } catch (error) {
+    console.warn(
+      "[HS classifyItem] note redirect failed, keeping first pass:",
+      error instanceof Error ? error.message : error,
+    );
+    return null;
+  }
 }
 
 export async function classifyItem(
@@ -260,24 +415,65 @@ export async function classifyItem(
     reasoningUserContent += `\n\n${options.vddEvidenceText.trim()}\nRules for VDD: use only as supporting evidence. Do NOT automatically copy an HS code from a VDD record. Do NOT choose a code because it has a lower duty. Historical data does not guarantee the current classification.`;
   }
 
-  const { list: allowedList, hasReferenceCandidates } =
-    await buildAllowedListForItem(description, features, mode);
+  const {
+    list: allowedList,
+    hasReferenceCandidates,
+    candidates,
+  } = await buildAllowedListForItem(description, features, mode);
+
+  // Import (tariff) mode only: legal Chapter/Section notes for the likely chapters.
+  // No notes in the database => notesBlock is null and the prompt is unchanged.
+  let notesBlock: ChapterNotesPromptBlock | null = null;
+  if (mode === "tariff") {
+    notesBlock = await buildChapterNotesPromptBlock(
+      pickCandidateChapters(candidates, gri.suggestedHsCodes),
+    );
+    if (notesBlock) {
+      console.log(
+        "[HS classifyItem] chapter notes in prompt:",
+        notesBlock.chapters.join(", "),
+      );
+    }
+  }
+
   const systemPrompt =
     mode === "tariff"
-      ? buildTariffSystemPrompt(allowedList, hasReferenceCandidates)
+      ? buildTariffSystemPrompt(
+          allowedList,
+          hasReferenceCandidates,
+          notesBlock?.text,
+        )
       : buildFurnitureSystemPrompt(allowedList);
 
-  const content = await callOpenRouter([
-    { role: "system", content: systemPrompt },
-    { role: "user", content: reasoningUserContent },
-  ]);
+  let content = await callOpenRouter(
+    [
+      { role: "system", content: systemPrompt },
+      { role: "user", content: reasoningUserContent },
+    ],
+    notesBlock ? NOTES_MAX_TOKENS : undefined,
+  );
 
-  let parsed: ClassificationResult;
+  let parsed: NotedClassification;
   try {
-    parsed = extractJson<ClassificationResult>(content);
+    parsed = extractJson<NotedClassification>(content);
   } catch {
     throw new Error(`Invalid JSON from reasoning AI: ${content}`);
   }
+
+  if (notesBlock) {
+    const redirected = await applyNoteRedirect({
+      features,
+      userContent: reasoningUserContent,
+      description,
+      first: parsed,
+      consideredChapters: notesBlock.chapters,
+    });
+    if (redirected) {
+      parsed = redirected.parsed;
+      content = redirected.content;
+    }
+  }
+  delete parsed.redirectChapter;
 
   console.log(
     "[HS classifyItem] AI raw → hsCode:",
@@ -341,5 +537,9 @@ export async function classifyItem(
     isImportItem: final.isImportItem !== false,
     confidence: final.confidence ?? parsed.confidence ?? 0.9,
     aiRawResponse: content,
+    noteReference:
+      notesBlock && typeof parsed.noteReference === "string"
+        ? parsed.noteReference.trim() || undefined
+        : undefined,
   };
 }

@@ -2,6 +2,7 @@ import {
   boolean,
   index,
   integer,
+  jsonb,
   numeric,
   pgTable,
   text,
@@ -43,6 +44,8 @@ export const invoiceLines = pgTable(
       precision: 18,
       scale: 3,
     }),
+    /** Unmapped / extra spreadsheet columns (label -> value) and HS code / specification. */
+    extra: jsonb("extra").$type<Record<string, string>>(),
     extractionConfidence: numeric("extraction_confidence", {
       precision: 5,
       scale: 4,

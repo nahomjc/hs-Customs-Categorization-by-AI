@@ -185,13 +185,14 @@ export const mainNavLinks: NavLink[] = [
     exact: false,
     icon: icons.history,
   },
-  {
-    href: "/dashboard/users",
-    label: "User list",
-    exact: false,
-    icon: icons.users,
-  },
 ];
+
+export const usersNavLink: NavLink = {
+  href: "/dashboard/users",
+  label: "User list",
+  exact: false,
+  icon: icons.users,
+};
 
 export const clientNavLinks: NavLink[] = [
   {
@@ -222,20 +223,6 @@ export const hsCodeSearchNavLink: NavLink = {
   icon: icons.hsSearch,
 };
 
-export const channelsNavLink: NavLink = {
-  href: "/dashboard/settings/channels",
-  label: "Channels",
-  exact: false,
-  icon: icons.channels,
-};
-
-export const vddNavLink: NavLink = {
-  href: "/dashboard/settings/vdd",
-  label: "VDD import",
-  exact: false,
-  icon: icons.vdd,
-};
-
 export const settingsLink: NavLink = {
   href: "/dashboard/settings",
   label: "Settings",
@@ -243,61 +230,181 @@ export const settingsLink: NavLink = {
   icon: icons.settings,
 };
 
-export function getDashboardNavLinks(options: {
+export type NavGroup = {
+  id: string;
+  label: string;
+  links: NavLink[];
+};
+
+export type DashboardNavOptions = {
   isAdmin?: boolean;
   isAssessor?: boolean;
   isClient?: boolean;
-}) {
+  canViewUsers?: boolean;
+};
+
+export function getDashboardNavGroups(options: DashboardNavOptions): NavGroup[] {
   if (options.isClient) {
-    return [...clientNavLinks];
+    return [
+      {
+        id: "overview",
+        label: "Overview",
+        links: clientNavLinks,
+      },
+    ];
   }
-  const links = [...mainNavLinks];
+
+  const groups: NavGroup[] = [
+    {
+      id: "overview",
+      label: "Overview",
+      links: [mainNavLinks[0]],
+    },
+    {
+      id: "workflow",
+      label: "Classification workflow",
+      links: [
+        mainNavLinks[1],
+        mainNavLinks[3],
+        mainNavLinks[4],
+      ],
+    },
+    {
+      id: "insights",
+      label: "Insights",
+      links: [mainNavLinks[2]],
+    },
+  ];
+
+  const toolLinks: NavLink[] = [];
   if (options.isAdmin || options.isAssessor) {
-    links.push(hsCodeSearchNavLink);
+    toolLinks.push(hsCodeSearchNavLink);
+  }
+  if (toolLinks.length > 0) {
+    groups.push({
+      id: "tools",
+      label: "Reference & tools",
+      links: toolLinks,
+    });
+  }
+
+  const managementLinks: NavLink[] = [];
+  if (options.canViewUsers) {
+    managementLinks.push(usersNavLink);
   }
   if (options.isAdmin) {
-    links.push(adminNavLink, channelsNavLink, vddNavLink);
+    managementLinks.push(adminNavLink);
   }
-  return links;
+  if (managementLinks.length > 0) {
+    groups.push({
+      id: "management",
+      label: "Management",
+      links: managementLinks,
+    });
+  }
+
+  return groups;
+}
+
+export function getDashboardNavLinks(options: DashboardNavOptions): NavLink[] {
+  return getDashboardNavGroups(options).flatMap((g) => g.links);
 }
 
 export function DashboardSidebar({
   isAdmin = false,
   isAssessor = false,
   isClient = false,
+  canViewUsers = false,
 }: {
   isAdmin?: boolean;
   isAssessor?: boolean;
   isClient?: boolean;
+  canViewUsers?: boolean;
 }) {
   const pathname = usePathname();
-  const links = getDashboardNavLinks({ isAdmin, isAssessor, isClient });
+  const groups = getDashboardNavGroups({
+    isAdmin,
+    isAssessor,
+    isClient,
+    canViewUsers,
+  });
 
   return (
-    <aside className="hidden lg:flex w-[17rem] shrink-0 flex-col overflow-hidden rounded-3xl border border-slate-200/70 bg-white shadow-[0_4px_24px_-8px_rgba(15,23,42,0.08)] sticky top-[4.5rem] max-h-[calc(100vh-6rem)] lg:ml-3">
-      <div className="border-b border-slate-100 px-5 py-4">
-        <p className="text-[11px] font-bold uppercase tracking-widest text-slate-400">
-          Workspace
-        </p>
-        <p className="mt-0.5 text-sm font-semibold text-slate-900">
-          {isClient ? "Shipment tracking" : "HS Classification"}
-        </p>
+    <aside className="hidden lg:flex w-[17rem] shrink-0 flex-col overflow-hidden rounded-3xl border border-slate-200/70 bg-white sticky top-[4.5rem] max-h-[calc(100vh-6rem)] lg:ml-3">
+      <div className="border-b border-slate-100/80 bg-linear-to-br from-slate-50 via-white to-blue-50/50 px-5 py-4">
+        <div className="flex items-center gap-2">
+          <span
+            className="flex h-8 w-8 items-center justify-center rounded-xl bg-[#007bff]/10 text-[#007bff]"
+          >
+            <svg
+              className="h-4 w-4"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth={2}
+              viewBox="0 0 24 24"
+              role="img"
+              aria-label="Navigation menu"
+            >
+              <title>Navigation menu</title>
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M4 6h16M4 12h10M4 18h6"
+              />
+            </svg>
+          </span>
+          <div className="min-w-0">
+            <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">
+              Workspace
+            </p>
+            <p className="truncate text-sm font-semibold text-slate-900">
+              {isClient ? "Shipment tracking" : "HS classification"}
+            </p>
+          </div>
+        </div>
       </div>
 
-      <nav className="flex min-h-0 flex-1 flex-col p-3" aria-label="Dashboard">
-        <div className="flex-1 space-y-1">
-          {links.map(({ href, label, exact, icon }) => (
-            <SidebarLink
-              key={href}
-              href={href}
-              label={label}
-              exact={exact}
-              icon={icon}
-              pathname={pathname}
-            />
+      <nav
+        className="flex min-h-0 flex-1 flex-col overflow-hidden"
+        aria-label="Dashboard"
+      >
+        <div
+          className="flex-1 overflow-y-auto px-2 py-3 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
+        >
+          {groups.map((group, groupIndex) => (
+            <div
+              key={group.id}
+              className={groupIndex > 0 ? "mt-5 border-t border-slate-100/80 pt-4" : ""}
+            >
+              <p
+                className="mb-1.5 px-2 text-[10px] font-bold uppercase tracking-wider text-slate-400"
+                id={`nav-group-${group.id}`}
+              >
+                {group.label}
+              </p>
+              <ul
+                className="space-y-0.5"
+                aria-labelledby={`nav-group-${group.id}`}
+              >
+                {group.links.map(({ href, label, exact, icon }) => (
+                  <li key={href}>
+                    <SidebarLink
+                      href={href}
+                      label={label}
+                      exact={exact}
+                      icon={icon}
+                      pathname={pathname}
+                    />
+                  </li>
+                ))}
+              </ul>
+            </div>
           ))}
         </div>
-        <div className="mt-3 border-t border-slate-100 pt-3">
+        <div className="shrink-0 border-t border-slate-100 bg-slate-50/40 px-2 py-3">
+          <p className="mb-1.5 px-2 text-[10px] font-bold uppercase tracking-wider text-slate-400">
+            Account
+          </p>
           <SidebarLink
             href={settingsLink.href}
             label={settingsLink.label}
@@ -315,13 +422,20 @@ export function DashboardMobileNav({
   isAdmin = false,
   isAssessor = false,
   isClient = false,
+  canViewUsers = false,
 }: {
   isAdmin?: boolean;
   isAssessor?: boolean;
   isClient?: boolean;
+  canViewUsers?: boolean;
 }) {
   const pathname = usePathname();
-  const links = getDashboardNavLinks({ isAdmin, isAssessor, isClient });
+  const links = getDashboardNavLinks({
+    isAdmin,
+    isAssessor,
+    isClient,
+    canViewUsers,
+  });
 
   return (
     <nav
@@ -376,20 +490,22 @@ function SidebarLink({
   return (
     <Link
       href={href}
-      className={`flex items-center gap-3 rounded-2xl px-3.5 py-2.5 text-sm font-medium transition-colors ${
+      className={`group flex items-center gap-3 rounded-xl px-2.5 py-2 text-sm font-medium transition-colors ${
         active
-          ? "bg-[#007bff] text-white shadow-sm shadow-blue-500/20"
-          : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
+          ? "bg-[#007bff] text-white"
+          : "text-slate-600 hover:bg-white hover:text-slate-900"
       }`}
     >
       <span
-        className={
-          active ? "text-white/90" : "text-slate-400 group-hover:text-slate-600"
-        }
+        className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg transition-colors ${
+          active
+            ? "bg-white/15 text-white"
+            : "bg-slate-100 text-slate-500 group-hover:bg-blue-50 group-hover:text-[#007bff]"
+        }`}
       >
         {icon}
       </span>
-      {label}
+      <span className="truncate">{label}</span>
     </Link>
   );
 }

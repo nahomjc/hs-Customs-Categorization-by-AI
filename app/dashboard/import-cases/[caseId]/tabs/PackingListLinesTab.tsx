@@ -1,8 +1,9 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { toast } from "sonner";
+import { Pagination, usePagination } from "@/components/dashboard/Pagination";
 import { BulkReviewToolbar } from "@/components/dashboard/import-case/BulkReviewActions";
 import {
   DashButton,
@@ -22,6 +23,7 @@ import {
 } from "@/components/dashboard/ui";
 import type { ImportCaseDocumentRow } from "@/db/schema/importCaseDocuments";
 import type { PackingListLineRow } from "@/db/schema/packingListLines";
+import { collectExtraKeys } from "@/lib/import-cases/extra-columns";
 import { useBulkReview } from "@/lib/import-cases/use-bulk-review";
 
 type PackingLineWithDoc = {
@@ -36,6 +38,27 @@ type PackingListLinesTabProps = {
   initialLines: PackingLineWithDoc[];
 };
 
+function packingLineSearchHaystack(row: PackingLineWithDoc): string {
+  const { line, documentName } = row;
+  const extra =
+    line.extra && typeof line.extra === "object"
+      ? Object.values(line.extra as Record<string, unknown>)
+          .map(String)
+          .join(" ")
+      : "";
+  return [
+    line.supplierDescription,
+    line.packageType,
+    documentName,
+    String(line.lineNumber),
+    line.unitOfMeasure,
+    extra,
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+}
+
 export function PackingListLinesTab({
   caseId,
   packingDocuments,
@@ -43,6 +66,7 @@ export function PackingListLinesTab({
 }: PackingListLinesTabProps) {
   const router = useRouter();
   const [lines, setLines] = useState(initialLines);
+  const [search, setSearch] = useState("");
   const [showForm, setShowForm] = useState(false);
   const [loading, setLoading] = useState(false);
   const [form, setForm] = useState({
@@ -65,6 +89,17 @@ export function PackingListLinesTab({
   }
 
   const pendingCount = lines.filter(({ line }) => !line.isReviewed).length;
+  // extra spreadsheet columns kept at import time (read-only)
+  const extraKeys = collectExtraKeys(lines.map(({ line }) => line.extra));
+
+  const filteredLines = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return lines;
+    return lines.filter((row) => packingLineSearchHaystack(row).includes(q));
+  }, [lines, search]);
+
+  const pagination = usePagination(filteredLines.length);
+  const pageLines = filteredLines.slice(pagination.start, pagination.end);
   const bulk = useBulkReview({
     caseId,
     endpoint: "packing-list-lines/bulk-review",
@@ -221,6 +256,46 @@ export function PackingListLinesTab({
       </DashCard>
 
       <DashCard>
+        {lines.length > 0 ? (
+          <div className="border-b border-slate-100 px-5 py-3">
+            <div className="relative max-w-md">
+              <span
+                className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
+                aria-hidden
+              >
+                <svg
+                  className="h-4 w-4"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+                  />
+                </svg>
+              </span>
+              <input
+                type="search"
+                value={search}
+                onChange={(e) => {
+                  setSearch(e.target.value);
+                  pagination.reset();
+                }}
+                placeholder="Search packing lines — description, package type, source file, line #…"
+                className={dashInputClass}
+                aria-label="Search packing lines"
+              />
+            </div>
+            {search.trim() ? (
+              <p className="mt-2 text-xs text-slate-500">
+                {filteredLines.length} of {lines.length} line(s) match
+              </p>
+            ) : null}
+          </div>
+        ) : null}
         <DashTable>
           <DashTableHead>
             <DashTableHeaderRow>
@@ -232,15 +307,22 @@ export function PackingListLinesTab({
               <DashTh>Gross wt</DashTh>
               <DashTh>Source</DashTh>
               <DashTh>Reviewed</DashTh>
+              {extraKeys.map((key) => (
+                <DashTh key={key}>{key}</DashTh>
+              ))}
             </DashTableHeaderRow>
           </DashTableHead>
           <DashTbody>
             {lines.length === 0 ? (
-              <DashTableEmpty colSpan={8}>
+              <DashTableEmpty colSpan={8 + extraKeys.length}>
                 No packing list lines yet.
               </DashTableEmpty>
+            ) : filteredLines.length === 0 ? (
+              <DashTableEmpty colSpan={8 + extraKeys.length}>
+                No packing lines match your search.
+              </DashTableEmpty>
             ) : (
-              lines.map(({ line, documentName }) => (
+              pageLines.map(({ line, documentName }) => (
                 <DashTr key={line.id}>
                   <DashTd>{line.lineNumber}</DashTd>
                   <DashTd>{line.supplierDescription}</DashTd>
@@ -262,11 +344,27 @@ export function PackingListLinesTab({
                       status={line.isReviewed ? "completed" : "uploaded"}
                     />
                   </DashTd>
+                  {extraKeys.map((key) => (
+                    <DashTd key={key} muted className="text-xs">
+                      {line.extra?.[key] ?? "—"}
+                    </DashTd>
+                  ))}
                 </DashTr>
               ))
             )}
           </DashTbody>
         </DashTable>
+        <Pagination
+          bounds={pagination}
+          onPageChange={pagination.setPage}
+          onPageSizeChange={pagination.setPageSize}
+          itemLabel="packing lines"
+          note={
+            pendingCount > 0
+              ? `Bulk review actions apply to all ${lines.length} packing lines (every page), not only this page.`
+              : undefined
+          }
+        />
       </DashCard>
     </div>
   );

@@ -391,13 +391,13 @@ export function DocumentView(props: {
             { label: fileName ?? "Document" },
           ]}
         />
-        <div className="overflow-hidden rounded-3xl border border-red-100 bg-white shadow-[0_8px_40px_-12px_rgba(15,23,42,0.1)]">
+        <div className="overflow-hidden rounded-3xl border border-red-100 bg-white">
           <div className="relative px-6 py-10 text-center sm:px-10">
             <div
               className="pointer-events-none absolute inset-0 bg-gradient-to-br from-red-50/80 via-white to-orange-50/40"
               aria-hidden
             />
-            <div className="relative mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-red-500 to-rose-600 shadow-lg shadow-red-500/20">
+            <div className="relative mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-red-500 to-rose-600">
               <svg
                 aria-hidden="true"
                 className="h-8 w-8 text-white"
@@ -424,7 +424,7 @@ export function DocumentView(props: {
                 type="button"
                 onClick={retryProcessing}
                 disabled={processing}
-                className="inline-flex items-center justify-center px-5 py-2.5 rounded-xl bg-[#007bff] text-white text-sm font-semibold shadow-sm hover:bg-[#0069d9] transition-colors disabled:opacity-50"
+                className="inline-flex items-center justify-center px-5 py-2.5 rounded-xl bg-[#007bff] text-white text-sm font-semibold hover:bg-[#0069d9] transition-colors disabled:opacity-50"
               >
                 {processing ? "Retrying…" : "Try again"}
               </button>
@@ -480,7 +480,7 @@ export function DocumentView(props: {
           </div>
         )}
 
-        <div className="overflow-hidden rounded-3xl border border-slate-200/70 bg-white shadow-[0_4px_24px_-8px_rgba(15,23,42,0.08)]">
+        <div className="overflow-hidden rounded-3xl border border-slate-200/70 bg-white">
           {/* Tab navigation */}
           <div className="flex flex-col gap-3 border-b border-slate-100 px-4 py-4 sm:px-6 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex rounded-2xl bg-slate-100/80 p-1">
@@ -489,7 +489,7 @@ export function DocumentView(props: {
                 onClick={() => setActiveTab("groups")}
                 className={`inline-flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold transition-all ${
                   activeTab === "groups"
-                    ? "bg-white text-slate-900 shadow-sm shadow-slate-200/80"
+                    ? "bg-white text-slate-900"
                     : "text-slate-500 hover:text-slate-700"
                 }`}
               >
@@ -505,7 +505,7 @@ export function DocumentView(props: {
                 onClick={() => setActiveTab("items")}
                 className={`inline-flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold transition-all ${
                   activeTab === "items"
-                    ? "bg-white text-slate-900 shadow-sm shadow-slate-200/80"
+                    ? "bg-white text-slate-900"
                     : "text-slate-500 hover:text-slate-700"
                 }`}
               >

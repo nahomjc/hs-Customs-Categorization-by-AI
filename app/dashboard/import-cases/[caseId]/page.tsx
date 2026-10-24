@@ -1,7 +1,10 @@
 import { notFound, redirect } from "next/navigation";
 import { Suspense } from "react";
 import { eq } from "drizzle-orm";
-import { ImportCaseHero } from "@/components/dashboard/import-case/ImportCaseHero";
+import {
+  ImportCaseBentoHeader,
+  type CaseInvoiceValue,
+} from "@/components/dashboard/import-case/ImportCaseBentoHeader";
 import { db } from "@/db";
 import { users } from "@/db/schema";
 import { getSessionUserProfile } from "@/lib/auth/require-admin";
@@ -20,7 +23,11 @@ import {
   listTenantUsers,
 } from "@/lib/import-cases/queries";
 import { getCaseChecks, runImportCaseChecks } from "@/lib/import-cases/run-case-checks";
-import { getWorkflowProgressPercent } from "@/lib/import-cases/workflow-progress";
+import {
+  getWorkflowProgressPercent,
+  isWizardStepComplete,
+} from "@/lib/import-cases/workflow-progress";
+import { WIZARD_STEPS } from "@/lib/import-cases/wizard-steps";
 import { ImportCaseWizard } from "./ImportCaseWizard";
 
 export const dynamic = "force-dynamic";
@@ -129,17 +136,56 @@ export default async function ImportCaseDetailPage({ params }: PageProps) {
     openChecks: checks.filter((c) => c.status === "open").length,
   };
 
+  const completedSteps = WIZARD_STEPS.filter((step) =>
+    isWizardStepComplete(step.id, progressCtx),
+  ).length;
+
+  // Invoice value: the amount declared on the case, else the sum of priced
+  // invoice lines when they share one currency. Omitted when neither exists.
+  let invoiceValue: CaseInvoiceValue | null = null;
+  const declaredTotal = Number(importCase.invoiceTotalAmount);
+  if (importCase.invoiceTotalAmount && Number.isFinite(declaredTotal) && declaredTotal > 0) {
+    invoiceValue = {
+      amount: declaredTotal,
+      currency: importCase.invoiceCurrencyCode,
+      source: "case",
+    };
+  } else {
+    const currencies = new Set<string>();
+    let linesTotal = 0;
+    for (const { line } of invoiceLines) {
+      if (line.unitPrice === null) continue;
+      const qty = Number(line.quantity);
+      const price = Number(line.unitPrice);
+      if (!Number.isFinite(qty) || !Number.isFinite(price)) continue;
+      linesTotal += qty * price;
+      currencies.add(line.currencyCode);
+    }
+    if (linesTotal > 0 && currencies.size === 1) {
+      invoiceValue = {
+        amount: linesTotal,
+        currency: [...currencies][0] ?? null,
+        source: "lines",
+      };
+    }
+  }
+
   return (
-    <div className="space-y-6">
-      <ImportCaseHero
+    <div className="space-y-4">
+      <ImportCaseBentoHeader
         importCase={importCase}
         stats={stats}
         progressPercent={getWorkflowProgressPercent(progressCtx)}
+        completedSteps={completedSteps}
+        totalSteps={WIZARD_STEPS.length}
+        invoiceLineCount={invoiceLines.length}
+        packingLineCount={packingLines.length}
+        invoiceValue={invoiceValue}
       />
 
       <Suspense
         fallback={
-          <div className="rounded-3xl border border-slate-200 bg-white p-10 text-center text-sm text-slate-500">
+          <div className="rounded-2xl border border-slate-200/70 bg-white p-10 text-center text-sm text-slate-500">
             Loading workflow…
           </div>
         }

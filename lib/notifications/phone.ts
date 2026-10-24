@@ -19,3 +19,10 @@ export function normalizeEthiopiaPhone(input: string): string | null {
   if (!/^251[79]\d{8}$/.test(normalized)) return null;
   return normalized;
 }
+
+/** SMSHub API expects 09… / 07… msisdn. */
+export function toSmsHubMsisdn(input: string): string | null {
+  const normalized = normalizeEthiopiaPhone(input);
+  if (!normalized) return null;
+  return `0${normalized.slice(3)}`;
+}

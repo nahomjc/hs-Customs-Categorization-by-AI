@@ -31,7 +31,7 @@ export function ClientShipmentCard({
   return (
     <Link
       href={`/dashboard/my-shipments/${shipment.id}`}
-      className="group block rounded-2xl border border-slate-200/80 bg-white p-4 shadow-[0_4px_24px_-12px_rgba(15,23,42,0.12)] transition-all hover:-translate-y-0.5 hover:border-sky-200 hover:shadow-[0_12px_32px_-12px_rgba(0,123,255,0.2)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#007bff]/40 sm:rounded-3xl sm:p-5"
+      className="group block rounded-2xl border border-slate-200/80 bg-white p-4 transition-all hover:-translate-y-0.5 hover:border-sky-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#007bff]/40 sm:rounded-3xl sm:p-5"
     >
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">

@@ -77,7 +77,7 @@ export function DocumentChat({ documentId }: { documentId: string }) {
           setOpen((o) => !o);
           if (open) setExpanded(false);
         }}
-        className="fixed bottom-6 right-6 z-50 flex items-center gap-2.5 rounded-xl bg-[#007bff] px-5 py-3.5 text-sm font-semibold text-white shadow-lg shadow-blue-500/25 transition-colors hover:bg-[#0069d9]"
+        className="fixed bottom-6 right-6 z-50 flex items-center gap-2.5 rounded-xl bg-[#007bff] px-5 py-3.5 text-sm font-semibold text-white transition-colors hover:bg-[#0069d9]"
         aria-expanded={open}
         aria-label={open ? "Close chat" : "Ask AI"}
       >
@@ -101,7 +101,7 @@ export function DocumentChat({ documentId }: { documentId: string }) {
       {/* Chat panel */}
       {open && (
         <div
-          className={`fixed z-50 flex flex-col overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-2xl shadow-slate-900/10 transition-[width,height,inset] ${
+          className={`fixed z-50 flex flex-col overflow-hidden rounded-2xl border border-slate-200/80 bg-white transition-[width,height,inset] ${
             expanded
               ? "inset-4 md:inset-8 max-w-none h-[calc(100vh-2rem)] md:h-[calc(100vh-4rem)]"
               : "bottom-24 right-6 w-full max-w-md"
@@ -110,7 +110,7 @@ export function DocumentChat({ documentId }: { documentId: string }) {
         >
           <div className="flex shrink-0 items-center justify-between gap-2 border-b border-slate-100 bg-gradient-to-r from-indigo-50/80 to-violet-50/50 px-4 py-3.5">
             <div className="flex items-center gap-2.5">
-              <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-[#007bff] text-white shadow-sm">
+              <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-[#007bff] text-white">
                 <svg
                   className="w-4 h-4"
                   fill="none"
@@ -194,7 +194,7 @@ export function DocumentChat({ documentId }: { documentId: string }) {
                 <div
                   className={`max-w-[85%] rounded-2xl px-3.5 py-2.5 text-sm ${
                     msg.role === "user"
-                      ? "bg-[#007bff] text-white shadow-sm"
+                      ? "bg-[#007bff] text-white"
                       : "border border-slate-200 bg-slate-50 text-slate-800"
                   }`}
                 >
@@ -237,7 +237,7 @@ export function DocumentChat({ documentId }: { documentId: string }) {
                 type="button"
                 onClick={send}
                 disabled={!input.trim() || loading}
-                className="shrink-0 rounded-xl bg-[#007bff] px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-[#0069d9] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                className="shrink-0 rounded-xl bg-[#007bff] px-4 py-2.5 text-sm font-semibold text-white hover:bg-[#0069d9] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
                 Send
               </button>

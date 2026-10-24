@@ -14,6 +14,7 @@ import {
   DashTh,
   DashTr,
   PageHeader,
+  dashSelectClass,
 } from "@/components/dashboard/ui";
 import { UserRoleSelect } from "@/components/dashboard/UserRoleSelect";
 import { UsersPageSizeSelect } from "@/components/dashboard/UsersPageSizeSelect";
@@ -100,9 +101,6 @@ function SortHeader({
   );
 }
 
-const fieldClass =
-  "w-full py-2 px-3 text-sm text-gray-900 bg-white border border-gray-200 rounded-xl focus:outline-none focus:border-[#007bff] focus:ring-[3px] focus:ring-[#007bff]/12";
-
 const hasActiveFilters = (filters: UsersFilters) =>
   Boolean(filters.q) ||
   filters.role !== "all" ||
@@ -123,9 +121,10 @@ export function UsersTable({
         title="User list"
         description="All registered users. Click a row to view full details."
         action={
+          canManageRoles ? (
           <Link
             href="/dashboard/users/invite"
-            className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#007bff] px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-[#0069d9]"
+            className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#007bff] px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-[#0069d9]"
           >
             <svg
               aria-hidden="true"
@@ -143,6 +142,7 @@ export function UsersTable({
             </svg>
             Invite user
           </Link>
+          ) : undefined
         }
       />
 
@@ -173,7 +173,7 @@ export function UsersTable({
                 type="search"
                 defaultValue={filters.q}
                 placeholder="Name, email, or phone…"
-                className={fieldClass}
+                className="w-full min-h-10 py-2 px-3 text-sm text-gray-900 bg-white border border-gray-200 rounded-xl focus:outline-none focus:border-[#007bff] focus:ring-[3px] focus:ring-[#007bff]/12"
               />
             </div>
             <div className="sm:w-40">
@@ -187,7 +187,7 @@ export function UsersTable({
                 id="users-role"
                 name="role"
                 defaultValue={filters.role}
-                className={fieldClass}
+                className={dashSelectClass}
               >
                 <option value="all">All roles</option>
                 {USER_ROLES.map((role) => (
@@ -208,7 +208,7 @@ export function UsersTable({
                 id="users-status"
                 name="status"
                 defaultValue={filters.status}
-                className={fieldClass}
+                className={dashSelectClass}
               >
                 <option value="active">Active</option>
                 <option value="inactive">Inactive</option>

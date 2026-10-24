@@ -15,6 +15,7 @@ import {
 } from "./classify-product-description";
 import type { ClassificationSource } from "./constants";
 import { TARIFF_VERSION } from "./constants";
+import { mapWithConcurrency, stableHash } from "./harmonize-plan";
 import { AI_MODEL_NAME, PROMPT_VERSION } from "./extraction-schemas";
 import { lookupTariffForHsCode, parseDutyRate, dutyRateOtherCharges } from "./tariff-lookup";
 import { writeAuditLog } from "./queries";
@@ -92,7 +93,10 @@ function buildReasoning(
   if (result.source === "rule_fallback") {
     return `Rule-based fallback (no reference match, AI unavailable): ${result.cleanDescription}.${vddNote}`;
   }
-  return `AI classification: ${result.category}. ${result.cleanDescription}.${vddNote}`;
+  const noteNote = result.noteReference
+    ? ` HS note applied: ${result.noteReference}.`
+    : "";
+  return `AI classification: ${result.category}. ${result.cleanDescription}.${noteNote}${vddNote}`;
 }
 
 function buildClassificationEvidence(
@@ -124,6 +128,7 @@ function buildClassificationEvidence(
     source: result.source,
     category: result.category,
     aiRawResponse: result.aiRawResponse ?? null,
+    ...(result.noteReference ? { noteReference: result.noteReference } : {}),
     ...vddBlock,
   };
 }
@@ -240,6 +245,73 @@ async function persistProductClassification(
     : { kind: "classified" };
 }
 
+type ProductRow = typeof importProducts.$inferSelect;
+
+const ELIGIBLE_STATUSES = new Set([
+  "ready_for_hs_suggestion",
+  "hs_suggested",
+  "needs_expert_review",
+]);
+
+/** Human-verified products of a case that can be (re)classified, in sequence order. */
+async function loadEligibleProducts(
+  caseId: string,
+  productIds?: string[],
+): Promise<ProductRow[]> {
+  let products = await db
+    .select()
+    .from(importProducts)
+    .where(
+      and(
+        eq(importProducts.importCaseId, caseId),
+        eq(importProducts.humanVerified, true),
+      ),
+    )
+    .orderBy(importProducts.productSequence);
+
+  if (productIds?.length) {
+    const idSet = new Set(productIds);
+    products = products.filter((p) => idSet.has(p.id));
+  }
+
+  return products.filter((p) => ELIGIBLE_STATUSES.has(p.status));
+}
+
+/**
+ * Classify and persist one product: VDD matches, tariff reference first, AI
+ * with HS chapter notes as fallback, then the same writes as always.
+ * `source` is where the suggestion came from (null when skipped).
+ */
+async function classifyProductRow(
+  product: ProductRow,
+  tenantId: string,
+  forceAi: boolean,
+): Promise<PersistClassificationOutcome & { source: ProductClassifySource | null }> {
+  const description =
+    product.normalizedDescription ?? product.rawDescription ?? "";
+  if (!description.trim()) {
+    return { kind: "skipped", source: null };
+  }
+
+  const vddResult = await persistVddMatchesForProduct(tenantId, product);
+  const vddMatches: VddScoredMatch[] = vddResult.matches.slice(0, 5);
+
+  const result = await classifyProductDescription(description, {
+    country: product.countryOfOriginCode ?? undefined,
+    unit: product.unitOfMeasure ?? undefined,
+    forceAi,
+    vddMatches,
+  });
+
+  // Mark whether suggested HS aligns with any top VDD HS (informational only)
+  if (vddMatches.length > 0 && result.hsCode && !isExcludedHsCode(result.hsCode)) {
+    await updateHsCodeMatchFlags(product.id, result.hsCode, vddMatches);
+  }
+
+  const outcome = await persistProductClassification(product, result);
+  return { ...outcome, source: result.source };
+}
+
 export async function classifyImportCaseProducts(
   caseId: string,
   tenantId: string,
@@ -254,28 +326,7 @@ export async function classifyImportCaseProducts(
   const forceAi = options?.forceAi ?? false;
   const referencePopulated = await isHsReferenceAvailable();
 
-  const conditions = [
-    eq(importProducts.importCaseId, caseId),
-    eq(importProducts.humanVerified, true),
-  ];
-
-  let products = await db
-    .select()
-    .from(importProducts)
-    .where(and(...conditions))
-    .orderBy(importProducts.productSequence);
-
-  if (options?.productIds?.length) {
-    const idSet = new Set(options.productIds);
-    products = products.filter((p) => idSet.has(p.id));
-  }
-
-  const eligible = products.filter(
-    (p) =>
-      p.status === "ready_for_hs_suggestion" ||
-      p.status === "hs_suggested" ||
-      p.status === "needs_expert_review",
-  );
+  const eligible = await loadEligibleProducts(caseId, options?.productIds);
 
   if (eligible.length === 0) {
     throw new Error(
@@ -292,29 +343,7 @@ export async function classifyImportCaseProducts(
   let skippedCount = 0;
 
   for (const product of eligible) {
-    const description =
-      product.normalizedDescription ?? product.rawDescription ?? "";
-    if (!description.trim()) {
-      skippedCount++;
-      continue;
-    }
-
-    const vddResult = await persistVddMatchesForProduct(tenantId, product);
-    const vddMatches: VddScoredMatch[] = vddResult.matches.slice(0, 5);
-
-    const result = await classifyProductDescription(description, {
-      country: product.countryOfOriginCode ?? undefined,
-      unit: product.unitOfMeasure ?? undefined,
-      forceAi,
-      vddMatches,
-    });
-
-    // Mark whether suggested HS aligns with any top VDD HS (informational only)
-    if (vddMatches.length > 0 && result.hsCode && !isExcludedHsCode(result.hsCode)) {
-      await updateHsCodeMatchFlags(product.id, result.hsCode, vddMatches);
-    }
-
-    const outcome = await persistProductClassification(product, result);
+    const outcome = await classifyProductRow(product, tenantId, forceAi);
     if (outcome.kind === "skipped") {
       skippedCount++;
     } else if (outcome.kind === "needs_review") {
@@ -353,6 +382,202 @@ export async function classifyImportCaseProducts(
     skippedCount,
     referencePopulated,
   };
+}
+
+/* ------------------------------------------------------------------ */
+/* Batched run (used by the classification progress dialog)            */
+/* ------------------------------------------------------------------ */
+
+/** Products classified in parallel inside one batch request. */
+const CLASSIFY_CONCURRENCY = 3;
+
+export class ClassifyPlanChangedError extends Error {
+  constructor() {
+    super(
+      "The set of products to classify changed while classifying. Start classification again.",
+    );
+    this.name = "ClassifyPlanChangedError";
+  }
+}
+
+function classifyPlanKey(products: ProductRow[]): string {
+  return stableHash(products.map((p) => `${p.productSequence}:${p.id}`));
+}
+
+export type ClassifyStartInfo = {
+  planKey: string;
+  total: number;
+  /** product_sequence of every product this run classifies, in order. */
+  sequences: number[];
+  referencePopulated: boolean;
+};
+
+/** Step 1: choose the products and clear their old suggestions (same as before). */
+export async function startClassifyRun(
+  caseId: string,
+  options?: { replaceExisting?: boolean },
+): Promise<ClassifyStartInfo> {
+  const replaceExisting = options?.replaceExisting ?? true;
+  const referencePopulated = await isHsReferenceAvailable();
+  const eligible = await loadEligibleProducts(caseId);
+
+  if (eligible.length === 0) {
+    throw new Error("No human-verified products ready for HS classification");
+  }
+
+  if (replaceExisting) {
+    await clearProductClassificationData(eligible.map((p) => p.id));
+  }
+
+  return {
+    planKey: classifyPlanKey(eligible),
+    total: eligible.length,
+    sequences: eligible.map((p) => p.productSequence),
+    referencePopulated,
+  };
+}
+
+export type ClassifyProductResult =
+  | {
+      sequence: number;
+      ok: true;
+      outcome: "classified" | "needs_review" | "skipped";
+      /** Suggested from the tariff reference or VDD (no AI call). */
+      viaReference: boolean;
+      /** Already classified earlier in this run; nothing was redone. */
+      reused: boolean;
+    }
+  | { sequence: number; ok: false; error: string };
+
+/**
+ * Step 2 (repeat): classify these products. Idempotent: a product that already
+ * has a classification from this run is reported, not redone; leftovers of a
+ * half-finished attempt are cleared before trying again.
+ */
+export async function classifyProductSequences(
+  caseId: string,
+  tenantId: string,
+  planKey: string,
+  sequences: number[],
+  options?: { forceAi?: boolean },
+): Promise<ClassifyProductResult[]> {
+  const forceAi = options?.forceAi ?? false;
+  const eligible = await loadEligibleProducts(caseId);
+  if (classifyPlanKey(eligible) !== planKey) throw new ClassifyPlanChangedError();
+
+  const bySequence = new Map(eligible.map((p) => [p.productSequence, p]));
+  const unique = [...new Set(sequences)].sort((a, b) => a - b);
+
+  return mapWithConcurrency(
+    unique,
+    CLASSIFY_CONCURRENCY,
+    async (sequence): Promise<ClassifyProductResult> => {
+      const product = bySequence.get(sequence);
+      if (!product) {
+        return { sequence, ok: false, error: "Unknown product sequence" };
+      }
+      try {
+        const [existing] = await db
+          .select({ source: productClassifications.source })
+          .from(productClassifications)
+          .where(eq(productClassifications.productId, product.id))
+          .limit(1);
+        if (existing) {
+          return {
+            sequence,
+            ok: true,
+            outcome:
+              product.status === "needs_expert_review"
+                ? "needs_review"
+                : "classified",
+            viaReference: existing.source === "reference_match",
+            reused: true,
+          };
+        }
+
+        // drop leftovers of an attempt that was cut off half-way
+        await clearProductClassificationData([product.id]);
+
+        const outcome = await classifyProductRow(product, tenantId, forceAi);
+        return {
+          sequence,
+          ok: true,
+          outcome: outcome.kind,
+          viaReference:
+            outcome.source === "reference_match" ||
+            outcome.source === "vdd_consensus",
+          reused: false,
+        };
+      } catch (error) {
+        return {
+          sequence,
+          ok: false,
+          error: error instanceof Error ? error.message : String(error),
+        };
+      }
+    },
+  );
+}
+
+/** Step 3: case status + audit entry (same as before), counts read from the database. */
+export async function finalizeClassifyRun(
+  caseId: string,
+  tenantId: string,
+  userId: string | null | undefined,
+  planKey: string,
+): Promise<ClassifyResult> {
+  const eligible = await loadEligibleProducts(caseId);
+  if (classifyPlanKey(eligible) !== planKey) throw new ClassifyPlanChangedError();
+
+  const ids = eligible.map((p) => p.id);
+  const withSuggestion = new Set(
+    ids.length === 0
+      ? []
+      : (
+          await db
+            .select({ productId: productClassifications.productId })
+            .from(productClassifications)
+            .where(inArray(productClassifications.productId, ids))
+        ).map((r) => r.productId),
+  );
+
+  const needsReviewCount = eligible.filter(
+    (p) => p.status === "needs_expert_review",
+  ).length;
+  const classifiedCount = eligible.filter(
+    (p) => p.status === "hs_suggested" && withSuggestion.has(p.id),
+  ).length;
+  const skippedCount = Math.max(
+    0,
+    eligible.length - classifiedCount - needsReviewCount,
+  );
+
+  const referencePopulated = await isHsReferenceAvailable();
+
+  await db
+    .update(importCases)
+    .set({
+      status: "classification_in_review",
+      updatedAt: new Date(),
+    })
+    .where(eq(importCases.id, caseId));
+
+  await writeAuditLog({
+    tenantId,
+    importCaseId: caseId,
+    userId: userId ?? null,
+    entityType: "import_case",
+    entityId: caseId,
+    action: "classification_suggested",
+    newData: {
+      classifiedCount,
+      needsReviewCount,
+      skippedCount,
+      referencePopulated,
+    },
+  });
+
+  return { classifiedCount, needsReviewCount, skippedCount, referencePopulated };
 }
 
 export type SingleClassifyResult = {

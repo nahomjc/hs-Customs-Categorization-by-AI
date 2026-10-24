@@ -1,5 +1,4 @@
-import { createHash } from "node:crypto";
-import { and, eq } from "drizzle-orm";
+import { and, asc, eq, inArray } from "drizzle-orm";
 import { db } from "@/db";
 import {
   importCases,
@@ -9,6 +8,12 @@ import {
   productGroupings,
   tariffSnapshots,
 } from "@/db/schema";
+import { mapWithConcurrency } from "./harmonize-plan";
+import {
+  buildGroupingPlan,
+  type GroupingPlan,
+  type PlannedGroup,
+} from "./grouping-plan";
 import { writeAuditLog } from "./queries";
 
 export type GroupResult = {
@@ -16,42 +21,24 @@ export type GroupResult = {
   productCount: number;
 };
 
-type GroupKey = {
-  hsCode: string;
-  countryOfOriginCode: string;
-  procedureCode: string;
-  taxProfileHash: string;
-  unitOfMeasure: string;
-};
+/** Groups written in parallel inside one batch request. */
+const GROUP_WRITE_CONCURRENCY = 3;
 
-function buildTaxProfileHash(
-  snapshots: Array<{ customsDutyRate: string | null }>,
-): string {
-  const rates = snapshots
-    .map((s) => s.customsDutyRate ?? "0")
-    .sort()
-    .join("|");
-  return createHash("sha256").update(rates).digest("hex").slice(0, 32);
+/** Thrown when the approved products changed between the start and a later batch. */
+export class GroupingPlanChangedError extends Error {
+  constructor() {
+    super(
+      "The approved products or their HS codes changed while grouping. Start grouping again.",
+    );
+    this.name = "GroupingPlanChangedError";
+  }
 }
 
-function groupKeyString(key: GroupKey): string {
-  return [
-    key.hsCode,
-    key.countryOfOriginCode,
-    key.procedureCode,
-    key.taxProfileHash,
-    key.unitOfMeasure,
-  ].join("::");
-}
-
-export async function groupImportCaseProducts(
-  caseId: string,
-  tenantId: string,
-  userId?: string | null,
-  options?: { replaceExisting?: boolean },
-): Promise<GroupResult> {
-  const replaceExisting = options?.replaceExisting ?? true;
-
+/**
+ * Read approved products with their final classification and tariff snapshot
+ * and build the grouping plan. Throws the same errors as before.
+ */
+async function loadGroupingPlan(caseId: string): Promise<GroupingPlan> {
   const [importCase] = await db
     .select()
     .from(importCases)
@@ -73,114 +60,118 @@ export async function groupImportCaseProducts(
 
   if (approvedProducts.length === 0) {
     throw new Error(
-      "No products approved for declaration — approve HS classifications first",
+      "No products approved for declaration \u2014 approve HS classifications first",
     );
   }
 
-  const classifications = await Promise.all(
-    approvedProducts.map(async (p) => {
-      const [cls] = await db
-        .select()
-        .from(productClassifications)
-        .where(
-          and(
-            eq(productClassifications.productId, p.id),
-            eq(productClassifications.isFinal, true),
-          ),
-        )
-        .limit(1);
-      const [snapshot] = await db
-        .select()
-        .from(tariffSnapshots)
-        .where(eq(tariffSnapshots.productId, p.id))
-        .limit(1);
-      return { product: p, classification: cls, snapshot };
-    }),
-  );
+  const ids = approvedProducts.map((p) => p.id);
+  // two bulk reads instead of two queries per product; first row wins
+  const [classificationRows, snapshotRows] = await Promise.all([
+    db
+      .select()
+      .from(productClassifications)
+      .where(
+        and(
+          inArray(productClassifications.productId, ids),
+          eq(productClassifications.isFinal, true),
+        ),
+      )
+      .orderBy(asc(productClassifications.createdAt), asc(productClassifications.id)),
+    db
+      .select()
+      .from(tariffSnapshots)
+      .where(inArray(tariffSnapshots.productId, ids))
+      .orderBy(asc(tariffSnapshots.retrievedAt), asc(tariffSnapshots.id)),
+  ]);
+  const classificationByProduct = new Map<string, (typeof classificationRows)[number]>();
+  for (const row of classificationRows) {
+    if (!classificationByProduct.has(row.productId)) {
+      classificationByProduct.set(row.productId, row);
+    }
+  }
+  const snapshotByProduct = new Map<string, (typeof snapshotRows)[number]>();
+  for (const row of snapshotRows) {
+    if (!snapshotByProduct.has(row.productId)) {
+      snapshotByProduct.set(row.productId, row);
+    }
+  }
 
-  const missing = classifications.filter((c) => !c.classification);
+  const missing = approvedProducts.filter(
+    (p) => !classificationByProduct.has(p.id),
+  );
   if (missing.length > 0) {
     throw new Error(
       `${missing.length} product(s) lack final HS classification`,
     );
   }
 
-  if (replaceExisting) {
-    const existing = await db
-      .select({ id: productGroupings.id })
-      .from(productGroupings)
-      .where(eq(productGroupings.importCaseId, caseId));
-    if (existing.length > 0) {
-      await db
-        .delete(productGroupings)
-        .where(eq(productGroupings.importCaseId, caseId));
-    }
-  }
-
-  const procedureCode = importCase.importProcedureCode ?? "IM4";
-  const buckets = new Map<
-    string,
+  return buildGroupingPlan(
+    approvedProducts.map((p) => {
+      const snapshot = snapshotByProduct.get(p.id);
+      return {
+        productId: p.id,
+        hsCode: classificationByProduct.get(p.id)!.hsCode,
+        countryOfOriginCode: p.countryOfOriginCode,
+        unitOfMeasure: p.unitOfMeasure,
+        quantity: p.quantity,
+        snapshot: snapshot ? { customsDutyRate: snapshot.customsDutyRate } : null,
+      };
+    }),
     {
-      key: GroupKey;
-      items: typeof classifications;
-    }
-  >();
+      caseCountryOfOriginCode: importCase.countryOfOriginCode,
+      procedureCode: importCase.importProcedureCode ?? "IM4",
+    },
+  );
+}
 
-  for (const item of classifications) {
-    const cls = item.classification!;
-    const key: GroupKey = {
-      hsCode: cls.hsCode,
-      countryOfOriginCode:
-        item.product.countryOfOriginCode ??
-        importCase.countryOfOriginCode ??
-        "UNK",
-      procedureCode,
-      taxProfileHash: buildTaxProfileHash(
-        item.snapshot ? [item.snapshot] : [],
-      ),
-      unitOfMeasure: item.product.unitOfMeasure ?? "PCS",
-    };
-    const keyStr = groupKeyString(key);
-    const bucket = buckets.get(keyStr);
-    if (bucket) {
-      bucket.items.push(item);
-    } else {
-      buckets.set(keyStr, { key, items: [item] });
-    }
+async function deleteExistingGroupings(caseId: string) {
+  const existing = await db
+    .select({ id: productGroupings.id })
+    .from(productGroupings)
+    .where(eq(productGroupings.importCaseId, caseId));
+  if (existing.length > 0) {
+    await db
+      .delete(productGroupings)
+      .where(eq(productGroupings.importCaseId, caseId));
   }
+}
 
-  let groupIndex = 0;
-  for (const [, bucket] of buckets) {
-    groupIndex++;
-    const groupCode = `GRP-${String(groupIndex).padStart(3, "0")}`;
-    const totalQty = bucket.items.reduce(
-      (sum, i) => sum + (Number.parseFloat(i.product.quantity ?? "0") || 0),
-      0,
-    );
-
-    const [grouping] = await db
+/** Save one group and its products together or not at all. */
+async function writeGroup(caseId: string, group: PlannedGroup) {
+  await db.transaction(async (tx) => {
+    const [grouping] = await tx
       .insert(productGroupings)
       .values({
         importCaseId: caseId,
-        groupCode,
+        groupCode: group.groupCode,
         status: "ready_for_review",
-        hsCode: bucket.key.hsCode,
-        countryOfOriginCode: bucket.key.countryOfOriginCode,
-        procedureCode: bucket.key.procedureCode,
-        taxProfileHash: bucket.key.taxProfileHash,
-        unitOfMeasure: bucket.key.unitOfMeasure,
-        groupingReason: `${bucket.items.length} product(s), total qty ${totalQty}`,
+        hsCode: group.key.hsCode,
+        countryOfOriginCode: group.key.countryOfOriginCode,
+        procedureCode: group.key.procedureCode,
+        taxProfileHash: group.key.taxProfileHash,
+        unitOfMeasure: group.key.unitOfMeasure,
+        groupingReason: group.groupingReason,
       })
+      .onConflictDoNothing()
       .returning();
 
-    await db.insert(productGroupingItems).values(
-      bucket.items.map((i) => ({
+    if (!grouping) return;
+
+    await tx.insert(productGroupingItems).values(
+      group.productIds.map((productId) => ({
         groupingId: grouping.id,
-        productId: i.product.id,
+        productId,
       })),
     );
-  }
+  });
+}
 
+async function auditGrouping(
+  caseId: string,
+  tenantId: string,
+  userId: string | null | undefined,
+  plan: GroupingPlan,
+) {
   await writeAuditLog({
     tenantId,
     importCaseId: caseId,
@@ -188,11 +179,146 @@ export async function groupImportCaseProducts(
     entityType: "import_case",
     entityId: caseId,
     action: "grouping_created",
-    newData: { groupCount: buckets.size, productCount: approvedProducts.length },
+    newData: { groupCount: plan.groups.length, productCount: plan.productCount },
   });
+}
 
+/* ------------------------------------------------------------------ */
+/* Batched run (used by the grouping progress dialog)                  */
+/* ------------------------------------------------------------------ */
+
+export type GroupingStartInfo = {
+  planKey: string;
+  /** Number of declaration groups this run writes. */
+  total: number;
+  /** Group numbers 1..total. */
+  sequences: number[];
+  /** Approved products being grouped. */
+  productCount: number;
+};
+
+/** Step 1: build the plan and clear the previous groups (same as before). */
+export async function startGroupingRun(
+  caseId: string,
+  options?: { replaceExisting?: boolean },
+): Promise<GroupingStartInfo> {
+  const replaceExisting = options?.replaceExisting ?? true;
+  const plan = await loadGroupingPlan(caseId);
+  if (replaceExisting) await deleteExistingGroupings(caseId);
   return {
-    groupCount: buckets.size,
-    productCount: approvedProducts.length,
+    planKey: plan.planKey,
+    total: plan.groups.length,
+    sequences: plan.groups.map((g) => g.sequence),
+    productCount: plan.productCount,
   };
+}
+
+export type GroupingBatchResult =
+  | {
+      sequence: number;
+      ok: true;
+      productCount: number;
+      totalQuantity: number;
+      reused: boolean;
+    }
+  | { sequence: number; ok: false; error: string };
+
+/** Step 2 (repeat): save these groups. A group code that already exists is skipped. */
+export async function writeGroupingSequences(
+  caseId: string,
+  planKey: string,
+  sequences: number[],
+): Promise<GroupingBatchResult[]> {
+  const plan = await loadGroupingPlan(caseId);
+  if (plan.planKey !== planKey) throw new GroupingPlanChangedError();
+
+  const unique = [...new Set(sequences)].sort((a, b) => a - b);
+  return mapWithConcurrency(
+    unique,
+    GROUP_WRITE_CONCURRENCY,
+    async (sequence): Promise<GroupingBatchResult> => {
+      const group = plan.groups[sequence - 1];
+      if (!group || group.sequence !== sequence) {
+        return { sequence, ok: false, error: "Unknown group number" };
+      }
+      try {
+        const [existing] = await db
+          .select({ id: productGroupings.id })
+          .from(productGroupings)
+          .where(
+            and(
+              eq(productGroupings.importCaseId, caseId),
+              eq(productGroupings.groupCode, group.groupCode),
+            ),
+          )
+          .limit(1);
+        let reused = true;
+        if (!existing) {
+          await writeGroup(caseId, group);
+          reused = false;
+        }
+        return {
+          sequence,
+          ok: true,
+          productCount: group.productIds.length,
+          totalQuantity: group.totalQuantity,
+          reused,
+        };
+      } catch (error) {
+        return {
+          sequence,
+          ok: false,
+          error: error instanceof Error ? error.message : String(error),
+        };
+      }
+    },
+  );
+}
+
+/** Step 3: check every group was saved, then write the audit entry (same as before). */
+export async function finalizeGroupingRun(
+  caseId: string,
+  tenantId: string,
+  userId: string | null | undefined,
+  planKey: string,
+): Promise<GroupResult> {
+  const plan = await loadGroupingPlan(caseId);
+  if (plan.planKey !== planKey) throw new GroupingPlanChangedError();
+
+  const saved = await db
+    .select({ id: productGroupings.id })
+    .from(productGroupings)
+    .where(eq(productGroupings.importCaseId, caseId));
+  if (saved.length !== plan.groups.length) {
+    throw new Error(
+      `Only ${saved.length} of ${plan.groups.length} groups were saved. Retry the failed groups first.`,
+    );
+  }
+
+  await auditGrouping(caseId, tenantId, userId, plan);
+  return { groupCount: plan.groups.length, productCount: plan.productCount };
+}
+
+/* ------------------------------------------------------------------ */
+/* Single blocking run (kept for callers that send no batch action)    */
+/* ------------------------------------------------------------------ */
+
+export async function groupImportCaseProducts(
+  caseId: string,
+  tenantId: string,
+  userId?: string | null,
+  options?: { replaceExisting?: boolean },
+): Promise<GroupResult> {
+  const replaceExisting = options?.replaceExisting ?? true;
+  const plan = await loadGroupingPlan(caseId);
+
+  if (replaceExisting) await deleteExistingGroupings(caseId);
+
+  for (const group of plan.groups) {
+    await writeGroup(caseId, group);
+  }
+
+  await auditGrouping(caseId, tenantId, userId, plan);
+
+  return { groupCount: plan.groups.length, productCount: plan.productCount };
 }

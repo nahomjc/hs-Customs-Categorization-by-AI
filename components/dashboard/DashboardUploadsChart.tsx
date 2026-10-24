@@ -182,7 +182,7 @@ export function DashboardUploadsChart({
                         className="group/point relative flex-1"
                       >
                         <div className="pointer-events-none absolute bottom-full left-1/2 z-20 mb-2 -translate-x-1/2 opacity-0 transition-all duration-200 group-hover/point:opacity-100 group-hover/point:-translate-y-0.5">
-                          <div className="rounded-lg bg-slate-900 px-2.5 py-1.5 text-center shadow-lg shadow-slate-900/25 whitespace-nowrap">
+                          <div className="rounded-lg bg-slate-900 px-2.5 py-1.5 text-center whitespace-nowrap">
                             <p className="text-[10px] font-medium text-slate-300">
                               {point.label}
                             </p>

@@ -5,7 +5,12 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { toast } from "sonner";
 import { PasswordInput } from "@/components/auth/PasswordInput";
-import { DashCard, DashCardHeader, PageHeader } from "@/components/dashboard/ui";
+import {
+  DashCard,
+  DashCardHeader,
+  PageHeader,
+  dashSelectClass,
+} from "@/components/dashboard/ui";
 
 const fieldClass =
   "w-full py-2.5 px-3 text-sm text-gray-900 bg-white border border-gray-200 rounded-xl focus:outline-none focus:border-[#007bff] focus:ring-[3px] focus:ring-[#007bff]/12";
@@ -127,7 +132,7 @@ export function InviteUserForm() {
               id="invite-role"
               name="role"
               defaultValue="user"
-              className={fieldClass}
+              className={dashSelectClass}
             >
               <option value="user">User</option>
               <option value="assessor">Assessor</option>

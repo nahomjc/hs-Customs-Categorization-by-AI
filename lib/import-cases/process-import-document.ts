@@ -11,7 +11,21 @@ import {
   INVOICE_DOCUMENT_TYPES,
   PACKING_LIST_DOCUMENT_TYPES,
 } from "./constants";
-import { extractDocumentData } from "./extract-document-data";
+import {
+  extractDocumentData,
+  type ExtractDocumentOutput,
+} from "./extract-document-data";
+import { mappingToSaved } from "./column-mapping";
+import { saveColumnMapping } from "./column-mapping-store";
+import {
+  mappingKindForDocumentType,
+  planSpreadsheetExtraction,
+  type ColumnMappingRequest,
+} from "./spreadsheet-plan";
+import {
+  SpreadsheetImportError,
+  type ImportIssue,
+} from "./spreadsheet-import";
 import type {
   InvoiceExtractResult,
   PackingListExtractResult,
@@ -21,13 +35,33 @@ import { downloadObject } from "@/lib/storage/r2";
 import { runImportCaseChecks } from "./run-case-checks";
 import { writeAuditLog } from "./queries";
 
+export type ProcessImportOptions = {
+  /** Column mapping confirmed by the user (spreadsheets only). */
+  columnMapping?: ColumnMappingRequest;
+  /** Skip the spreadsheet mapper and use AI extraction. */
+  forceAi?: boolean;
+};
+
 export type ProcessImportDocumentResult = {
   documentId: string;
   extractionStatus: string;
   lineCount: number;
   confidence: number;
   error?: string;
+  /** Spreadsheet needs the user to confirm the column mapping. */
+  needsMapping?: boolean;
+  /** Why the mapping needs confirmation. */
+  reasons?: string[];
+  warnings?: string[];
+  issues?: ImportIssue[];
+  mappingSource?: "auto" | "saved" | "user";
 };
+
+function asRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {};
+}
 
 function extToFileType(ext: string): FileType | null {
   const map: Record<string, FileType> = {
@@ -51,6 +85,7 @@ export async function processImportDocument(
   documentId: string,
   tenantId: string,
   userId?: string | null,
+  options: ProcessImportOptions = {},
 ): Promise<ProcessImportDocumentResult> {
   const [doc] = await db
     .select()
@@ -81,6 +116,8 @@ export async function processImportDocument(
     .set({ status: "extraction_in_progress", updatedAt: new Date() })
     .where(eq(importCases.id, caseId));
 
+  let importIssues: ImportIssue[] = [];
+
   try {
     const ext =
       doc.originalFileName.split(".").pop()?.toLowerCase() ??
@@ -98,16 +135,121 @@ export async function processImportDocument(
       throw new Error("No text could be extracted from this document");
     }
 
-    const extraction = await extractDocumentData({
-      documentType: doc.documentType as DocumentType,
-      ocrText,
-      fileName: doc.originalFileName,
-    });
+    let extraction: ExtractDocumentOutput | null = null;
+    let columnMappingInfo: Record<string, unknown> | null = null;
+    let mappingSource: "auto" | "saved" | "user" | undefined;
+    let mappingWarnings: string[] = [];
+    let planForSave: {
+      kind: "invoice" | "packing_list";
+      signature: string;
+      headers: string[];
+      mapping: Parameters<typeof mappingToSaved>[0];
+    } | null = null;
+
+    const mappingKind = mappingKindForDocumentType(doc.documentType);
+    const isSpreadsheet = fileType === "xlsx" || fileType === "csv";
+    if (mappingKind && isSpreadsheet && !options.forceAi) {
+      const plan = await planSpreadsheetExtraction({
+        buffer,
+        kind: mappingKind,
+        tenantId,
+        request: options.columnMapping,
+      });
+
+      if (plan.status === "needs_mapping") {
+        const reasons = plan.analysis.reasons;
+        await db
+          .update(importCaseDocuments)
+          .set({
+            extractionStatus: "needs_mapping",
+            status: "needs_review",
+            extractedData: {
+              ...asRecord(doc.extractedData),
+              columnMapping: {
+                needsMapping: true,
+                reasons,
+                sheetName: plan.table.sheetName,
+                headerRow: plan.table.headerRowNumber,
+                signature: plan.signature,
+              },
+            },
+            updatedAt: new Date(),
+          })
+          .where(eq(importCaseDocuments.id, documentId));
+        await db
+          .update(importCases)
+          .set({ status: "documents_uploaded", updatedAt: new Date() })
+          .where(eq(importCases.id, caseId));
+        await writeAuditLog({
+          tenantId,
+          importCaseId: caseId,
+          userId: userId ?? null,
+          entityType: "import_case_document",
+          entityId: documentId,
+          action: "document_needs_column_mapping",
+          newData: { reasons },
+        });
+        return {
+          documentId,
+          extractionStatus: "needs_mapping",
+          lineCount: 0,
+          confidence: 0,
+          needsMapping: true,
+          reasons,
+        };
+      }
+
+      if (plan.status === "ready") {
+        extraction = plan.extraction;
+        mappingSource = plan.source;
+        importIssues = plan.report.issues;
+        mappingWarnings = [...plan.report.warnings, ...plan.analysis.warnings];
+        mappingWarnings = Array.from(new Set(mappingWarnings));
+        columnMappingInfo = {
+          source: plan.source,
+          sheetName: plan.table.sheetName,
+          headerRow: plan.table.headerRowNumber,
+          signature: plan.signature,
+          headers: plan.table.headers,
+          fields: plan.mapping.fields,
+          extraColumns: plan.mapping.extraColumns ?? {},
+          keptAsExtra: plan.report.extraColumns,
+          rowsRead: plan.report.rowsRead,
+          rowsImported: plan.report.rowsImported,
+          rowsSkipped: plan.report.rowsSkipped,
+          warnings: mappingWarnings,
+          issues: plan.report.issues,
+        };
+        planForSave = {
+          kind: plan.kind,
+          signature: plan.signature,
+          headers: plan.table.headers,
+          mapping: plan.mapping,
+        };
+      } else if (options.columnMapping) {
+        // The user confirmed a mapping but the sheet could not be read the same way.
+        throw new Error(plan.error);
+      } else {
+        console.warn(
+          "[import-cases] spreadsheet mapper skipped, falling back to AI:",
+          plan.error,
+        );
+      }
+    }
+
+    if (!extraction) {
+      extraction = await extractDocumentData({
+        documentType: doc.documentType as DocumentType,
+        ocrText,
+        fileName: doc.originalFileName,
+      });
+    }
 
     const extractedData = {
       ocrText,
       extraction,
       extractedAt: new Date().toISOString(),
+      ...(columnMappingInfo ? { columnMapping: columnMappingInfo } : {}),
     };
 
     let lineCount = 0;
@@ -135,6 +277,9 @@ export async function processImportDocument(
           currencyCode: line.currencyCode ?? currency,
           countryOfOriginCode:
             line.countryOfOriginCode ?? data.countryOfOriginCode ?? null,
+          declaredNetWeightKg: line.declaredNetWeightKg ?? null,
+          declaredGrossWeightKg: line.declaredGrossWeightKg ?? null,
+          extra: line.extra ?? null,
           extractionConfidence: String(extraction.confidence),
         }));
 
@@ -199,6 +344,7 @@ export async function processImportDocument(
           grossWeightKg: line.grossWeightKg ?? null,
           packageMarks: line.packageMarks ?? null,
           countryOfOriginCode: line.countryOfOriginCode ?? null,
+          extra: line.extra ?? null,
           extractionConfidence: String(extraction.confidence),
         }));
 
@@ -263,6 +409,26 @@ export async function processImportDocument(
       throw new Error("No product lines could be extracted");
     }
 
+    if (options.columnMapping?.remember && planForSave && mappingSource === "user") {
+      try {
+        await saveColumnMapping({
+          tenantId,
+          kind: planForSave.kind,
+          headerSignature: planForSave.signature,
+          headers: planForSave.headers,
+          mapping: mappingToSaved(planForSave.mapping, planForSave.headers),
+          supplierName:
+            extraction.kind === "invoice" || extraction.kind === "packing_list"
+              ? ((extraction.data as { supplierName?: string | null }).supplierName ??
+                null)
+              : null,
+          userId: userId ?? null,
+        });
+      } catch (saveError) {
+        console.error("[import-cases] could not save column mapping", saveError);
+      }
+    }
+
     await runImportCaseChecks(caseId);
 
     await db
@@ -281,6 +447,7 @@ export async function processImportDocument(
         lineCount,
         confidence: extraction.confidence,
         kind: extraction.kind,
+        ...(mappingSource ? { mappingSource } : {}),
       },
     });
 
@@ -289,14 +456,26 @@ export async function processImportDocument(
       extractionStatus: "completed",
       lineCount,
       confidence: extraction.confidence,
+      ...(mappingSource ? { mappingSource } : {}),
+      ...(mappingWarnings.length ? { warnings: mappingWarnings } : {}),
+      ...(importIssues.length ? { issues: importIssues } : {}),
     };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
+    const failedIssues =
+      error instanceof SpreadsheetImportError ? error.issues : importIssues;
     await db
       .update(importCaseDocuments)
       .set({
         extractionStatus: "failed",
         status: "failed",
+        // keep the reason so the UI can show it next to the document
+        extractedData: {
+          ...asRecord(doc.extractedData),
+          extractionError: message,
+          extractionIssues: failedIssues,
+          failedAt: new Date().toISOString(),
+        },
         updatedAt: new Date(),
       })
       .where(eq(importCaseDocuments.id, documentId));
@@ -317,6 +496,7 @@ export async function processImportDocument(
       lineCount: 0,
       confidence: 0,
       error: message,
+      ...(failedIssues.length ? { issues: failedIssues } : {}),
     };
   }
 }

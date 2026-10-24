@@ -1,7 +1,9 @@
+import { redirect } from "next/navigation";
 import { Breadcrumbs } from "@/components/dashboard/ui";
 import { UserDetailPanel } from "@/components/dashboard/UserDetailPanel";
+import { canManageUsers } from "@/lib/auth/permissions";
 import { getDashboardUserDetail } from "@/lib/dashboard/users";
-import { getSessionUserProfile } from "@/lib/auth/require-admin";
+import { getSessionUserProfile, requireAdminOrAssessor } from "@/lib/auth/require-admin";
 import { getUserAuditLogs } from "@/lib/import-cases/audit-queries";
 
 export const dynamic = "force-dynamic";
@@ -11,6 +13,11 @@ type PageProps = {
 };
 
 export default async function UserDetailPage({ params }: PageProps) {
+  const access = await requireAdminOrAssessor();
+  if (!access.ok) {
+    redirect("/dashboard");
+  }
+
   const { id } = await params;
   const [user, session] = await Promise.all([
     getDashboardUserDetail(id),
@@ -19,7 +26,7 @@ export default async function UserDetailPage({ params }: PageProps) {
 
   const activityLog =
     user != null ? await getUserAuditLogs(user.id, user.tenantId) : [];
-  const canManageRoles = session?.profile?.role === "admin";
+  const canManageRoles = canManageUsers(session?.profile?.role);
 
   if (!user) {
     return (

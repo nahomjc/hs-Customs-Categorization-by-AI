@@ -3,7 +3,12 @@
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
+import { Pagination, usePagination } from "@/components/dashboard/Pagination";
 import { HsCodeBadge } from "@/components/dashboard/document/HsCodeBadge";
+import {
+  GroupingProgressBanner,
+  GroupingProgressDialog,
+} from "@/components/dashboard/import-case/GroupingProgressDialog";
 import {
   DashButton,
   DashCard,
@@ -15,6 +20,7 @@ import {
   DashTh,
   StatusBadge,
   TruncatedText,
+  dashInputClass,
 } from "@/components/dashboard/ui";
 import { getCountryLabel } from "@/lib/countries";
 import {
@@ -22,13 +28,45 @@ import {
   type GroupingStatus,
 } from "@/lib/import-cases/constants";
 import { formatDutyRateFromSnapshot } from "@/lib/import-cases/duty-rate-display";
+import type { GroupingSnapshot } from "@/lib/import-cases/grouping-progress";
 import type { GroupingWithProducts } from "@/lib/import-cases/grouping-queries";
+import { useGroupingJob } from "@/lib/import-cases/use-grouping-job";
 
 type GroupingExportTabProps = {
   caseId: string;
   caseNumber: string;
   initialGroupings: GroupingWithProducts[];
 };
+
+function groupingSearchHaystack(row: GroupingWithProducts): string {
+  const g = row.grouping;
+  const originLabel = g.countryOfOriginCode
+    ? getCountryLabel(g.countryOfOriginCode)
+    : null;
+  const status = g.status as GroupingStatus;
+  const statusLabel = GROUPING_STATUS_LABELS[status] ?? g.status;
+  const productBits = row.products.flatMap(({ product }) => [
+    product.normalizedDescription,
+    product.rawDescription,
+    product.productName,
+    String(product.productSequence),
+  ]);
+  return [
+    g.groupCode,
+    g.hsCode,
+    g.countryOfOriginCode,
+    originLabel,
+    g.unitOfMeasure,
+    g.procedureCode,
+    g.groupingReason,
+    g.status,
+    statusLabel,
+    ...productBits,
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+}
 
 export function GroupingExportTab({
   caseId,
@@ -38,9 +76,22 @@ export function GroupingExportTab({
   const router = useRouter();
   const [groupings, setGroupings] =
     useState<GroupingWithProducts[]>(initialGroupings);
-  const [grouping, setGrouping] = useState(false);
+  const [progressOpen, setProgressOpen] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [expandedGroupId, setExpandedGroupId] = useState<string | null>(null);
+  const [search, setSearch] = useState("");
+
+  const filteredGroupings = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return groupings;
+    return groupings.filter((row) => groupingSearchHaystack(row).includes(q));
+  }, [groupings, search]);
+
+  const pagination = usePagination(filteredGroupings.length);
+  const pageGroupings = filteredGroupings.slice(
+    pagination.start,
+    pagination.end,
+  );
 
   const totalProducts = useMemo(
     () => groupings.reduce((sum, g) => sum + g.products.length, 0),
@@ -61,27 +112,33 @@ export function GroupingExportTab({
     router.refresh();
   }
 
-  async function handleGroup() {
-    setGrouping(true);
-    try {
-      const res = await fetch(`/api/import-cases/${caseId}/group`, {
-        method: "POST",
-      });
-      const data = (await res.json()) as {
-        error?: string;
-        groupCount?: number;
-        productCount?: number;
-      };
-      if (!res.ok) throw new Error(data.error ?? "Grouping failed");
+  // Grouping runs as short, resumable batches driven from here so the dialog
+  // can show real progress (see lib/import-cases/grouping-progress.ts).
+  function handleJobFinished(snap: GroupingSnapshot) {
+    setProgressOpen(true);
+    if (snap.status === "success" && snap.summary) {
       toast.success(
-        `Created ${data.groupCount} declaration group(s) from ${data.productCount} product(s)`,
+        `Created ${snap.summary.groupCount} declaration group(s) from ${snap.summary.productCount} product(s)`,
       );
-      await refresh();
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Grouping failed");
-    } finally {
-      setGrouping(false);
+    } else if (snap.status === "failed") {
+      toast.error(snap.fatalError ?? "Grouping failed");
     }
+    // show whatever was saved so far behind the dialog
+    void refresh();
+  }
+
+  const job = useGroupingJob(caseId, { onFinished: handleJobFinished });
+  const grouping = job.active;
+
+  function handleGroup() {
+    setProgressOpen(true);
+    job.start();
+  }
+
+  function handleProgressDone() {
+    setProgressOpen(false);
+    job.reset();
+    void refresh();
   }
 
   async function handleExport() {
@@ -142,6 +199,14 @@ export function GroupingExportTab({
           Groups approved products by HS code, origin, and tax profile into
           declaration lines. Download the CSV for customs review.
         </p>
+        {job.snapshot && !progressOpen ? (
+          <div className="mt-3">
+            <GroupingProgressBanner
+              snapshot={job.snapshot}
+              onShow={() => setProgressOpen(true)}
+            />
+          </div>
+        ) : null}
         {groupings.length > 0 ? (
           <div className="mt-3 flex flex-wrap gap-2">
             <SummaryPill label="Groups" value={String(groupings.length)} />
@@ -178,6 +243,44 @@ export function GroupingExportTab({
         </div>
       ) : (
         <>
+          <div className="border-b border-slate-100 px-5 py-3">
+            <div className="relative max-w-md">
+              <span
+                className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
+                aria-hidden
+              >
+                <svg
+                  className="h-4 w-4"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+                  />
+                </svg>
+              </span>
+              <input
+                type="search"
+                value={search}
+                onChange={(e) => {
+                  setSearch(e.target.value);
+                  pagination.reset();
+                }}
+                placeholder="Search groups — HS code, origin, group code, product description…"
+                className={dashInputClass}
+                aria-label="Search declaration groups"
+              />
+            </div>
+            {search.trim() ? (
+              <p className="mt-2 text-xs text-slate-500">
+                {filteredGroupings.length} of {groupings.length} group(s) match
+              </p>
+            ) : null}
+          </div>
           <DashTable tableClassName="min-w-160">
             <DashTableHead>
               <DashTableHeaderRow>
@@ -193,7 +296,17 @@ export function GroupingExportTab({
               </DashTableHeaderRow>
             </DashTableHead>
             <DashTbody>
-              {groupings.map(({ grouping: g, products, totalQuantity: qty }) => {
+              {pageGroupings.length === 0 ? (
+                <tr>
+                  <td
+                    colSpan={9}
+                    className="px-5 py-8 text-center text-sm text-slate-500"
+                  >
+                    No groups match your search.
+                  </td>
+                </tr>
+              ) : null}
+              {pageGroupings.map(({ grouping: g, products, totalQuantity: qty }) => {
                 const expanded = expandedGroupId === g.id;
                 const dutyRate =
                   formatDutyRateFromSnapshot(products[0]?.tariffSnapshot) ??
@@ -217,6 +330,12 @@ export function GroupingExportTab({
               })}
             </DashTbody>
           </DashTable>
+          <Pagination
+            bounds={pagination}
+            onPageChange={pagination.setPage}
+            onPageSizeChange={pagination.setPageSize}
+            itemLabel="groups"
+          />
 
           <section className="border-t border-slate-100 bg-slate-50/50 px-5 py-4">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -240,6 +359,15 @@ export function GroupingExportTab({
           </section>
         </>
       )}
+      <GroupingProgressDialog
+        open={progressOpen && job.snapshot !== null}
+        snapshot={job.snapshot}
+        onHide={() => setProgressOpen(false)}
+        onDone={handleProgressDone}
+        onStop={job.stop}
+        onResume={job.resume}
+        onRetryFailed={job.retryFailed}
+      />
     </DashCard>
   );
 }

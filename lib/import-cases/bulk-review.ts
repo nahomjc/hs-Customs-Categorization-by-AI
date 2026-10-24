@@ -183,6 +183,17 @@ export async function bulkReviewChecks(
   return { affectedCount: openChecks.length, action };
 }
 
+const BULK_ID_CHUNK = 250;
+
+async function forEachIdChunk(
+  ids: string[],
+  fn: (chunk: string[]) => Promise<void>,
+) {
+  for (let i = 0; i < ids.length; i += BULK_ID_CHUNK) {
+    await fn(ids.slice(i, i + BULK_ID_CHUNK));
+  }
+}
+
 export async function bulkReviewProducts(
   caseId: string,
   tenantId: string,
@@ -190,6 +201,55 @@ export async function bulkReviewProducts(
   action: BulkReviewAction,
   reason?: string | null,
 ): Promise<BulkReviewResult> {
+  if (action === "approve" || action === "override") {
+    const updated = await db
+      .update(importProducts)
+      .set({
+        humanVerified: true,
+        verifiedByUserId: userId,
+        verifiedAt: new Date(),
+        status: "ready_for_hs_suggestion",
+        updatedAt: new Date(),
+      })
+      .where(
+        and(
+          eq(importProducts.importCaseId, caseId),
+          eq(importProducts.humanVerified, false),
+        ),
+      )
+      .returning({ id: importProducts.id });
+
+    if (updated.length === 0) {
+      return { affectedCount: 0, action };
+    }
+
+    const ids = updated.map((row) => row.id);
+    await forEachIdChunk(ids, async (chunk) => {
+      await db
+        .update(productInvoiceLines)
+        .set({ isConfirmed: true })
+        .where(inArray(productInvoiceLines.productId, chunk));
+
+      await db
+        .update(productPackingListLines)
+        .set({ isConfirmed: true })
+        .where(inArray(productPackingListLines.productId, chunk));
+    });
+
+    await writeAuditLog({
+      tenantId,
+      importCaseId: caseId,
+      userId,
+      entityType: "import_case",
+      entityId: caseId,
+      action: `products_bulk_${action}`,
+      newData: { count: updated.length },
+      reason: reason ?? null,
+    });
+
+    return { affectedCount: updated.length, action };
+  }
+
   const pending = await db
     .select({ id: importProducts.id })
     .from(importProducts)
@@ -206,38 +266,15 @@ export async function bulkReviewProducts(
 
   const ids = pending.map((row) => row.id);
 
-  if (action === "approve" || action === "override") {
-    await db
-      .update(productInvoiceLines)
-      .set({ isConfirmed: true })
-      .where(inArray(productInvoiceLines.productId, ids));
+  await db
+    .update(importProducts)
+    .set({
+      status: "rejected",
+      updatedAt: new Date(),
+    })
+    .where(inArray(importProducts.id, ids));
 
-    await db
-      .update(productPackingListLines)
-      .set({ isConfirmed: true })
-      .where(inArray(productPackingListLines.productId, ids));
-
-    await db
-      .update(importProducts)
-      .set({
-        humanVerified: true,
-        verifiedByUserId: userId,
-        verifiedAt: new Date(),
-        status: "ready_for_hs_suggestion",
-        updatedAt: new Date(),
-      })
-      .where(inArray(importProducts.id, ids));
-  } else {
-    await db
-      .update(importProducts)
-      .set({
-        status: "rejected",
-        updatedAt: new Date(),
-      })
-      .where(inArray(importProducts.id, ids));
-
-    await updateCaseAfterBulkReview(caseId, "needs_information", reason);
-  }
+  await updateCaseAfterBulkReview(caseId, "needs_information", reason);
 
   await writeAuditLog({
     tenantId,
@@ -289,23 +326,29 @@ export async function bulkReviewClassifications(
 
   if (action === "approve" || action === "override") {
     for (const row of rows) {
-      if (action === "override" && options?.overrideHsCode) {
-        await approveProductClassification(caseId, row.productId, tenantId, userId, {
-          hsCode: options.overrideHsCode,
-          reviewerReason: options.reason ?? undefined,
-        });
-      } else if (row.selectedCandidateId) {
-        await approveProductClassification(caseId, row.productId, tenantId, userId, {
-          candidateId: row.selectedCandidateId,
-          reviewerReason: options?.reason ?? undefined,
-        });
-      } else if (row.hsCode) {
-        await approveProductClassification(caseId, row.productId, tenantId, userId, {
-          hsCode: row.hsCode,
-          reviewerReason: options?.reason ?? undefined,
-        });
+      try {
+        if (action === "override" && options?.overrideHsCode) {
+          await approveProductClassification(caseId, row.productId, tenantId, userId, {
+            hsCode: options.overrideHsCode,
+            reviewerReason: options.reason ?? undefined,
+          });
+        } else if (action === "override") {
+          continue;
+        } else if (row.selectedCandidateId) {
+          await approveProductClassification(caseId, row.productId, tenantId, userId, {
+            candidateId: row.selectedCandidateId,
+            reviewerReason: options?.reason ?? undefined,
+          });
+        } else {
+          await approveProductClassification(caseId, row.productId, tenantId, userId, {
+            hsCode: row.hsCode ?? undefined,
+            reviewerReason: options?.reason ?? undefined,
+          });
+        }
+        affectedCount++;
+      } catch {
+        // skip rows that cannot be approved (e.g. missing HS data)
       }
-      affectedCount++;
     }
   } else {
     const productIds = rows.map((row) => row.productId);

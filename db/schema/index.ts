@@ -30,3 +30,5 @@ export * from "./vddReferenceRecords";
 export * from "./vddProductMatches";
 export * from "./vddCustomFields";
 export * from "./hsCodeSearchLogs";
+export * from "./hsChapterNotes";
+export * from "./importColumnMappings";

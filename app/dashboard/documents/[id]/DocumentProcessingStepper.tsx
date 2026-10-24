@@ -156,7 +156,7 @@ export function DocumentProcessingStepper({
     current?.id === "classify" && total > 0 && status === "ai_processed";
 
   return (
-    <div className="overflow-hidden rounded-3xl border border-slate-200/70 bg-white shadow-[0_8px_40px_-12px_rgba(15,23,42,0.12)] w-full">
+    <div className="overflow-hidden rounded-3xl border border-slate-200/70 bg-white w-full">
       {/* Header */}
       <div className="relative overflow-hidden border-b border-slate-100 px-5 py-5 sm:px-7 sm:py-6">
         <div
@@ -164,7 +164,7 @@ export function DocumentProcessingStepper({
           aria-hidden
         />
         <div className="relative flex items-start gap-4">
-          <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-[#007bff] shadow-md shadow-blue-500/20">
+          <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-[#007bff]">
             <svg
               aria-hidden
               className="h-7 w-7 animate-pulse text-white"
@@ -201,7 +201,7 @@ export function DocumentProcessingStepper({
           </div>
           <div className="h-2.5 overflow-hidden rounded-full bg-slate-100" aria-hidden>
             <div
-              className="h-full rounded-full bg-[#007bff] transition-all duration-500 ease-out shadow-sm shadow-blue-500/20"
+              className="h-full rounded-full bg-[#007bff] transition-all duration-500 ease-out"
               style={{ width: `${percent}%` }}
             />
           </div>

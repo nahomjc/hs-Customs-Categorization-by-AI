@@ -16,6 +16,7 @@ import {
   writeAuditLog,
 } from "@/lib/import-cases/queries";
 import { updateImportCaseSchema } from "@/lib/import-cases/validation";
+import { notifyImportCaseAssignment } from "@/lib/notifications/notify-assignment";
 
 type RouteParams = { params: Promise<{ caseId: string }> };
 
@@ -123,6 +124,18 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     oldData: existing as unknown as Record<string, unknown>,
     newData: updated as unknown as Record<string, unknown>,
   });
+
+  if (
+    updated.assignedAgentId &&
+    existing.assignedAgentId !== updated.assignedAgentId
+  ) {
+    void notifyImportCaseAssignment({
+      tenantId,
+      importCaseId: caseId,
+      caseNumber: updated.caseNumber,
+      assigneeUserId: updated.assignedAgentId,
+    });
+  }
 
   return NextResponse.json(updated);
 }

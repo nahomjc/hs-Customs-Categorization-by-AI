@@ -113,7 +113,7 @@ export function CountrySearchSelect({
       {open ? (
         <div
           id={listId}
-          className="absolute z-20 mt-1 max-h-56 w-full overflow-auto rounded-xl border border-slate-200 bg-white py-1 shadow-lg"
+          className="absolute z-20 mt-1 max-h-56 w-full overflow-auto rounded-xl border border-slate-200 bg-white py-1"
         >
           {filtered.length === 0 ? (
             <p className="px-3 py-2 text-sm text-slate-500">No countries found</p>

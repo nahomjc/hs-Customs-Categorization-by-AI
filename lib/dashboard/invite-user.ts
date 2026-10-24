@@ -10,7 +10,10 @@ import { syncAuthUserRole } from "@/lib/auth/sync-auth-role";
 import { inviteUserEmail } from "@/lib/emails/templates/invite-user";
 import { sendViaBrevo } from "@/lib/emails/send-via-brevo";
 import { getTenantChannelSettings } from "@/lib/notifications/channel-settings";
-import { sendSmsEthiopia } from "@/lib/notifications/sms-ethiopia";
+import {
+  hasConfiguredSms,
+  sendTenantSms,
+} from "@/lib/notifications/send-tenant-sms";
 
 export type InviteUserInput = {
   email: string;
@@ -154,10 +157,10 @@ export async function inviteDashboardUser(
   let smsSent = false;
   let emailSent = false;
 
-  if (channels.smsEthiopiaApiKey && input.phone) {
+  if (hasConfiguredSms(channels) && input.phone) {
     try {
-      const smsResult = await sendSmsEthiopia({
-        apiKey: channels.smsEthiopiaApiKey,
+      const smsResult = await sendTenantSms({
+        tenantId,
         phone: input.phone,
         text: buildInviteSmsText({
           fullName: input.fullName,
@@ -165,6 +168,7 @@ export async function inviteDashboardUser(
           password: input.password,
           loginUrl,
         }),
+        settings: channels,
       });
       if (smsResult.ok) {
         smsSent = true;
@@ -177,7 +181,7 @@ export async function inviteDashboardUser(
         error instanceof Error ? error.message : "SMS send failed unexpectedly";
       console.warn("Invite SMS threw:", smsError);
     }
-  } else if (!channels.smsEthiopiaApiKey) {
+  } else if (!hasConfiguredSms(channels)) {
     smsError = "SMS not configured";
   }
 

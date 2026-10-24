@@ -1,3 +1,4 @@
+import { redirect } from "next/navigation";
 import { PageHeader } from "@/components/dashboard/ui";
 import { db } from "@/db";
 import { documents } from "@/db/schema";
@@ -6,6 +7,7 @@ import {
   DEFAULT_PREFERENCES,
 } from "@/lib/auth/settings-meta";
 import { getSessionUserProfile } from "@/lib/auth/require-admin";
+import { isClientRole, isStaffRole } from "@/lib/auth/roles";
 import { documentScopeFilter } from "@/lib/settings/document-scope";
 import { getUserPreferences } from "@/lib/settings/user-settings";
 import { desc } from "drizzle-orm";
@@ -22,6 +24,12 @@ export default async function HistoryPage() {
   }[] = [];
 
   const session = await getSessionUserProfile();
+  if (isClientRole(session?.profile?.role)) {
+    redirect("/dashboard/my-shipments");
+  }
+  if (!isStaffRole(session?.profile?.role)) {
+    redirect("/dashboard");
+  }
   const authUser = session?.authUser;
   const prefs = authUser?.id
     ? clampPreferencesForRole(

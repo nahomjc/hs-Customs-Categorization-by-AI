@@ -16,7 +16,7 @@ type CountryFlagProps = {
  */
 export function CountryFlag({
   code,
-  className = "h-3.5 w-5 object-cover rounded-[2px] shadow-sm",
+  className = "h-3.5 w-5 object-cover rounded-[2px]",
   title,
   size = 20,
 }: CountryFlagProps) {

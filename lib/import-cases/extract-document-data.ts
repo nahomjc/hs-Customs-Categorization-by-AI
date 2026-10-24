@@ -27,8 +27,18 @@ export type ExtractDocumentOutput = {
 
 function extractJson(content: string): unknown {
   const fenced = content.match(/```(?:json)?\s*([\s\S]*?)```/);
-  const raw = fenced ? fenced[1].trim() : content.trim();
-  return JSON.parse(raw) as unknown;
+  // Also strip an opening fence that was never closed (cut-off responses).
+  const raw = fenced
+    ? fenced[1].trim()
+    : content.trim().replace(/^```(?:json)?\s*/i, "");
+  try {
+    return JSON.parse(raw) as unknown;
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    throw new Error(
+      `The AI returned data that could not be read (${msg}). Try again, or upload an Excel/CSV file and map the columns manually.`,
+    );
+  }
 }
 
 const INVOICE_SYSTEM = `You extract structured data from commercial invoices for Ethiopian import clearance.
@@ -115,7 +125,7 @@ async function callExtractionAi(
         { role: "user", content: userContent },
       ],
       temperature: 0.1,
-      max_tokens: 4096,
+      max_tokens: 16000,
     }),
   });
 
@@ -125,10 +135,18 @@ async function callExtractionAi(
   }
 
   const data = (await res.json()) as {
-    choices?: Array<{ message?: { content?: string } }>;
+    choices?: Array<{
+      finish_reason?: string;
+      message?: { content?: string };
+    }>;
   };
   const content = data.choices?.[0]?.message?.content?.trim();
   if (!content) throw new Error("AI returned empty extraction response");
+  if (data.choices?.[0]?.finish_reason === "length") {
+    throw new Error(
+      "This document has too many lines for AI extraction - the AI response was cut off. Upload it as Excel/CSV and use the column mapping step instead.",
+    );
+  }
   return content;
 }
 

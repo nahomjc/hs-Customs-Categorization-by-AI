@@ -7,6 +7,10 @@ import { DEFAULT_TENANT_ID } from "@/lib/auth/constants";
 import { documentsUploadedByUser } from "@/lib/dashboard/document-ownership";
 import { getAuthUser } from "@/lib/auth/session";
 import { classifyProductDescription } from "@/lib/import-cases/classify-product-description";
+import {
+  buildImportCaseAssistantContext,
+  parseImportCaseIdFromPath,
+} from "@/lib/dashboard/import-case-assistant-context";
 
 const MAX_HISTORY = 12;
 
@@ -79,7 +83,11 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  let body: { message?: string; history?: ClientMessage[] };
+  let body: {
+    message?: string;
+    history?: ClientMessage[];
+    page?: { pathname?: string; wizardStepId?: string | null };
+  };
   try {
     body = await request.json();
   } catch {
@@ -119,6 +127,20 @@ export async function POST(request: Request) {
     : [];
 
   const displayName = user.name ?? user.email ?? "User";
+
+  const pathname = String(body.page?.pathname ?? "").trim();
+  const caseIdFromPath = pathname ? parseImportCaseIdFromPath(pathname) : null;
+  let importCaseContext: string | null = null;
+  if (caseIdFromPath) {
+    try {
+      importCaseContext = await buildImportCaseAssistantContext(
+        caseIdFromPath,
+        body.page?.wizardStepId,
+      );
+    } catch {
+      importCaseContext = null;
+    }
+  }
 
   let recentDocsSummary = "No documents uploaded yet.";
   try {
@@ -163,8 +185,13 @@ The signed-in user is ${displayName} (${user.email ?? "unknown email"}).
 
 Their recent uploads:
 ${recentDocsSummary}
+${importCaseContext ? `\n${importCaseContext}\n` : ""}
 
-Be concise, practical, and accurate. If you don't know something specific about their data, say so and suggest where in the app to look (e.g. History, open a document, Upload). For HS code questions about a product description, the system will classify automatically — otherwise suggest the Classification tab → Ask AI. Do not invent document contents.`;
+Be concise, practical, and accurate. If you don't know something specific about their data, say so and suggest where in the app to look (e.g. History, open a document, Upload). For HS code questions about a product description, the system will classify automatically — otherwise suggest the Classification tab → Ask AI. Do not invent document contents.${
+    importCaseContext
+      ? " When import case context is present, prioritize answering about that case and the wizard step the user is viewing."
+      : ""
+  }`;
 
   const messages: ChatMessage[] = [
     { role: "system", content: systemPrompt },

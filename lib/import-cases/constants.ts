@@ -49,6 +49,7 @@ export const EXTRACTION_STATUSES = [
   "completed",
   "failed",
   "reviewed",
+  "needs_mapping",
 ] as const;
 
 export type ExtractionStatus = (typeof EXTRACTION_STATUSES)[number];

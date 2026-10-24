@@ -27,7 +27,7 @@ export function DocumentHeroHeader({
   const typeLabel = fileTypeLabel(fileName);
 
   return (
-    <div className="relative overflow-hidden rounded-3xl border border-slate-200/70 bg-white shadow-[0_8px_40px_-12px_rgba(15,23,42,0.12)]">
+    <div className="relative overflow-hidden rounded-3xl border border-slate-200/70 bg-white">
       {/* Ambient mesh */}
       <div
         className="pointer-events-none absolute inset-0 opacity-[0.55]"
@@ -50,7 +50,7 @@ export function DocumentHeroHeader({
 
             <div className="flex items-start gap-4">
               <div
-                className={`flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br ${iconGradient} shadow-lg shadow-slate-900/10`}
+                className={`flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br ${iconGradient}`}
               >
                 <svg
                   aria-hidden
@@ -95,7 +95,7 @@ export function DocumentHeroHeader({
           <div className="flex shrink-0 flex-col gap-2 sm:flex-row lg:flex-col">
             <a
               href={downloadHref}
-              className="group inline-flex items-center justify-center gap-2 rounded-xl bg-[#007bff] px-5 py-3 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-[#0069d9]"
+              className="group inline-flex items-center justify-center gap-2 rounded-xl bg-[#007bff] px-5 py-3 text-sm font-semibold text-white transition-colors hover:bg-[#0069d9]"
             >
               <svg
                 aria-hidden

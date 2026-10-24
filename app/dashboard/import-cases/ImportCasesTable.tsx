@@ -15,8 +15,8 @@ import {
   DashTh,
   DashTr,
   StatusBadge,
+  DashSelect,
   dashInputClass,
-  dashSelectClass,
 } from "@/components/dashboard/ui";
 import {
   IMPORT_CASE_STATUSES,
@@ -119,21 +119,18 @@ export function ImportCasesTable({
             className={dashInputClass}
             aria-label="Search import cases"
           />
-          <select
+          <DashSelect
             value={status}
-            onChange={(e) =>
-              setStatus(e.target.value as ImportCaseStatus | "")
-            }
-            className={dashSelectClass}
+            onChange={(v) => setStatus(v as ImportCaseStatus | "")}
             aria-label="Filter by status"
-          >
-            <option value="">All statuses</option>
-            {IMPORT_CASE_STATUSES.map((s) => (
-              <option key={s} value={s}>
-                {IMPORT_CASE_STATUS_LABELS[s]}
-              </option>
-            ))}
-          </select>
+            options={[
+              { value: "", label: "All statuses" },
+              ...IMPORT_CASE_STATUSES.map((s) => ({
+                value: s,
+                label: IMPORT_CASE_STATUS_LABELS[s],
+              })),
+            ]}
+          />
           <DashButton
             onClick={() => void applyFilters(search, status)}
             disabled={loading}

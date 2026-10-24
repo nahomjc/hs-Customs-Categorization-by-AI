@@ -6,9 +6,10 @@ import {
   DashButton,
   DashCard,
   DashCardHeader,
-  PageHeader,
   dashInputClass,
 } from "@/components/dashboard/ui";
+
+type SmsProvider = "smshub" | "sms_ethiopia";
 
 type ChannelPublic = {
   telegramEnabled: boolean;
@@ -16,8 +17,12 @@ type ChannelPublic = {
   telegramBotTokenMasked: string | null;
   hasTelegramBotToken: boolean;
   smsEnabled: boolean;
+  smsProvider: SmsProvider;
   smsEthiopiaApiKeyMasked: string | null;
+  smsSmshubApiKeyMasked: string | null;
   hasSmsApiKey: boolean;
+  hasSmsEthiopiaApiKey: boolean;
+  hasSmsSmshubApiKey: boolean;
   authorizedStaffPhones: string[];
   webhookUrl?: string;
   smsWebhookUrl?: string;
@@ -30,8 +35,10 @@ export function ChannelsSettingsPanel() {
   const [data, setData] = useState<ChannelPublic | null>(null);
   const [telegramEnabled, setTelegramEnabled] = useState(false);
   const [smsEnabled, setSmsEnabled] = useState(false);
+  const [smsProvider, setSmsProvider] = useState<SmsProvider>("smshub");
   const [telegramBotToken, setTelegramBotToken] = useState("");
-  const [smsApiKey, setSmsApiKey] = useState("");
+  const [smsSmshubApiKey, setSmsSmshubApiKey] = useState("");
+  const [smsEthiopiaApiKey, setSmsEthiopiaApiKey] = useState("");
   const [staffPhones, setStaffPhones] = useState("");
   const [testTelegramChatId, setTestTelegramChatId] = useState("");
   const [testSmsPhone, setTestSmsPhone] = useState("");
@@ -45,6 +52,7 @@ export function ChannelsSettingsPanel() {
       setData(json);
       setTelegramEnabled(json.telegramEnabled);
       setSmsEnabled(json.smsEnabled);
+      setSmsProvider(json.smsProvider === "sms_ethiopia" ? "sms_ethiopia" : "smshub");
       setStaffPhones((json.authorizedStaffPhones ?? []).join(", "));
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Failed to load");
@@ -66,8 +74,10 @@ export function ChannelsSettingsPanel() {
         body: JSON.stringify({
           telegramEnabled,
           smsEnabled,
+          smsProvider,
           telegramBotToken: telegramBotToken.trim() || undefined,
-          smsEthiopiaApiKey: smsApiKey.trim() || undefined,
+          smsSmshubApiKey: smsSmshubApiKey.trim() || undefined,
+          smsEthiopiaApiKey: smsEthiopiaApiKey.trim() || undefined,
           authorizedStaffPhones: staffPhones
             .split(/[,\n]/)
             .map((p) => p.trim())
@@ -79,7 +89,8 @@ export function ChannelsSettingsPanel() {
       if (!res.ok) throw new Error(json.error ?? "Save failed");
       setData(json);
       setTelegramBotToken("");
-      setSmsApiKey("");
+      setSmsSmshubApiKey("");
+      setSmsEthiopiaApiKey("");
       if (json.webhookError) {
         toast.error(`Saved, but webhook failed: ${json.webhookError}`);
       } else {
@@ -113,14 +124,10 @@ export function ChannelsSettingsPanel() {
 
   return (
     <div className="space-y-6">
-      <PageHeader
-        title="Notification channels"
-        description="Configure Telegram bot and SMS Ethiopia for client shipment updates."
-        breadcrumbs={[
-          { label: "Settings", href: "/dashboard/settings" },
-          { label: "Channels" },
-        ]}
-      />
+      <p className="text-sm text-slate-500">
+        Configure Telegram and SMS (SMSHub or SMS Ethiopia) for shipment and
+        assignment alerts.
+      </p>
 
       <DashCard>
         <DashCardHeader title="Telegram" />
@@ -188,7 +195,7 @@ export function ChannelsSettingsPanel() {
       </DashCard>
 
       <DashCard>
-        <DashCardHeader title="SMS Ethiopia" />
+        <DashCardHeader title="SMS" />
         <div className="space-y-4 px-5 py-5">
           <label className="flex items-center gap-2 text-sm text-slate-700">
             <input
@@ -196,17 +203,51 @@ export function ChannelsSettingsPanel() {
               checked={smsEnabled}
               onChange={(e) => setSmsEnabled(e.target.checked)}
             />
-            Enable SMS notifications & inbound status commands
+            Enable outbound SMS notifications
           </label>
           <div>
             <label className="mb-1.5 block text-xs font-medium text-slate-600">
-              API key {data?.hasSmsApiKey ? `(${data.smsEthiopiaApiKeyMasked})` : ""}
+              Active provider
+            </label>
+            <select
+              value={smsProvider}
+              onChange={(e) =>
+                setSmsProvider(
+                  e.target.value === "sms_ethiopia" ? "sms_ethiopia" : "smshub",
+                )
+              }
+              className={dashInputClass}
+            >
+              <option value="smshub">SMSHub (default)</option>
+              <option value="sms_ethiopia">SMS Ethiopia (legacy)</option>
+            </select>
+            <p className="mt-1 text-xs text-slate-500">
+              Test SMS and all outbound messages use the active provider.
+            </p>
+          </div>
+          <div>
+            <label className="mb-1.5 block text-xs font-medium text-slate-600">
+              SMSHub API key{" "}
+              {data?.hasSmsSmshubApiKey ? `(${data.smsSmshubApiKeyMasked})` : ""}
             </label>
             <input
               type="password"
-              value={smsApiKey}
-              onChange={(e) => setSmsApiKey(e.target.value)}
-              placeholder="Paste new key to replace"
+              value={smsSmshubApiKey}
+              onChange={(e) => setSmsSmshubApiKey(e.target.value)}
+              placeholder="sk_live_… paste to replace"
+              className={dashInputClass}
+            />
+          </div>
+          <div>
+            <label className="mb-1.5 block text-xs font-medium text-slate-600">
+              SMS Ethiopia API key{" "}
+              {data?.hasSmsEthiopiaApiKey ? `(${data.smsEthiopiaApiKeyMasked})` : ""}
+            </label>
+            <input
+              type="password"
+              value={smsEthiopiaApiKey}
+              onChange={(e) => setSmsEthiopiaApiKey(e.target.value)}
+              placeholder="Paste legacy key to replace"
               className={dashInputClass}
             />
           </div>
@@ -223,7 +264,8 @@ export function ChannelsSettingsPanel() {
             />
           </div>
           <p className="text-xs text-slate-500">
-            Inbound webhook: <code className="text-[11px]">{data?.smsWebhookUrl}</code>
+            Inbound STATUS commands (SMS Ethiopia only):{" "}
+            <code className="text-[11px]">{data?.smsWebhookUrl}</code>
           </p>
           <p className="text-xs text-slate-500">
             SMS command:{" "}
@@ -236,7 +278,7 @@ export function ChannelsSettingsPanel() {
             <input
               value={testSmsPhone}
               onChange={(e) => setTestSmsPhone(e.target.value)}
-              placeholder="Test phone 251…"
+              placeholder="Test phone 251… or 09…"
               className={dashInputClass}
             />
             <DashButton

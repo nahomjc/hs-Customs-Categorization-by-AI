@@ -1,9 +1,9 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { BulkReviewToolbar } from "@/components/dashboard/import-case/BulkReviewActions";
-import { DashCard, StatusBadge } from "@/components/dashboard/ui";
+import { DashCard, StatusBadge, dashInputClass } from "@/components/dashboard/ui";
 import type { DocumentCheckRow } from "@/db/schema/documentChecks";
 import { useBulkReview } from "@/lib/import-cases/use-bulk-review";
 
@@ -12,9 +12,24 @@ type ChecksTabProps = {
   checks: DocumentCheckRow[];
 };
 
+function checkSearchHaystack(check: DocumentCheckRow): string {
+  return [
+    check.title,
+    check.message,
+    check.severity,
+    check.status,
+    check.checkType,
+    check.resolutionNote,
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+}
+
 export function ChecksTab({ caseId, checks: initialChecks }: ChecksTabProps) {
   const router = useRouter();
   const [checks, setChecks] = useState(initialChecks);
+  const [search, setSearch] = useState("");
   const [revalidating, setRevalidating] = useState(false);
 
   const refreshChecks = useCallback(
@@ -42,6 +57,12 @@ export function ChecksTab({ caseId, checks: initialChecks }: ChecksTabProps) {
     setChecks(initialChecks);
   }, [initialChecks]);
 
+  const filteredChecks = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return checks;
+    return checks.filter((c) => checkSearchHaystack(c).includes(q));
+  }, [checks, search]);
+
   const openChecks = checks.filter((c) => c.status === "open");
   const pendingCount = openChecks.length;
   const bulk = useBulkReview({
@@ -53,10 +74,11 @@ export function ChecksTab({ caseId, checks: initialChecks }: ChecksTabProps) {
     },
   });
 
-  const errors = openChecks.filter((c) => c.severity === "error");
-  const warnings = openChecks.filter((c) => c.severity === "warning");
-  const infos = openChecks.filter((c) => c.severity === "info");
-  const closed = checks.filter((c) => c.status !== "open");
+  const filteredOpen = filteredChecks.filter((c) => c.status === "open");
+  const errors = filteredOpen.filter((c) => c.severity === "error");
+  const warnings = filteredOpen.filter((c) => c.severity === "warning");
+  const infos = filteredOpen.filter((c) => c.severity === "info");
+  const closed = filteredChecks.filter((c) => c.status !== "open");
 
   if (revalidating && checks.length === 0) {
     return (
@@ -104,12 +126,43 @@ export function ChecksTab({ caseId, checks: initialChecks }: ChecksTabProps) {
             </button>
           </div>
         </DashCard>
+        <div className="rounded-2xl border border-slate-200 bg-white px-5 py-3">
+          <label className="block space-y-1.5">
+            <span className="text-xs font-medium text-slate-600">
+              Search checks
+            </span>
+            <input
+              type="search"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Title, message, severity, status…"
+              className={`${dashInputClass} pl-3 max-w-md`}
+            />
+          </label>
+          {search.trim() ? (
+            <p className="mt-2 text-xs text-slate-500">
+              {filteredChecks.length} of {checks.length} check(s) match
+            </p>
+          ) : null}
+        </div>
         {closed.length > 0 ? (
           <CheckSection title="Resolved / ignored" checks={closed} muted />
+        ) : null}
+        {search.trim() && filteredChecks.length === 0 ? (
+          <DashCard>
+            <div className="p-8 text-center text-sm text-slate-500">
+              No checks match your search.
+            </div>
+          </DashCard>
         ) : null}
       </div>
     );
   }
+
+  const noSearchMatches =
+    search.trim().length > 0 &&
+    filteredOpen.length === 0 &&
+    closed.length === 0;
 
   return (
     <div className="space-y-6">
@@ -167,6 +220,34 @@ export function ChecksTab({ caseId, checks: initialChecks }: ChecksTabProps) {
           ) : null}
         </div>
       </div>
+
+      <div className="rounded-2xl border border-slate-200 bg-white px-5 py-3">
+        <label className="block space-y-1.5">
+          <span className="text-xs font-medium text-slate-600">
+            Search checks
+          </span>
+          <input
+            type="search"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Title, message, severity, status…"
+            className={`${dashInputClass} pl-3 max-w-md`}
+          />
+        </label>
+        {search.trim() ? (
+          <p className="mt-2 text-xs text-slate-500">
+            {filteredChecks.length} of {checks.length} check(s) match
+          </p>
+        ) : null}
+      </div>
+
+      {noSearchMatches ? (
+        <DashCard>
+          <div className="p-8 text-center text-sm text-slate-500">
+            No checks match your search.
+          </div>
+        </DashCard>
+      ) : null}
 
       {errors.length > 0 ? (
         <CheckSection title="Errors" checks={errors} />

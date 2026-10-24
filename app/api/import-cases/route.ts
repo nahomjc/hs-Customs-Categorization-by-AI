@@ -20,6 +20,7 @@ import {
   createImportCaseSchema,
   listImportCasesQuerySchema,
 } from "@/lib/import-cases/validation";
+import { notifyImportCaseAssignment } from "@/lib/notifications/notify-assignment";
 import { recordInitialTrackingEvent } from "@/lib/tracking/update-tracking-status";
 
 export async function GET(request: NextRequest) {
@@ -177,6 +178,15 @@ export async function POST(request: NextRequest) {
       clientUserId: created.clientUserId,
     },
   });
+
+  if (created.assignedAgentId) {
+    void notifyImportCaseAssignment({
+      tenantId,
+      importCaseId: created.id,
+      caseNumber: created.caseNumber,
+      assigneeUserId: created.assignedAgentId,
+    });
+  }
 
   return NextResponse.json(created, { status: 201 });
 }

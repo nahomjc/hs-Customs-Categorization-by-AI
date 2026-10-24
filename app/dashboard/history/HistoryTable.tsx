@@ -16,8 +16,8 @@ import {
   DashTh,
   DashTr,
   StatusBadge,
+  DashSelect,
   dashInputClass,
-  dashSelectClass,
 } from "@/components/dashboard/ui";
 import {
   Dialog,
@@ -205,18 +205,15 @@ export function HistoryTable({ list }: { list: Doc[] }) {
             </div>
             <div className="flex flex-wrap items-center gap-2">
               <label className="shrink-0 text-sm text-gray-500">Status:</label>
-              <select
+              <DashSelect
                 value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value)}
-                className={dashSelectClass}
+                onChange={setStatusFilter}
                 aria-label="Filter by status"
-              >
-                {STATUS_OPTIONS.map((o) => (
-                  <option key={o.value || "all"} value={o.value}>
-                    {o.label}
-                  </option>
-                ))}
-              </select>
+                options={STATUS_OPTIONS.map((o) => ({
+                  value: o.value,
+                  label: o.label,
+                }))}
+              />
               <span className="whitespace-nowrap text-xs text-gray-500">
                 {sorted.length === list.length
                   ? `${list.length} document${list.length !== 1 ? "s" : ""}`
@@ -290,7 +287,7 @@ export function HistoryTable({ list }: { list: Doc[] }) {
                   </p>
                   <Link
                     href="/dashboard/upload"
-                    className="mt-5 inline-flex items-center gap-2 rounded-full bg-[#007bff] px-5 py-2.5 text-sm font-semibold text-white shadow-md shadow-blue-500/20 transition-colors hover:bg-[#0069d9]"
+                    className="mt-5 inline-flex items-center gap-2 rounded-full bg-[#007bff] px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-[#0069d9]"
                   >
                     Upload packing list
                   </Link>

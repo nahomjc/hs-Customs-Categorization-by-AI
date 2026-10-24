@@ -126,7 +126,7 @@ export function MyShipmentsView({
 
   if (shipments.length === 0) {
     return (
-      <div className="rounded-3xl border border-dashed border-slate-200 bg-white px-5 py-12 text-center shadow-[0_4px_24px_-12px_rgba(15,23,42,0.08)] sm:px-6 sm:py-16">
+      <div className="rounded-3xl border border-dashed border-slate-200 bg-white px-5 py-12 text-center sm:px-6 sm:py-16">
         <p className="text-base font-semibold text-slate-900">
           No shipments yet
         </p>

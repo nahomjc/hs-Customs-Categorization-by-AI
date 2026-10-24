@@ -17,6 +17,7 @@ import {
   StatusBadge,
   dashSelectClass,
 } from "@/components/dashboard/ui";
+import { MapColumnsDialog } from "@/components/dashboard/import-case/MapColumnsDialog";
 import {
   Dialog,
   DialogContent,
@@ -47,7 +48,29 @@ const EXTRACTION_LABELS: Record<string, string> = {
   completed: "Extracted",
   failed: "Failed",
   reviewed: "Reviewed",
+  needs_mapping: "Needs mapping",
 };
+
+/** Invoice / packing list spreadsheets can have their columns mapped. */
+function canMapColumns(doc: ImportCaseDocumentRow): boolean {
+  const ext = doc.originalFileName.split(".").pop()?.toLowerCase() ?? "";
+  return (
+    (doc.documentType === "commercial_invoice" ||
+      doc.documentType === "proforma_invoice" ||
+      doc.documentType === "packing_list") &&
+    (ext === "xlsx" || ext === "xls" || ext === "csv")
+  );
+}
+
+/** Why the last extraction failed (saved by the import), if known. */
+function extractionErrorOf(doc: ImportCaseDocumentRow): string | null {
+  const data = doc.extractedData;
+  if (data && typeof data === "object" && !Array.isArray(data)) {
+    const err = (data as Record<string, unknown>).extractionError;
+    if (typeof err === "string" && err) return err;
+  }
+  return null;
+}
 
 const REQUIRED_TYPES: DocumentType[] = [
   "commercial_invoice",
@@ -83,6 +106,7 @@ export function DocumentsTab({
   const [docPendingDelete, setDocPendingDelete] =
     useState<ImportCaseDocumentRow | null>(null);
   const [dragActive, setDragActive] = useState(false);
+  const [mappingDocId, setMappingDocId] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const sampleTemplate = SAMPLE_TEMPLATES[uploadType];
 
@@ -117,18 +141,26 @@ export function DocumentsTab({
       });
       const data = (await res.json()) as {
         error?: string;
+        document?: { id: string };
         extraction?: {
           lineCount: number;
           extractionStatus: string;
           error?: string;
+          needsMapping?: boolean;
+          warnings?: string[];
         };
       };
       if (!res.ok) throw new Error(data.error ?? "Upload failed");
 
-      if (data.extraction?.extractionStatus === "completed") {
+      if (data.extraction?.needsMapping) {
+        toast.info("Uploaded - please check which column is which");
+      } else if (data.extraction?.extractionStatus === "completed") {
         toast.success(
           `Document uploaded — ${data.extraction.lineCount} line(s) extracted`,
         );
+        if (data.extraction.warnings?.length) {
+          toast.message(data.extraction.warnings[0]);
+        }
       } else if (data.extraction?.error) {
         toast.error(`Uploaded but extraction failed: ${data.extraction.error}`);
       } else {
@@ -136,6 +168,9 @@ export function DocumentsTab({
       }
       setUploadOpen(false);
       await refreshDocuments();
+      if (data.extraction?.needsMapping && data.document?.id) {
+        setMappingDocId(data.document.id);
+      }
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Upload failed");
     } finally {
@@ -157,11 +192,15 @@ export function DocumentsTab({
           lineCount: number;
           extractionStatus: string;
           error?: string;
+          needsMapping?: boolean;
         };
       };
       if (!res.ok) throw new Error(data.error ?? "Extraction failed");
 
-      if (data.extraction?.extractionStatus === "completed") {
+      if (data.extraction?.needsMapping) {
+        toast.info("Please check which column is which");
+        setMappingDocId(documentId);
+      } else if (data.extraction?.extractionStatus === "completed") {
         toast.success(`Extracted ${data.extraction.lineCount} line(s)`);
       } else {
         toast.error(data.extraction?.error ?? "Extraction failed");
@@ -243,6 +282,7 @@ export function DocumentsTab({
               deletingId={deletingId}
               onUpload={() => openUpload("commercial_invoice")}
               onExtract={handleExtract}
+              onMapColumns={setMappingDocId}
               onDelete={setDocPendingDelete}
             />
             <RequiredDocumentSlot
@@ -253,6 +293,7 @@ export function DocumentsTab({
               deletingId={deletingId}
               onUpload={() => openUpload("packing_list")}
               onExtract={handleExtract}
+              onMapColumns={setMappingDocId}
               onDelete={setDocPendingDelete}
             />
           </div>
@@ -307,6 +348,7 @@ export function DocumentsTab({
                     extractingId={extractingId}
                     deletingId={deletingId}
                     onExtract={handleExtract}
+                    onMapColumns={setMappingDocId}
                     onDelete={setDocPendingDelete}
                   />
                 ))}
@@ -406,7 +448,7 @@ export function DocumentsTab({
               }`}
             >
               <div className="flex flex-col items-center justify-center px-6 py-7 text-center">
-                <div className="mb-3 flex h-11 w-11 items-center justify-center rounded-xl bg-white text-indigo-600 shadow-sm">
+                <div className="mb-3 flex h-11 w-11 items-center justify-center rounded-xl bg-white text-indigo-600">
                   <UploadIcon />
                 </div>
                 <p className="text-sm font-medium text-slate-800">
@@ -493,6 +535,13 @@ export function DocumentsTab({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <MapColumnsDialog
+        caseId={caseId}
+        documentId={mappingDocId}
+        onClose={() => setMappingDocId(null)}
+        onApplied={refreshDocuments}
+      />
     </>
   );
 }
@@ -505,6 +554,7 @@ function RequiredDocumentSlot({
   deletingId,
   onUpload,
   onExtract,
+  onMapColumns,
   onDelete,
 }: {
   type: DocumentType;
@@ -514,9 +564,12 @@ function RequiredDocumentSlot({
   deletingId: string | null;
   onUpload: () => void;
   onExtract: (id: string) => void;
+  onMapColumns: (id: string) => void;
   onDelete: (doc: ImportCaseDocumentRow) => void;
 }) {
   const latest = documents[0];
+  const latestError =
+    latest?.extractionStatus === "failed" ? extractionErrorOf(latest) : null;
   const complete =
     latest &&
     (latest.extractionStatus === "completed" ||
@@ -568,6 +621,9 @@ function RequiredDocumentSlot({
                   </span>
                 ) : null}
               </div>
+              {latestError ? (
+                <p className="mt-2 text-xs text-red-600">{latestError}</p>
+              ) : null}
             </>
           ) : (
             <p className="mt-1 text-xs text-slate-500">Not uploaded yet</p>
@@ -598,6 +654,21 @@ function RequiredDocumentSlot({
             {extractingId === latest.id ? "Extracting…" : "Extract now"}
           </DashButton>
         ) : null}
+        {latest && canMapColumns(latest) ? (
+          <DashButton
+            type="button"
+            variant={
+              latest.extractionStatus === "needs_mapping" ? "primary" : "ghost"
+            }
+            className="px-3 py-2 text-xs"
+            disabled={extractingId === latest.id}
+            onClick={() => onMapColumns(latest.id)}
+          >
+            {latest.extractionStatus === "needs_mapping"
+              ? "Map columns"
+              : "Change columns"}
+          </DashButton>
+        ) : null}
         {latest ? (
           <DashButton
             type="button"
@@ -619,12 +690,14 @@ function DocumentRow({
   extractingId,
   deletingId,
   onExtract,
+  onMapColumns,
   onDelete,
 }: {
   doc: ImportCaseDocumentRow;
   extractingId: string | null;
   deletingId: string | null;
   onExtract: (id: string) => void;
+  onMapColumns: (id: string) => void;
   onDelete: (doc: ImportCaseDocumentRow) => void;
 }) {
   const type = doc.documentType as DocumentType;
@@ -669,6 +742,19 @@ function DocumentRow({
       </DashTd>
       <DashTd align="right">
         <div className="flex items-center justify-end gap-1">
+          {canMapColumns(doc) && (
+            <DashButton
+              type="button"
+              variant="ghost"
+              className="px-3 py-1.5 text-xs"
+              disabled={busy}
+              onClick={() => onMapColumns(doc.id)}
+            >
+              {doc.extractionStatus === "needs_mapping"
+                ? "Map columns"
+                : "Change columns"}
+            </DashButton>
+          )}
           {(doc.extractionStatus === "pending" ||
             doc.extractionStatus === "failed") && (
             <DashButton

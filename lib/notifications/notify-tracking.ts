@@ -7,7 +7,7 @@ import {
 } from "@/db/schema";
 import { getUserPreferences } from "@/lib/settings/user-settings";
 import { getTenantChannelSettings } from "@/lib/notifications/channel-settings";
-import { sendSmsEthiopia } from "@/lib/notifications/sms-ethiopia";
+import { sendTenantSms } from "@/lib/notifications/send-tenant-sms";
 import { sendTelegramMessage } from "@/lib/notifications/telegram";
 import {
   TRACKING_STATUS_LABELS,
@@ -94,19 +94,15 @@ export async function notifyClientTrackingUpdate(params: {
     });
   }
 
-  if (
-    prefs.notifySms &&
-    channels.smsEnabled &&
-    channels.smsEthiopiaApiKey &&
-    client.phone
-  ) {
+  if (prefs.notifySms && channels.smsEnabled && client.phone) {
     const smsText = `${params.caseNumber}: ${label}${
       params.note?.trim() ? ` — ${params.note.trim()}` : ""
     }`.slice(0, 160);
-    const result = await sendSmsEthiopia({
-      apiKey: channels.smsEthiopiaApiKey,
+    const result = await sendTenantSms({
+      tenantId: params.tenantId,
       phone: client.phone,
       text: smsText,
+      settings: channels,
     });
     await db.insert(notificationLogs).values({
       tenantId: params.tenantId,

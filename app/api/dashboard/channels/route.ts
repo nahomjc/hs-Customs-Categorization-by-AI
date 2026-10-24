@@ -13,7 +13,11 @@ import {
   setTelegramWebhook,
   sendTelegramMessage,
 } from "@/lib/notifications/telegram";
-import { sendSmsEthiopia } from "@/lib/notifications/sms-ethiopia";
+import {
+  activeSmsApiKey,
+  sendTenantSms,
+} from "@/lib/notifications/send-tenant-sms";
+import { type SmsProvider } from "@/lib/notifications/channel-settings";
 import { getAppOrigin } from "@/lib/auth/redirect-origin";
 
 export async function GET() {
@@ -41,8 +45,11 @@ export async function PATCH(request: NextRequest) {
     telegramBotToken?: string;
     clearTelegramBotToken?: boolean;
     smsEnabled?: boolean;
+    smsProvider?: SmsProvider;
+    smsSmshubApiKey?: string;
     smsEthiopiaApiKey?: string;
     clearSmsApiKey?: boolean;
+    clearSmsSmshubApiKey?: boolean;
     authorizedStaffPhones?: string[];
     setWebhook?: boolean;
   };
@@ -74,8 +81,11 @@ export async function PATCH(request: NextRequest) {
     clearTelegramBotToken: body.clearTelegramBotToken,
     telegramWebhookSecret,
     smsEnabled: body.smsEnabled,
+    smsProvider: body.smsProvider,
+    smsSmshubApiKey: body.smsSmshubApiKey?.trim() || undefined,
     smsEthiopiaApiKey: body.smsEthiopiaApiKey?.trim() || undefined,
     clearSmsApiKey: body.clearSmsApiKey,
+    clearSmsSmshubApiKey: body.clearSmsSmshubApiKey,
     authorizedStaffPhones: phones,
   });
 
@@ -155,9 +165,11 @@ export async function POST(request: NextRequest) {
   }
 
   if (body.channel === "sms") {
-    if (!settings.smsEthiopiaApiKey) {
+    if (!activeSmsApiKey(settings)) {
+      const label =
+        settings.smsProvider === "sms_ethiopia" ? "SMS Ethiopia" : "SMSHub";
       return NextResponse.json(
-        { error: "SMS Ethiopia API key not configured" },
+        { error: `${label} API key not configured` },
         { status: 400 },
       );
     }
@@ -167,10 +179,11 @@ export async function POST(request: NextRequest) {
         { status: 400 },
       );
     }
-    const result = await sendSmsEthiopia({
-      apiKey: settings.smsEthiopiaApiKey,
+    const result = await sendTenantSms({
+      tenantId: getTenantId(),
       phone: body.target,
       text: message,
+      settings,
     });
     return NextResponse.json(result, { status: result.ok ? 200 : 400 });
   }

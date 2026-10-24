@@ -270,7 +270,7 @@ export function CaseHistoryPanel({
                           className={`absolute -left-6 top-2 h-2.5 w-2.5 -translate-x-1/2 rounded-full ring-4 ring-white ${tone.dot}`}
                           aria-hidden
                         />
-                        <article className="rounded-xl border border-slate-200/80 bg-white p-4 shadow-sm shadow-slate-100/50 transition hover:border-slate-300 hover:shadow-md">
+                        <article className="rounded-xl border border-slate-200/80 bg-white p-4 transition hover:border-slate-300">
                           <div className="flex flex-wrap items-center gap-2">
                             <span
                               className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold ring-1 ring-inset ${tone.badge}`}

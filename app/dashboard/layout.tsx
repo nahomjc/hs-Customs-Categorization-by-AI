@@ -1,5 +1,6 @@
 import { Inter } from "next/font/google";
 import { redirect } from "next/navigation";
+import { Suspense } from "react";
 import { BrandLogo } from "@/components/BrandLogo";
 import { DashboardAssistantChat } from "@/components/dashboard/DashboardAssistantChat";
 import { DashboardSidebarShell } from "@/components/dashboard/DashboardSidebarShell";
@@ -72,7 +73,9 @@ export default async function DashboardLayout({
         </main>
       </div>
       {profileSession?.profile?.role !== "client" ? (
-        <DashboardAssistantChat />
+        <Suspense fallback={null}>
+          <DashboardAssistantChat />
+        </Suspense>
       ) : null}
     </div>
   );

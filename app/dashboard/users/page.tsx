@@ -1,5 +1,7 @@
+import { redirect } from "next/navigation";
 import { UsersTable } from "@/components/dashboard/UsersTable";
-import { getSessionUserProfile } from "@/lib/auth/require-admin";
+import { canManageUsers } from "@/lib/auth/permissions";
+import { getSessionUserProfile, requireAdminOrAssessor } from "@/lib/auth/require-admin";
 import {
   listDashboardUsers,
   parseUsersListSearchParams,
@@ -20,6 +22,11 @@ type PageProps = {
 };
 
 export default async function UsersPage({ searchParams }: PageProps) {
+  const access = await requireAdminOrAssessor();
+  if (!access.ok) {
+    redirect("/dashboard");
+  }
+
   const raw = await searchParams;
   const filters = parseUsersListSearchParams(raw);
 
@@ -28,7 +35,7 @@ export default async function UsersPage({ searchParams }: PageProps) {
     getSessionUserProfile(),
   ]);
 
-  const canManageRoles = session?.profile?.role === "admin";
+  const canManageRoles = canManageUsers(session?.profile?.role);
 
   return (
     <UsersTable

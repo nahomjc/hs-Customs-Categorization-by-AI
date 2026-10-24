@@ -1,9 +1,16 @@
+import { redirect } from "next/navigation";
 import { AnalyticsView } from "@/components/dashboard/AnalyticsView";
 import { clampPreferencesForRole } from "@/lib/auth/settings-meta";
 import { getSessionUserProfile } from "@/lib/auth/require-admin";
+import { isClientRole, isStaffRole } from "@/lib/auth/roles";
 import { fetchClientsAnalytics } from "@/lib/clients-analytics";
 import { parseAnalyticsRange } from "@/lib/dashboard-analytics-utils";
-import { fetchImportCasesAnalytics } from "@/lib/import-cases-analytics";
+import { dayKeys, shiftKey } from "@/lib/dashboard-bento-utils";
+import {
+  fetchClassificationTotals,
+  fetchImportCaseOutcomesByDay,
+  fetchImportCasesAnalytics,
+} from "@/lib/import-cases-analytics";
 import { getTenantId } from "@/lib/import-cases/queries";
 import { getUserPreferences } from "@/lib/settings/user-settings";
 
@@ -16,6 +23,12 @@ export default async function AnalyticsPage({
 }) {
   const params = await searchParams;
   const session = await getSessionUserProfile();
+  if (isClientRole(session?.profile?.role)) {
+    redirect("/dashboard/my-shipments");
+  }
+  if (!isStaffRole(session?.profile?.role)) {
+    redirect("/dashboard");
+  }
   const defaultPreset =
     session?.authUser?.id != null
       ? clampPreferencesForRole(
@@ -28,9 +41,21 @@ export default async function AnalyticsPage({
     defaultPreset,
   });
   const tenantId = getTenantId();
-  const [importCasesData, clientsData] = await Promise.all([
+  const spanDays = dayKeys(fromKey, toKey).length;
+  const previousToKey = shiftKey(fromKey, -1);
+  const previousFromKey = shiftKey(previousToKey, -(spanDays - 1));
+  const [
+    importCasesData,
+    clientsData,
+    currentOutcomes,
+    previousOutcomes,
+    classification,
+  ] = await Promise.all([
     fetchImportCasesAnalytics(tenantId, from, to),
     fetchClientsAnalytics(tenantId, from, to),
+    fetchImportCaseOutcomesByDay(tenantId, fromKey, toKey),
+    fetchImportCaseOutcomesByDay(tenantId, previousFromKey, previousToKey),
+    fetchClassificationTotals(tenantId, from, to),
   ]);
 
   return (
@@ -39,6 +64,11 @@ export default async function AnalyticsPage({
       toKey={toKey}
       importCasesData={importCasesData}
       clientsData={clientsData}
+      currentOutcomes={currentOutcomes}
+      previousOutcomes={previousOutcomes}
+      previousFromKey={previousFromKey}
+      previousToKey={previousToKey}
+      classification={classification}
     />
   );
 }

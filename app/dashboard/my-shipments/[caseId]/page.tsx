@@ -143,7 +143,7 @@ export default async function MyShipmentDetailPage({ params }: PageProps) {
 
 function InfoTile({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-2xl border border-slate-200/80 bg-white px-4 py-3.5 shadow-[0_4px_20px_-12px_rgba(15,23,42,0.1)] sm:rounded-3xl sm:px-5 sm:py-4">
+    <div className="rounded-2xl border border-slate-200/80 bg-white px-4 py-3.5 sm:rounded-3xl sm:px-5 sm:py-4">
       <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
         {label}
       </p>

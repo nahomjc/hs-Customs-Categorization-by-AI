@@ -14,6 +14,10 @@ export const invoiceLineExtractSchema = z.object({
   lineTotalAmount: numericString.nullable().optional(),
   currencyCode: z.string().optional(),
   countryOfOriginCode: z.string().nullable().optional(),
+  declaredNetWeightKg: numericString.nullable().optional(),
+  declaredGrossWeightKg: numericString.nullable().optional(),
+  /** Extra spreadsheet columns (label -> value); only set by the spreadsheet mapper. */
+  extra: z.record(z.string(), z.string()).nullable().optional(),
 });
 
 export const invoiceExtractSchema = z.object({
@@ -45,6 +49,7 @@ export const packingListLineExtractSchema = z.object({
   grossWeightKg: numericString.nullable().optional(),
   packageMarks: z.string().nullable().optional(),
   countryOfOriginCode: z.string().nullable().optional(),
+  extra: z.record(z.string(), z.string()).nullable().optional(),
 });
 
 export const packingListExtractSchema = z.object({

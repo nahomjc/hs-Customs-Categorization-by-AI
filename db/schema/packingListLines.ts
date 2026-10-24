@@ -2,6 +2,7 @@ import {
   boolean,
   index,
   integer,
+  jsonb,
   numeric,
   pgTable,
   text,
@@ -47,6 +48,8 @@ export const packingListLines = pgTable(
     heightCm: numeric("height_cm", { precision: 18, scale: 2 }),
     packageMarks: text("package_marks"),
     countryOfOriginCode: varchar("country_of_origin_code", { length: 3 }),
+    /** Unmapped / extra spreadsheet columns (label -> value), HS code, CBM, dimensions. */
+    extra: jsonb("extra").$type<Record<string, string>>(),
     extractionConfidence: numeric("extraction_confidence", {
       precision: 5,
       scale: 4,

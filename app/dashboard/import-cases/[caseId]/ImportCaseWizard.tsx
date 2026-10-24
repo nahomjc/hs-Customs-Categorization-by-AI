@@ -3,6 +3,21 @@
 import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { CaseHistoryPanel } from "@/components/dashboard/import-case/CaseHistoryPanel";
+import {
+  BentoCard,
+  PromoBanner,
+  promoButtonClass,
+} from "@/components/dashboard/bento/BentoCard";
+import { BentoIcon } from "@/components/dashboard/bento/icons";
+import {
+  CaseActivityCard,
+  CaseDetailsCard,
+  CaseDocumentsCard,
+} from "@/components/dashboard/import-case/CaseSideCards";
+import {
+  CaseWorkflowStepper,
+  type StepperStep,
+} from "@/components/dashboard/import-case/CaseWorkflowStepper";
 import { DashButton, DashCard } from "@/components/dashboard/ui";
 import type { AuditLogView } from "@/lib/import-cases/audit-queries";
 import type { DocumentCheckRow } from "@/db/schema/documentChecks";
@@ -13,9 +28,18 @@ import type { GroupingWithProducts } from "@/lib/import-cases/grouping-queries";
 import type { CaseProductWithSources } from "@/lib/import-cases/product-queries";
 import {
   getCurrentWizardStep,
+  getWizardStepWarnings,
   isWizardStepComplete,
   isWizardStepUnlocked,
 } from "@/lib/import-cases/workflow-progress";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import {
   ACTIVE_WIZARD_STEPS,
   getWizardStepIndex,
@@ -163,6 +187,8 @@ export function ImportCaseWizard({
   const [visitedSteps, setVisitedSteps] = useState<Set<WizardStepId>>(
     () => new Set([resolvedStep]),
   );
+  const [continueWarningOpen, setContinueWarningOpen] = useState(false);
+  const [continueWarnings, setContinueWarnings] = useState<string[]>([]);
 
   // Open on the furthest incomplete step when URL has no valid ?step=
   useEffect(() => {
@@ -201,11 +227,9 @@ export function ImportCaseWizard({
     (c) => c.product.humanVerified && c.classification?.isFinal,
   ).length;
 
-  const currentStepComplete = isWizardStepComplete(currentStep, completionCtx);
-
   const goToStep = useCallback(
-    (stepId: WizardStepId) => {
-      if (!stepUnlocked(stepId)) return;
+    (stepId: WizardStepId, options?: { bypassUnlock?: boolean }) => {
+      if (!options?.bypassUnlock && !stepUnlocked(stepId)) return;
       setCurrentStep(stepId);
       setVisitedSteps((prev) => new Set(prev).add(stepId));
       const params = new URLSearchParams(searchParams.toString());
@@ -215,12 +239,30 @@ export function ImportCaseWizard({
     [router, searchParams, stepUnlocked],
   );
 
-  function goNext() {
-    if (!currentStepComplete) return;
+  function advanceToNextStep() {
     const idx = activeSteps.findIndex((s) => s.id === currentStep);
     if (idx >= 0 && idx < activeSteps.length - 1) {
-      goToStep(activeSteps[idx + 1].id);
+      goToStep(activeSteps[idx + 1].id, { bypassUnlock: true });
     }
+    setContinueWarningOpen(false);
+    setContinueWarnings([]);
+  }
+
+  function goNext() {
+    const idx = activeSteps.findIndex((s) => s.id === currentStep);
+    if (idx < 0 || idx >= activeSteps.length - 1) return;
+
+    const warnings = getWizardStepWarnings(
+      currentStep,
+      completionCtx,
+      openCheckCount,
+    );
+    if (warnings.length > 0) {
+      setContinueWarnings(warnings);
+      setContinueWarningOpen(true);
+      return;
+    }
+    advanceToNextStep();
   }
 
   function goBack() {
@@ -273,232 +315,163 @@ export function ImportCaseWizard({
     return null;
   }
 
+  const stepperSteps: StepperStep[] = WIZARD_STEPS.map((step, index) => ({
+    id: step.id,
+    label: step.label,
+    shortLabel: step.shortLabel,
+    description: step.description,
+    status: stepStatus(step.id, index),
+    badge: stepBadge(step.id),
+  }));
+  const nextMeta = isLastActive ? null : (activeSteps[currentIndex + 1] ?? null);
+  const showNextBanner = Boolean(nextMeta && !isLastActive);
+
   return (
-    <div className="min-w-0 space-y-5">
-      {/* Chevron workflow stepper — above Phase card */}
-      <nav
-        className="w-full overflow-x-auto"
-        aria-label="Workflow steps"
-      >
-        <ol className="relative flex w-full min-w-[720px] list-none sm:min-w-0">
-          {WIZARD_STEPS.map((step, index) => {
-            const status = stepStatus(step.id, index);
-            const unlocked = stepUnlocked(step.id);
-            const segmentFirst = index === 0;
-            const segmentLast = index === WIZARD_STEPS.length - 1;
-            const isActive = status === "current";
-            const isComplete = status === "complete";
-            const isLocked = status === "locked";
-            const tip = 14;
+    <div className="min-w-0 space-y-4">
+      <CaseWorkflowStepper
+        steps={stepperSteps}
+        completedCount={completedCount}
+        nextLabel={nextMeta?.label ?? null}
+        onSelect={(id) => {
+          if (isWizardStepId(id)) goToStep(id);
+        }}
+      />
 
-            const segmentClass = isActive
-              ? "bg-[#1e3a8a] text-white shadow-lg brightness-110"
-              : isComplete
-                ? "bg-emerald-500 text-white hover:bg-emerald-600"
-                : unlocked
-                  ? "bg-slate-100 text-slate-600 hover:bg-slate-200/90"
-                  : "cursor-not-allowed bg-slate-50 text-slate-300";
+      {showNextBanner && nextMeta ? (
+        <PromoBanner
+          title={`Next: ${nextMeta.label}`}
+          description={
+            isWizardStepComplete(currentStep, completionCtx)
+              ? `${currentMeta?.label ?? "This step"} is done. ${nextMeta.description}.`
+              : `${nextMeta.description}. Use Continue when you are ready to move on.`
+          }
+          action={
+            <button type="button" onClick={goNext} className={promoButtonClass}>
+              Continue
+              <BentoIcon name="chevron" className="h-4 w-4" strokeWidth={2} />
+            </button>
+          }
+        />
+      ) : null}
 
-            return (
-              <li
-                key={step.id}
-                className="relative min-w-0 flex-1"
-                style={{
-                  marginLeft: segmentFirst ? 0 : -tip + 2,
-                  zIndex: isActive
-                    ? WIZARD_STEPS.length + 1
-                    : WIZARD_STEPS.length - index,
-                }}
-              >
-                <button
-                  type="button"
-                  disabled={!unlocked}
-                  onClick={() => unlocked && goToStep(step.id)}
-                  aria-current={isActive ? "step" : undefined}
-                  title={
-                    isLocked
-                      ? `${step.label} — locked until previous steps are finished`
-                      : stepBadge(step.id)
-                        ? `${step.label} — ${stepBadge(step.id)}`
-                        : step.description
-                  }
-                  className={`relative flex h-10 w-full items-center justify-center gap-1.5 px-3 text-center text-[11px] font-semibold leading-tight transition-all sm:h-11 sm:px-4 sm:text-xs ${segmentClass}`}
-                  style={{
-                    clipPath: chevronClipPath(segmentFirst, segmentLast, tip),
-                    WebkitClipPath: chevronClipPath(
-                      segmentFirst,
-                      segmentLast,
-                      tip,
-                    ),
-                  }}
+      <div className="grid min-w-0 gap-4 xl:grid-cols-[minmax(0,1fr)_20rem]">
+        <div className="min-w-0 space-y-4">
+          {/* Current step card */}
+          <BentoCard padded={false} className="overflow-hidden" label="Current step">
+            <div className="flex items-start gap-4 px-5 py-5 sm:px-6">
+              <div className="hidden h-12 w-12 shrink-0 items-center justify-center rounded-full bg-blue-50 text-[#007bff] sm:flex">
+                <svg
+                  className="h-6 w-6"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                  aria-hidden
                 >
-                  <span className="relative z-10 flex max-w-full items-center justify-center gap-1 px-1">
-                    {isComplete ? (
-                      <CheckIcon className="hidden h-3 w-3 shrink-0 sm:block" />
-                    ) : isLocked ? (
-                      <LockIcon className="hidden h-3 w-3 shrink-0 sm:block" />
-                    ) : isActive ? (
-                      <span
-                        className="hidden h-1.5 w-1.5 shrink-0 rounded-full bg-white sm:block"
-                        aria-hidden
-                      />
-                    ) : null}
-                    <span className="line-clamp-2">
-                      <span className="sm:hidden">{step.shortLabel}</span>
-                      <span className="hidden sm:inline">{step.label}</span>
-                    </span>
+                  <title>{currentMeta?.label}</title>
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={1.75}
+                    d={STEP_ICONS[currentStep]}
+                  />
+                </svg>
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                  <p className="text-xs font-bold uppercase tracking-wider text-[#007bff]">
+                    Phase {currentMeta?.phase} &middot; Step {currentIndex + 1} of{" "}
+                    {WIZARD_STEPS.length}
+                  </p>
+                  <span className="text-xs font-medium tabular-nums text-slate-400">
+                    {completedCount}/{WIZARD_STEPS.length} complete
                   </span>
-                </button>
-              </li>
-            );
-          })}
-        </ol>
-      </nav>
-      <div className="flex flex-wrap items-center gap-4 text-[11px] text-slate-500">
-        <span className="inline-flex items-center gap-1.5">
-          <span className="h-2.5 w-2.5 rounded-sm bg-[#1e3a8a]" aria-hidden />
-          Current
-        </span>
-        <span className="inline-flex items-center gap-1.5">
-          <span className="h-2.5 w-2.5 rounded-sm bg-emerald-500" aria-hidden />
-          Done
-        </span>
-        <span className="inline-flex items-center gap-1.5">
-          <span className="h-2.5 w-2.5 rounded-sm bg-slate-200" aria-hidden />
-          Upcoming
-        </span>
-        <span className="inline-flex items-center gap-1.5">
-          <span className="h-2.5 w-2.5 rounded-sm bg-slate-50 ring-1 ring-slate-200" aria-hidden />
-          Locked
-        </span>
-      </div>
-
-      {/* Phase card */}
-      <div className="overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-sm">
-        <div className="flex items-start gap-4 px-5 py-5 sm:px-6">
-          <div className="hidden h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-[#007bff] text-white shadow-sm sm:flex">
-            <svg
-              className="h-6 w-6"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-              aria-hidden
-            >
-              <title>{currentMeta?.label}</title>
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={1.75}
-                d={STEP_ICONS[currentStep]}
-              />
-            </svg>
-          </div>
-          <div className="min-w-0 flex-1">
-            <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-              <p className="text-xs font-bold uppercase tracking-wider text-indigo-500">
-                Phase {currentMeta?.phase} · Step {currentIndex + 1}
-              </p>
-              <span className="text-xs font-medium tabular-nums text-slate-400">
-                {completedCount}/{WIZARD_STEPS.length} complete
-              </span>
+                </div>
+                <h2 className="mt-1 text-xl font-bold text-slate-900">
+                  {currentMeta?.label}
+                </h2>
+                <p className="mt-1 text-sm leading-relaxed text-slate-500">
+                  {currentMeta?.description}
+                </p>
+              </div>
             </div>
-            <h2 className="mt-1 text-xl font-bold text-slate-900">
-              {currentMeta?.label}
-            </h2>
-            <p className="mt-1 text-sm leading-relaxed text-slate-500">
-              {currentMeta?.description}
-            </p>
-          </div>
-        </div>
+          </BentoCard>
 
-        <div className="h-1 w-full bg-slate-100" aria-hidden>
-          <div
-            className="h-full bg-[#007bff] transition-[width] duration-300 ease-out"
-            style={{
-              width: `${Math.round(
-                (completedCount / Math.max(WIZARD_STEPS.length, 1)) * 100,
-              )}%`,
-            }}
-          />
-        </div>
-      </div>
+          {!stepUnlocked(currentStep) ? (
+            <LockedStepPanel stepId={currentStep} />
+          ) : (
+            <>
+              <StepHint
+                stepId={currentStep}
+                documents={documents}
+                invoiceLines={invoiceLines}
+                packingLines={packingLines}
+                openCheckCount={openCheckCount}
+                products={products}
+                classifications={classifications}
+                groupings={groupings}
+              />
 
-      {!stepUnlocked(currentStep) ? (
-        <LockedStepPanel stepId={currentStep} />
-      ) : (
-        <>
-          <StepHint
-            stepId={currentStep}
-            documents={documents}
-            invoiceLines={invoiceLines}
-            packingLines={packingLines}
-            openCheckCount={openCheckCount}
-            products={products}
-            classifications={classifications}
-            groupings={groupings}
-          />
-
-          <div className="space-y-6">
-            {currentStep === "case-info" ? (
-              <OverviewTab
-                importCase={importCase}
-                agents={agents}
-                client={client}
-              />
-            ) : null}
-            {currentStep === "documents" ? (
-              <DocumentsTab
-                caseId={importCase.id}
-                initialDocuments={documents}
-              />
-            ) : null}
-            {currentStep === "invoice-lines" ? (
-              <InvoiceLinesTab
-                caseId={importCase.id}
-                invoiceDocuments={invoiceDocuments}
-                initialLines={invoiceLines as never}
-              />
-            ) : null}
-            {currentStep === "packing-lines" ? (
-              <PackingListLinesTab
-                caseId={importCase.id}
-                packingDocuments={packingDocuments}
-                initialLines={packingLines as never}
-              />
-            ) : null}
-            {currentStep === "checks" ? (
-              <ChecksTab caseId={importCase.id} checks={checks} />
-            ) : null}
-            {currentStep === "products" ? (
-              <ProductsTab
-                caseId={importCase.id}
-                initialProducts={products}
-              />
-            ) : null}
-            {currentStep === "classification" ? (
-              <ClassificationTab
-                caseId={importCase.id}
-                initialClassifications={classifications}
-                referencePopulated={referencePopulated}
-              />
-            ) : null}
-            {currentStep === "grouping-export" ? (
-              <GroupingExportTab
-                caseId={importCase.id}
-                caseNumber={importCase.caseNumber}
-                initialGroupings={groupings}
-              />
-            ) : null}
-            {currentStep === "case-history" ? (
-              <CaseHistoryPanel
-                entries={auditLogs}
-                caseNumber={importCase.caseNumber}
-              />
-            ) : null}
-          </div>
+              <div className="space-y-6">
+                {currentStep === "case-info" ? (
+                  <OverviewTab
+                    importCase={importCase}
+                    agents={agents}
+                    client={client}
+                  />
+                ) : null}
+                {currentStep === "documents" ? (
+                  <DocumentsTab
+                    caseId={importCase.id}
+                    initialDocuments={documents}
+                  />
+                ) : null}
+                {currentStep === "invoice-lines" ? (
+                  <InvoiceLinesTab
+                    caseId={importCase.id}
+                    invoiceDocuments={invoiceDocuments}
+                    initialLines={invoiceLines as never}
+                  />
+                ) : null}
+                {currentStep === "packing-lines" ? (
+                  <PackingListLinesTab
+                    caseId={importCase.id}
+                    packingDocuments={packingDocuments}
+                    initialLines={packingLines as never}
+                  />
+                ) : null}
+                {currentStep === "checks" ? (
+                  <ChecksTab caseId={importCase.id} checks={checks} />
+                ) : null}
+                {currentStep === "products" ? (
+                  <ProductsTab
+                    caseId={importCase.id}
+                    initialProducts={products}
+                  />
+                ) : null}
+                {currentStep === "classification" ? (
+                  <ClassificationTab
+                    caseId={importCase.id}
+                    initialClassifications={classifications}
+                    referencePopulated={referencePopulated}
+                  />
+                ) : null}
+                {currentStep === "grouping-export" ? (
+                  <GroupingExportTab
+                    caseId={importCase.id}
+                    caseNumber={importCase.caseNumber}
+                    initialGroupings={groupings}
+                  />
+                ) : null}
+                {currentStep === "case-history" ? (
+                  <CaseHistoryPanel
+                    entries={auditLogs}
+                    caseNumber={importCase.caseNumber}
+                  />
+                ) : null}
+              </div>
 
           {/* End-of-step actions (scroll destination after finishing work) */}
-          <div className="flex flex-wrap items-center gap-3 border-t border-slate-200/80 pt-5">
+          <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-slate-200/70 bg-white px-4 py-3 sm:px-5">
             <DashButton
               variant="secondary"
               onClick={goBack}
@@ -522,64 +495,94 @@ export function ImportCaseWizard({
               Back
             </DashButton>
             {!isLastActive ? (
-              <span
-                title={
-                  currentStepComplete
-                    ? undefined
-                    : "Finish this step before continuing"
-                }
-              >
+              <div className="ml-auto flex flex-wrap items-center justify-end gap-3">
+                {nextMeta ? (
+                  <span className="hidden text-xs text-slate-400 sm:inline">
+                    Next: {nextMeta.label}
+                  </span>
+                ) : null}
                 <DashButton
                   variant="primary"
                   onClick={goNext}
-                  disabled={!currentStepComplete}
                   className="min-w-30"
                 >
                   Continue
-                  <svg
-                    className="h-4 w-4"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                    aria-hidden="true"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M9 5l7 7-7 7"
-                    />
-                  </svg>
-                </DashButton>
-              </span>
+                    <svg
+                      className="h-4 w-4"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                      aria-hidden="true"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M9 5l7 7-7 7"
+                      />
+                    </svg>
+                  </DashButton>
+              </div>
             ) : (
-              <p className="px-2 text-sm font-medium text-emerald-700">
-                Workflow complete — review case history above.
+              <p className="ml-auto px-2 text-sm font-medium text-emerald-700">
+                Workflow complete - review case history above.
               </p>
             )}
           </div>
-        </>
-      )}
+            </>
+          )}
+        </div>
+
+        {/* Side cards */}
+        <aside aria-label="Case sidebar" className="min-w-0 space-y-4">
+          <CaseDetailsCard importCase={importCase} agents={agents} client={client} />
+          <CaseDocumentsCard
+            documents={documents}
+            onManage={() => goToStep("documents")}
+          />
+          {currentStep !== "case-history" ? (
+            <CaseActivityCard
+              entries={auditLogs}
+              onViewAll={
+                stepUnlocked("case-history")
+                  ? () => goToStep("case-history")
+                  : undefined
+              }
+            />
+          ) : null}
+        </aside>
+      </div>
+
+      <Dialog open={continueWarningOpen} onOpenChange={setContinueWarningOpen}>
+        <DialogContent className="max-w-md gap-0 overflow-hidden p-0 sm:max-w-md">
+          <DialogHeader className="border-b border-slate-100 px-5 py-4 text-left">
+            <DialogTitle>Step not fully complete</DialogTitle>
+            <DialogDescription>
+              You can continue anyway, but the following items still need
+              attention on this step:
+            </DialogDescription>
+          </DialogHeader>
+          <ul className="max-h-60 overflow-y-auto px-5 py-4 text-sm text-slate-700 list-disc pl-8 space-y-2">
+            {continueWarnings.map((line) => (
+              <li key={line}>{line}</li>
+            ))}
+          </ul>
+          <DialogFooter className="flex-col-reverse gap-2 border-t border-slate-100 px-5 py-4 sm:flex-row sm:justify-end">
+            <DashButton
+              variant="secondary"
+              type="button"
+              onClick={() => setContinueWarningOpen(false)}
+            >
+              Stay on this step
+            </DashButton>
+            <DashButton type="button" onClick={advanceToNextStep}>
+              Continue anyway
+            </DashButton>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
-}
-
-/** Interlocking chevron segments: pointed right, notched left (except ends). */
-function chevronClipPath(
-  isFirst: boolean,
-  isLast: boolean,
-  tip = 12,
-): string {
-  if (isFirst && isLast) {
-    return "polygon(0 0, 100% 0, 100% 100%, 0 100%)";
-  }
-  if (isFirst) {
-    return `polygon(0% 0%, calc(100% - ${tip}px) 0%, 100% 50%, calc(100% - ${tip}px) 100%, 0% 100%)`;
-  }
-  if (isLast) {
-    return `polygon(0% 0%, 100% 0%, 100% 100%, 0% 100%, ${tip}px 50%)`;
-  }
-  return `polygon(0% 0%, calc(100% - ${tip}px) 0%, 100% 50%, calc(100% - ${tip}px) 100%, 0% 100%, ${tip}px 50%)`;
 }
 
 function StepHint({
@@ -665,9 +668,16 @@ function StepHint({
 
   const isWarning =
     (stepId === "documents" && (!hasInvoice || !hasPacking)) ||
-    (stepId === "invoice-lines" && unreviewedInvoiceCount > 0) ||
-    (stepId === "packing-lines" && unreviewedPackingCount > 0) ||
-    (stepId === "checks" && openCheckCount > 0);
+    (stepId === "invoice-lines" &&
+      (invoiceLines.length === 0 || unreviewedInvoiceCount > 0)) ||
+    (stepId === "packing-lines" &&
+      (packingLines.length === 0 || unreviewedPackingCount > 0)) ||
+    (stepId === "checks" && openCheckCount > 0) ||
+    (stepId === "products" &&
+      (products.length === 0 || unverifiedCount > 0)) ||
+    (stepId === "classification" &&
+      (classifications.length === 0 || unapprovedCount > 0)) ||
+    (stepId === "grouping-export" && groupings.length === 0);
   const isSuccess =
     !isWarning &&
     (stepId === "case-history" ||

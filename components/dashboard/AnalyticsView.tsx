@@ -1,11 +1,26 @@
 import { AnalyticsBreakdownBars } from "@/components/dashboard/AnalyticsBreakdownBars";
 import { AnalyticsDateFilter } from "@/components/dashboard/AnalyticsDateFilter";
-import { DashboardStatCard } from "@/components/dashboard/DashboardStatCard";
-import { DashboardStatusChart } from "@/components/dashboard/DashboardStatusChart";
-import { DashboardUploadsChart } from "@/components/dashboard/DashboardUploadsChart";
+import { AreaTrendChart } from "@/components/dashboard/bento/AreaTrendChart";
 import {
-  DashCard,
-  DashCardHeader,
+  BentoCard,
+  BentoCardHeader,
+  BentoEmpty,
+  BentoListRow,
+  KpiRingTile,
+  KpiSparkTile,
+  KpiTile,
+  PeriodPill,
+  PromoBanner,
+  PromoLink,
+} from "@/components/dashboard/bento/BentoCard";
+import {
+  BENTO_COLORS,
+  RingChart,
+  RingLegend,
+  StackedBarChart,
+} from "@/components/dashboard/bento/charts";
+import { BentoIcon } from "@/components/dashboard/bento/icons";
+import {
   DashLink,
   DashTable,
   DashTableAction,
@@ -24,13 +39,22 @@ import {
   formatRangeLabel,
 } from "@/lib/dashboard-analytics-utils";
 import {
+  buildOutcomeSeries,
+  type OutcomeDayRow,
+  pctChange,
+  sum,
+} from "@/lib/dashboard-bento-utils";
+import {
   IMPORT_CASE_STATUS_LABELS,
   type ImportCaseStatus,
 } from "@/lib/import-cases/constants";
-import type { ImportCasesAnalyticsData } from "@/lib/import-cases-analytics";
+import type {
+  ClassificationTotals,
+  ImportCasesAnalyticsData,
+} from "@/lib/import-cases-analytics";
 
 function formatDocDate(d: Date | null): string {
-  if (!d) return "—";
+  if (!d) return "-";
   return new Date(d).toLocaleDateString("en-US", {
     month: "short",
     day: "numeric",
@@ -44,7 +68,7 @@ function formatImportCaseStatus(status: string | null): string {
 }
 
 function formatMoney(value: number): string {
-  if (!value) return "—";
+  if (!value) return "-";
   if (value >= 1_000_000) {
     return `${(value / 1_000_000).toFixed(1)}M`;
   }
@@ -61,14 +85,14 @@ function clientDisplayName(fullName: string | null, email: string): string {
 }
 
 const CLIENT_BAR_COLORS = [
-  "#7c3aed",
-  "#4f46e5",
-  "#0ea5e9",
-  "#10b981",
-  "#f59e0b",
-  "#f43f5e",
-  "#6366f1",
+  BENTO_COLORS.brand,
+  BENTO_COLORS.indigo,
+  BENTO_COLORS.sky,
+  BENTO_COLORS.success,
+  BENTO_COLORS.warning,
+  BENTO_COLORS.muted,
   "#14b8a6",
+  "#64748b",
 ];
 
 type AnalyticsViewProps = {
@@ -76,6 +100,13 @@ type AnalyticsViewProps = {
   toKey: string;
   importCasesData: ImportCasesAnalyticsData;
   clientsData: ClientsAnalyticsData;
+  /** Cases per day by outcome for the selected range (null when unavailable). */
+  currentOutcomes: OutcomeDayRow[] | null;
+  /** Same, for the equally long period right before the range. */
+  previousOutcomes: OutcomeDayRow[] | null;
+  previousFromKey: string;
+  previousToKey: string;
+  classification: ClassificationTotals | null;
 };
 
 export function AnalyticsView({
@@ -83,27 +114,43 @@ export function AnalyticsView({
   toKey,
   importCasesData,
   clientsData,
+  currentOutcomes,
+  previousOutcomes,
+  previousFromKey,
+  previousToKey,
+  classification,
 }: AnalyticsViewProps) {
-  const importCaseSeries = buildDateRangeUploadSeries(
-    importCasesData.casesByDay,
-    new Date(`${fromKey}T00:00:00`),
-    new Date(`${toKey}T00:00:00`),
-  );
   const clientsSeries = buildDateRangeUploadSeries(
     clientsData.clientsByDay,
     new Date(`${fromKey}T00:00:00`),
     new Date(`${toKey}T00:00:00`),
   );
-  const importCasePeriodTotal = importCaseSeries.reduce(
-    (s, d) => s + d.count,
-    0,
-  );
-  const importCaseCompletionRate =
-    importCasesData.totalCount > 0
-      ? Math.round(
-          (importCasesData.completedCount / importCasesData.totalCount) * 100,
-        )
-      : 0;
+
+  const current = currentOutcomes
+    ? buildOutcomeSeries(currentOutcomes, fromKey, toKey)
+    : null;
+  const previous = previousOutcomes
+    ? buildOutcomeSeries(previousOutcomes, previousFromKey, previousToKey)
+    : null;
+  const comparable =
+    current !== null &&
+    previous !== null &&
+    current.labels.length === previous.labels.length;
+
+  const periodTotal = current ? sum(current.total) : null;
+  const prevTotals = previous
+    ? {
+        total: sum(previous.total),
+        completed: sum(previous.completed),
+        inProgress: sum(previous.inProgress),
+        cancelled: sum(previous.cancelled),
+      }
+    : null;
+
+  const { totalCount, completedCount, inProgressCount, cancelledCount } =
+    importCasesData;
+  const completionRate =
+    totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0;
   const clientAdoptionRate =
     clientsData.totalClients > 0
       ? Math.round(
@@ -111,6 +158,28 @@ export function AnalyticsView({
         )
       : 0;
   const rangeLabel = formatRangeLabel(fromKey, toKey);
+
+  const outcomeRows = [
+    {
+      label: "Completed",
+      value: completedCount,
+      color: BENTO_COLORS.success,
+      delta: prevTotals ? pctChange(completedCount, prevTotals.completed) : null,
+    },
+    {
+      label: "In progress",
+      value: inProgressCount,
+      color: BENTO_COLORS.brand,
+      delta: prevTotals ? pctChange(inProgressCount, prevTotals.inProgress) : null,
+    },
+    {
+      label: "Cancelled",
+      value: cancelledCount,
+      color: BENTO_COLORS.danger,
+      delta: prevTotals ? pctChange(cancelledCount, prevTotals.cancelled) : null,
+      invertDelta: true,
+    },
+  ];
 
   const topClientRows = clientsData.topClients.map((c, i) => ({
     label: clientDisplayName(c.fullName, c.email),
@@ -122,12 +191,12 @@ export function AnalyticsView({
     {
       label: "Active this period",
       count: clientsData.activeClientsInRange,
-      color: "#7c3aed",
+      color: BENTO_COLORS.brand,
     },
     {
       label: "No cases in range",
       count: clientsData.clientsWithoutCases,
-      color: "#94a3b8",
+      color: BENTO_COLORS.muted,
     },
   ].filter((r) => r.count > 0);
 
@@ -135,367 +204,328 @@ export function AnalyticsView({
     {
       label: "Linked to a client",
       count: clientsData.casesWithClient,
-      color: "#4f46e5",
+      color: BENTO_COLORS.indigo,
     },
     {
       label: "Unassigned",
       count: clientsData.casesWithoutClient,
-      color: "#f59e0b",
+      color: BENTO_COLORS.warning,
     },
   ].filter((r) => r.count > 0);
 
   return (
-    <div className="w-full min-w-0 space-y-6">
-      {/* Hero */}
-      <div className="relative overflow-hidden rounded-3xl border border-slate-200/70 bg-white shadow-[0_8px_40px_-12px_rgba(15,23,42,0.1)]">
-        <div className="pointer-events-none absolute inset-0" aria-hidden>
-          <div className="absolute -right-20 -top-20 h-56 w-56 rounded-full bg-violet-400/15 blur-3xl" />
-          <div className="absolute -bottom-16 left-1/3 h-48 w-48 rounded-full bg-indigo-400/10 blur-3xl" />
-        </div>
-        <div className="relative px-5 py-5 sm:px-7 sm:py-6">
-          <p className="text-[11px] font-bold uppercase tracking-widest text-violet-600">
-            Insights
-          </p>
-          <h1 className="mt-1 text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">
-            Analytics
-          </h1>
-          <p className="mt-1.5 text-sm text-slate-500">
-            {rangeLabel} — import case volume, client usage, and operational
-            impact across Impact Logistics.
-          </p>
-
-          <div className="mt-5 grid grid-cols-2 gap-3 sm:max-w-3xl sm:grid-cols-4">
-            <div className="rounded-2xl border border-slate-200/60 bg-white/80 px-4 py-3">
-              <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                Import cases
-              </p>
-              <p className="mt-0.5 text-xl font-bold tabular-nums text-violet-700">
-                {importCasesData.totalCount}
-              </p>
-            </div>
-            <div className="rounded-2xl border border-slate-200/60 bg-white/80 px-4 py-3">
-              <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                Case completion
-              </p>
-              <p className="mt-0.5 text-xl font-bold tabular-nums text-emerald-700">
-                {importCaseCompletionRate}%
-              </p>
-            </div>
-            <div className="rounded-2xl border border-slate-200/60 bg-white/80 px-4 py-3">
-              <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                Clients
-              </p>
-              <p className="mt-0.5 text-xl font-bold tabular-nums text-indigo-700">
-                {clientsData.totalClients}
-              </p>
-            </div>
-            <div className="rounded-2xl border border-slate-200/60 bg-white/80 px-4 py-3">
-              <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                Client adoption
-              </p>
-              <p className="mt-0.5 text-xl font-bold tabular-nums text-emerald-700">
-                {clientAdoptionRate}%
-              </p>
-            </div>
-          </div>
-        </div>
+    <div className="w-full min-w-0 space-y-4">
+      <div className="min-w-0">
+        <p className="text-[11px] font-bold uppercase tracking-widest text-[#007bff]">
+          Insights
+        </p>
+        <h1 className="mt-1 text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">
+          Analytics
+        </h1>
+        <p className="mt-1.5 text-sm text-slate-500">
+          {rangeLabel} &mdash; import case volume, client usage, and operational
+          impact across Impact Logistics.
+        </p>
       </div>
 
       <AnalyticsDateFilter from={fromKey} to={toKey} />
 
-      {/* Import cases */}
-      <div>
-        <div className="mb-4 flex items-center justify-between gap-3">
-          <div>
-            <h2 className="text-lg font-bold text-slate-900">Import cases</h2>
-            <p className="text-sm text-slate-500">
-              Cases created in the selected date range
-            </p>
-          </div>
-          {importCasesData.totalCount > 0 ? (
-            <DashLink href="/dashboard/import-cases">View all →</DashLink>
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-12">
+        {/* Left column */}
+        <div className="grid min-w-0 content-start gap-4 sm:grid-cols-2 lg:col-span-3 lg:grid-cols-1">
+          <BentoCard className="sm:col-span-2 lg:col-span-1" label="Case outcomes">
+            <BentoCardHeader title="Case outcomes" action={<PeriodPill>{rangeLabel}</PeriodPill>} />
+            <div className="flex justify-center py-2">
+              <RingChart
+                segments={outcomeRows}
+                centerValue={`${completionRate}%`}
+                centerLabel="Complete"
+                ariaLabel={`Case outcomes in range: ${completedCount} completed, ${inProgressCount} in progress, ${cancelledCount} cancelled`}
+              />
+            </div>
+            <div className="mt-4">
+              <RingLegend rows={outcomeRows} />
+            </div>
+          </BentoCard>
+          <KpiTile
+            label="Cases in range"
+            value={totalCount.toLocaleString()}
+            icon="cases"
+            tone="blue"
+            delta={prevTotals && periodTotal !== null ? pctChange(periodTotal, prevTotals.total) : null}
+            hint={periodTotal !== null ? `${periodTotal} in chart` : undefined}
+          />
+          <KpiRingTile
+            label="Completion rate"
+            value={completedCount.toLocaleString()}
+            percent={completionRate}
+            tone="green"
+            hint="Cases completed"
+          />
+          {classification && classification.products > 0 ? (
+            <KpiRingTile
+              label="Items classified"
+              value={classification.classified.toLocaleString()}
+              percent={(classification.classified / classification.products) * 100}
+              tone="blue"
+              hint={`of ${classification.products.toLocaleString()} extracted items`}
+            />
           ) : null}
         </div>
 
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          <DashboardStatCard
-            label="Cases in range"
-            value={importCasesData.totalCount}
-            hint={`${importCasePeriodTotal} in chart`}
-            accent="violet"
-            icon={
-              <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
-                <title>Cases</title>
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
-              </svg>
+        {/* Centre column */}
+        <div className="min-w-0 space-y-4 lg:col-span-6">
+          {current ? (
+            <BentoCard label="Import case volume">
+              <BentoCardHeader
+                title="Import case volume"
+                action={<PeriodPill>{current.granularity === "weekly" ? "Weekly" : "Daily"}</PeriodPill>}
+              />
+              <AreaTrendChart
+                labels={current.labels}
+                ariaLabel="Import cases created, selected period compared with the previous period"
+                series={[
+                  ...(comparable && previous
+                    ? [
+                        {
+                          name: "Previous period",
+                          color: BENTO_COLORS.muted,
+                          values: previous.total,
+                          dashed: true,
+                        },
+                      ]
+                    : []),
+                  {
+                    name: "This period",
+                    color: BENTO_COLORS.brand,
+                    values: current.total,
+                    fill: true,
+                  },
+                ]}
+                emptyMessage="No import cases created in this range."
+              />
+            </BentoCard>
+          ) : null}
+
+          <PromoBanner
+            title="Dig into the cases behind the numbers"
+            description="Open the import case list to review statuses, importers, and classification progress."
+            action={
+              <PromoLink href="/dashboard/import-cases">
+                View import cases
+                <BentoIcon name="chevron" className="h-4 w-4" strokeWidth={2} />
+              </PromoLink>
             }
           />
-          <DashboardStatCard
-            label="Completed"
-            value={importCasesData.completedCount}
-            hint={`${importCaseCompletionRate}% completion rate`}
-            accent="green"
-            icon={
-              <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
-                <title>Completed</title>
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-            }
+
+          {current ? (
+            <BentoCard label="Outcome by day">
+              <BentoCardHeader
+                title={current.granularity === "weekly" ? "Outcome by week" : "Outcome by day"}
+                action={<PeriodPill>{rangeLabel}</PeriodPill>}
+              />
+              <StackedBarChart
+                labels={current.labels}
+                ariaLabel="Import cases created by outcome"
+                series={[
+                  { name: "Completed", color: BENTO_COLORS.success, values: current.completed },
+                  { name: "In progress", color: BENTO_COLORS.brand, values: current.inProgress },
+                  { name: "Cancelled", color: BENTO_COLORS.danger, values: current.cancelled },
+                ]}
+              />
+            </BentoCard>
+          ) : null}
+        </div>
+
+        {/* Right column */}
+        <div className="grid min-w-0 content-start gap-4 sm:grid-cols-2 lg:col-span-3 lg:grid-cols-1">
+          {current && periodTotal !== null ? (
+            <KpiSparkTile
+              label="Cases created"
+              value={periodTotal}
+              values={current.total}
+              delta={prevTotals ? pctChange(periodTotal, prevTotals.total) : null}
+              tone="blue"
+              hint="Compared with the previous period"
+            />
+          ) : null}
+          <KpiTile
+            label="Clients in system"
+            value={clientsData.totalClients.toLocaleString()}
+            icon="users"
+            tone="indigo"
+            hint={`${clientsData.newClientsInRange} new in range`}
           />
-          <DashboardStatCard
-            label="In progress"
-            value={importCasesData.inProgressCount}
-            hint="Extraction or classification"
-            accent="blue"
-            icon={
-              <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
-                <title>In progress</title>
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-            }
+          <KpiRingTile
+            label="Active clients"
+            value={clientsData.activeClientsInRange.toLocaleString()}
+            percent={clientAdoptionRate}
+            tone="blue"
+            hint={`${clientAdoptionRate}% of all clients`}
           />
-          <DashboardStatCard
-            label="Cancelled"
-            value={importCasesData.cancelledCount}
-            hint={importCasesData.cancelledCount > 0 ? "Review cases" : "None cancelled"}
-            accent={importCasesData.cancelledCount > 0 ? "red" : "default"}
-            icon={
-              <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
-                <title>Cancelled</title>
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            }
+          <KpiTile
+            label="Avg cases / client"
+            value={clientsData.avgCasesPerActiveClient}
+            icon="chart"
+            tone="green"
+            hint={`${clientsData.casesWithClient} linked cases`}
+          />
+          <KpiTile
+            label="Invoice value"
+            value={formatMoney(clientsData.totalInvoiceValue)}
+            icon="money"
+            tone="amber"
+            hint="From client-linked cases"
           />
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-5">
-        <DashCard className="lg:col-span-3">
-          <DashCardHeader
-            title="Import case volume"
-            action={
-              <span className="rounded-full bg-violet-50 px-2.5 py-1 text-xs font-semibold text-violet-700">
-                {importCaseSeries.length > 14 ? "Weekly" : "Daily"}
-              </span>
-            }
+      {/* Clients */}
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-12">
+        <BentoCard className="lg:col-span-7" label="New clients over time">
+          <BentoCardHeader
+            title="New clients over time"
+            action={<PeriodPill>{clientsSeries.length > 14 ? "Weekly" : "Daily"}</PeriodPill>}
           />
-          <div className="overflow-x-auto px-5 py-5 sm:px-6 sm:pb-6">
-            <DashboardUploadsChart
-              data={importCaseSeries}
-              granularity={importCaseSeries.length > 14 ? "weekly" : "daily"}
-            />
-          </div>
-        </DashCard>
+          <AreaTrendChart
+            labels={clientsSeries.map((p) => p.label)}
+            ariaLabel="New clients over time"
+            unit="clients"
+            series={[
+              {
+                name: "New clients",
+                color: BENTO_COLORS.indigo,
+                values: clientsSeries.map((p) => p.count),
+                fill: true,
+              },
+            ]}
+            emptyMessage="No new clients in this range."
+          />
+        </BentoCard>
 
-        <DashCard className="lg:col-span-2">
-          <DashCardHeader title="Case status breakdown" />
-          <div className="px-5 py-5 sm:px-6 sm:pb-6">
-            <DashboardStatusChart
-              items={importCasesData.statusBreakdown}
-              variant="import-cases"
-            />
-          </div>
-        </DashCard>
+        <BentoCard className="lg:col-span-5" label="Client engagement">
+          <BentoCardHeader title="Client engagement" />
+          <AnalyticsBreakdownBars
+            title="Who is using imports"
+            rows={engagementRows}
+            emptyMessage="No clients in the system yet."
+          />
+        </BentoCard>
+
+        <BentoCard className="lg:col-span-6" label="Top clients by import cases">
+          <BentoCardHeader title="Top clients by import cases" />
+          <AnalyticsBreakdownBars
+            title="Cases in range"
+            rows={topClientRows}
+            emptyMessage="No client-linked import cases in this range."
+          />
+        </BentoCard>
+
+        <BentoCard className="lg:col-span-6" label="Case and client coverage">
+          <BentoCardHeader title="Case & client coverage" />
+          <AnalyticsBreakdownBars
+            title="Assignment"
+            rows={caseCoverageRows}
+            emptyMessage="No import cases in this range."
+          />
+        </BentoCard>
       </div>
 
-      <DashCard>
-        <DashCardHeader
+      {/* Import cases list */}
+      <BentoCard padded={false} label="Import cases in selected range">
+        <BentoCardHeader
+          inset
           title="Import cases in selected range"
           action={
             importCasesData.recentInRange.length > 0 ? (
-              <DashLink href="/dashboard/import-cases">View all →</DashLink>
+              <DashLink href="/dashboard/import-cases">View all &rarr;</DashLink>
             ) : undefined
           }
         />
-        <DashTable>
-          <DashTableHead>
-            <DashTableHeaderRow>
-              <DashTh>Case #</DashTh>
-              <DashTh>Importer</DashTh>
-              <DashTh>Supplier</DashTh>
-              <DashTh className="w-28">Date</DashTh>
-              <DashTh className="w-40">Status</DashTh>
-              <DashTh align="right" className="w-20">
-                Action
-              </DashTh>
-            </DashTableHeaderRow>
-          </DashTableHead>
-          <DashTbody>
-            {importCasesData.recentInRange.length === 0 ? (
-              <DashTableEmpty colSpan={6} className="p-0">
-                <div className="flex flex-col items-center justify-center px-6 py-14 text-center">
-                  <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-100 text-slate-400">
-                    <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                      <title>No import cases</title>
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
-                    </svg>
-                  </div>
-                  <p className="font-semibold text-slate-800">No import cases in this range</p>
-                  <p className="mt-1 text-sm text-slate-500">
-                    Try expanding the date filter or create a new import case.
-                  </p>
-                </div>
-              </DashTableEmpty>
-            ) : (
-              importCasesData.recentInRange.map((item) => (
-                <DashTr key={item.id}>
-                  <DashTd className="max-w-[160px] truncate font-semibold text-gray-900 sm:max-w-xs">
-                    {item.caseNumber}
-                  </DashTd>
-                  <DashTd>{item.importerName ?? "—"}</DashTd>
-                  <DashTd>{item.supplierName ?? "—"}</DashTd>
-                  <DashTd muted nowrap>
-                    {formatDocDate(item.createdAt)}
-                  </DashTd>
-                  <DashTd>
+        {importCasesData.recentInRange.length === 0 ? (
+          <BentoEmpty
+            icon="cases"
+            title="No import cases in this range"
+            description="Try expanding the date filter or create a new import case."
+          />
+        ) : (
+          <>
+            <ul className="divide-y divide-slate-100 px-2 pb-3 sm:hidden">
+              {importCasesData.recentInRange.map((item) => (
+                <BentoListRow
+                  key={item.id}
+                  href={`/dashboard/import-cases/${item.id}`}
+                  title={item.caseNumber}
+                  subtitle={[item.importerName, formatDocDate(item.createdAt)]
+                    .filter(Boolean)
+                    .join(" \u00b7 ")}
+                  pill={
                     <StatusBadge
                       status={item.status}
                       label={formatImportCaseStatus(item.status)}
                     />
-                  </DashTd>
-                  <DashTd align="right">
-                    <DashTableAction href={`/dashboard/import-cases/${item.id}`}>
-                      Open
-                      <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                        <title>Open case</title>
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                      </svg>
-                    </DashTableAction>
-                  </DashTd>
-                </DashTr>
-              ))
-            )}
-          </DashTbody>
-        </DashTable>
-      </DashCard>
+                  }
+                />
+              ))}
+            </ul>
+            <div className="hidden sm:block">
+              <DashTable>
+                <DashTableHead>
+                  <DashTableHeaderRow>
+                    <DashTh>Case #</DashTh>
+                    <DashTh>Importer</DashTh>
+                    <DashTh>Supplier</DashTh>
+                    <DashTh className="w-28">Date</DashTh>
+                    <DashTh className="w-40">Status</DashTh>
+                    <DashTh align="right" className="w-20">
+                      Action
+                    </DashTh>
+                  </DashTableHeaderRow>
+                </DashTableHead>
+                <DashTbody>
+                  {importCasesData.recentInRange.map((item) => (
+                    <DashTr key={item.id}>
+                      <DashTd className="max-w-[160px] truncate font-semibold text-gray-900 sm:max-w-xs">
+                        {item.caseNumber}
+                      </DashTd>
+                      <DashTd>{item.importerName ?? "-"}</DashTd>
+                      <DashTd>{item.supplierName ?? "-"}</DashTd>
+                      <DashTd muted nowrap>
+                        {formatDocDate(item.createdAt)}
+                      </DashTd>
+                      <DashTd>
+                        <StatusBadge
+                          status={item.status}
+                          label={formatImportCaseStatus(item.status)}
+                        />
+                      </DashTd>
+                      <DashTd align="right">
+                        <DashTableAction href={`/dashboard/import-cases/${item.id}`}>
+                          Open
+                          <BentoIcon name="chevron" className="h-3.5 w-3.5" strokeWidth={2} />
+                        </DashTableAction>
+                      </DashTd>
+                    </DashTr>
+                  ))}
+                </DashTbody>
+              </DashTable>
+            </div>
+          </>
+        )}
+      </BentoCard>
 
-      {/* Clients */}
-      <div className="pt-2">
-        <div className="mb-4 flex items-center justify-between gap-3">
-          <div>
-            <h2 className="text-lg font-bold text-slate-900">
-              Client usage &amp; import impact
-            </h2>
-            <p className="text-sm text-slate-500">
-              Clients in the system and how they drive import case volume
-            </p>
-          </div>
-          {clientsData.totalClients > 0 ? (
-            <DashLink href="/dashboard/users">Manage clients →</DashLink>
-          ) : null}
-        </div>
-
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          <DashboardStatCard
-            label="Clients in system"
-            value={clientsData.totalClients}
-            hint={`${clientsData.newClientsInRange} new in range`}
-            accent="violet"
-            icon={
-              <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
-                <title>Clients</title>
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17 20h5v-2a4 4 0 00-4-4h-1m-4 6v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2h5m4 0H9m4-10a4 4 0 11-8 0 4 4 0 018 0zm10 0a4 4 0 11-8 0 4 4 0 018 0z" />
-              </svg>
-            }
-          />
-          <DashboardStatCard
-            label="Active clients"
-            value={clientsData.activeClientsInRange}
-            hint={`${clientAdoptionRate}% of all clients`}
-            accent="green"
-            icon={
-              <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
-                <title>Active</title>
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
-              </svg>
-            }
-          />
-          <DashboardStatCard
-            label="Avg cases / client"
-            value={clientsData.avgCasesPerActiveClient}
-            hint={`${clientsData.casesWithClient} linked cases`}
-            accent="blue"
-            icon={
-              <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
-                <title>Average</title>
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z" />
-              </svg>
-            }
-          />
-          <DashboardStatCard
-            label="Invoice value"
-            value={formatMoney(clientsData.totalInvoiceValue)}
-            hint="From client-linked cases"
-            accent="amber"
-            icon={
-              <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
-                <title>Invoice</title>
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-            }
-          />
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-5">
-        <DashCard className="lg:col-span-3">
-          <DashCardHeader
-            title="New clients over time"
-            action={
-              <span className="rounded-full bg-indigo-50 px-2.5 py-1 text-xs font-semibold text-indigo-700">
-                {clientsSeries.length > 14 ? "Weekly" : "Daily"}
-              </span>
-            }
-          />
-          <div className="overflow-x-auto px-5 py-5 sm:px-6 sm:pb-6">
-            <DashboardUploadsChart
-              data={clientsSeries}
-              granularity={clientsSeries.length > 14 ? "weekly" : "daily"}
-            />
-          </div>
-        </DashCard>
-
-        <DashCard className="lg:col-span-2">
-          <DashCardHeader title="Client engagement" />
-          <div className="px-5 py-5 sm:px-6 sm:pb-6">
-            <AnalyticsBreakdownBars
-              title="Who is using imports"
-              rows={engagementRows}
-              emptyMessage="No clients in the system yet."
-            />
-          </div>
-        </DashCard>
-      </div>
-
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-        <DashCard>
-          <DashCardHeader title="Top clients by import cases" />
-          <div className="px-5 py-5 sm:px-6 sm:pb-6">
-            <AnalyticsBreakdownBars
-              title="Cases in range"
-              rows={topClientRows}
-              emptyMessage="No client-linked import cases in this range."
-            />
-          </div>
-        </DashCard>
-        <DashCard>
-          <DashCardHeader title="Case ↔ client coverage" />
-          <div className="px-5 py-5 sm:px-6 sm:pb-6">
-            <AnalyticsBreakdownBars
-              title="Assignment"
-              rows={caseCoverageRows}
-              emptyMessage="No import cases in this range."
-            />
-          </div>
-        </DashCard>
-      </div>
-
-      <DashCard>
-        <DashCardHeader
+      <BentoCard padded={false} label="Clients driving import volume">
+        <BentoCardHeader
+          inset
           title="Clients driving import volume"
           action={
-            clientsData.topClients.length > 0 ? (
-              <DashLink href="/dashboard/import-cases">View cases →</DashLink>
+            clientsData.totalClients > 0 ? (
+              <span className="flex items-center gap-4">
+                {clientsData.topClients.length > 0 ? (
+                  <DashLink href="/dashboard/import-cases">View cases &rarr;</DashLink>
+                ) : null}
+                <DashLink href="/dashboard/users">Manage clients &rarr;</DashLink>
+              </span>
             ) : undefined
           }
         />
@@ -507,28 +537,18 @@ export function AnalyticsView({
               <DashTh className="w-24">Cases</DashTh>
               <DashTh className="w-28">Completed</DashTh>
               <DashTh className="w-28">In progress</DashTh>
-              <DashTh className="w-28">Invoice Σ</DashTh>
+              <DashTh className="w-28">Invoice value</DashTh>
               <DashTh className="w-28">Last case</DashTh>
             </DashTableHeaderRow>
           </DashTableHead>
           <DashTbody>
             {clientsData.topClients.length === 0 ? (
               <DashTableEmpty colSpan={7} className="p-0">
-                <div className="flex flex-col items-center justify-center px-6 py-14 text-center">
-                  <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-100 text-slate-400">
-                    <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                      <title>No active clients</title>
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17 20h5v-2a4 4 0 00-4-4h-1m-4 6v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2h5m4 0H9m4-10a4 4 0 11-8 0 4 4 0 018 0zm10 0a4 4 0 11-8 0 4 4 0 018 0z" />
-                    </svg>
-                  </div>
-                  <p className="font-semibold text-slate-800">
-                    No active clients in this range
-                  </p>
-                  <p className="mt-1 text-sm text-slate-500">
-                    Invite clients and link them to import cases to see usage
-                    impact here.
-                  </p>
-                </div>
+                <BentoEmpty
+                  icon="users"
+                  title="No active clients in this range"
+                  description="Invite clients and link them to import cases to see usage impact here."
+                />
               </DashTableEmpty>
             ) : (
               clientsData.topClients.map((client) => (
@@ -545,7 +565,7 @@ export function AnalyticsView({
                   <DashTd className="tabular-nums text-emerald-700">
                     {client.completedCases}
                   </DashTd>
-                  <DashTd className="tabular-nums text-indigo-700">
+                  <DashTd className="tabular-nums text-[#007bff]">
                     {client.inProgressCases}
                   </DashTd>
                   <DashTd className="tabular-nums">
@@ -559,11 +579,11 @@ export function AnalyticsView({
             )}
           </DashTbody>
         </DashTable>
-      </DashCard>
+      </BentoCard>
 
       {clientsData.totalClients > 0 && clientsData.topClients.length === 0 ? (
-        <DashCard>
-          <DashCardHeader title="All clients in system" />
+        <BentoCard padded={false} label="All clients in system">
+          <BentoCardHeader inset title="All clients in system" />
           <DashTable>
             <DashTableHead>
               <DashTableHeaderRow>
@@ -587,9 +607,7 @@ export function AnalyticsView({
                   <DashTd>
                     <StatusBadge
                       status={client.status}
-                      label={
-                        client.status === "active" ? "Active" : client.status
-                      }
+                      label={client.status === "active" ? "Active" : client.status}
                     />
                   </DashTd>
                   <DashTd className="tabular-nums">{client.casesInRange}</DashTd>
@@ -597,7 +615,7 @@ export function AnalyticsView({
               ))}
             </DashTbody>
           </DashTable>
-        </DashCard>
+        </BentoCard>
       ) : null}
     </div>
   );

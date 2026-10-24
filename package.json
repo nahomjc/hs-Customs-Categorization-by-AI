@@ -12,7 +12,11 @@
 		"db:migrate": "drizzle-kit migrate",
 		"db:introspect": "drizzle-kit pull",
 		"db:studio": "drizzle-kit studio",
-		"test:hs-code-search": "npx tsx --env-file=.env scripts/test-hs-code-search.ts"
+		"db:seed-notes": "npx tsx --env-file=.env scripts/seed-chapter-notes.ts",
+		"test:hs-code-search": "npx tsx --env-file=.env scripts/test-hs-code-search.ts",
+		"test:column-mapping": "npx tsx scripts/test-column-mapping.ts",
+		"test:dashboard-map": "npx tsx scripts/test-dashboard-map.ts",
+		"test:progress-pagination": "npx tsx scripts/test-progress-pagination.ts"
 	},
 	"dependencies": {
 		"@aws-sdk/client-s3": "^3.1121.0",

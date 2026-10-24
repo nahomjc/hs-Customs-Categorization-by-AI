@@ -1,31 +1,46 @@
-import Link from "next/link";
 import {
-  buildLast7DaysUploadSeries,
-  DashboardUploadsChart,
-} from "@/components/dashboard/DashboardUploadsChart";
-import { DashboardStatCard } from "@/components/dashboard/DashboardStatCard";
-import { DashboardStatusChart } from "@/components/dashboard/DashboardStatusChart";
+  BentoCard,
+  BentoCardHeader,
+  BentoEmpty,
+  KpiRingTile,
+  KpiSparkTile,
+  PeriodPill,
+} from "@/components/dashboard/bento/BentoCard";
 import {
-  DashButton,
-  DashCard,
-  DashCardHeader,
-  DashLink,
-  DashTable,
-  DashTableAction,
-  DashTableEmpty,
-  DashTableHead,
-  DashTableHeaderRow,
-  DashTbody,
-  DashTd,
-  DashTh,
-  DashTr,
-  StatusBadge,
-} from "@/components/dashboard/ui";
+  AmountListRow,
+  GradientHeroCard,
+  KpiProgressTile,
+  StatList,
+} from "@/components/dashboard/bento/DashboardCards";
+import { BENTO_COLORS } from "@/components/dashboard/bento/charts";
+import { DonutChart, DonutLegend } from "@/components/dashboard/bento/DonutChart";
+import { BentoIcon } from "@/components/dashboard/bento/icons";
+import { SourceCountryMap } from "@/components/dashboard/map/SourceCountryMap";
+import { DashButton, DashLink, StatusBadge } from "@/components/dashboard/ui";
+import {
+  buildOutcomeSeries,
+  pctChange,
+  shiftKey,
+  sum,
+  todayKeyUtc,
+} from "@/lib/dashboard-bento-utils";
+import {
+  formatShare,
+  summarizeSourceCountries,
+  weeklySeries,
+} from "@/lib/dashboard-map-utils";
 import {
   IMPORT_CASE_STATUS_LABELS,
   type ImportCaseStatus,
 } from "@/lib/import-cases/constants";
-import { fetchImportCasesAnalytics } from "@/lib/import-cases-analytics";
+import {
+  fetchCasesBySourceCountry,
+  fetchClassificationTotals,
+  fetchImportCaseOutcomesByDay,
+  fetchImportCasesAnalytics,
+  fetchInvoiceValueByCurrency,
+  fetchSourceCountryWeekly,
+} from "@/lib/import-cases-analytics";
 import { getTenantId } from "@/lib/import-cases/queries";
 
 function formatImportCaseStatus(status: string | null): string {
@@ -34,7 +49,7 @@ function formatImportCaseStatus(status: string | null): string {
 }
 
 function formatDate(d: Date | null): string {
-  if (!d) return "—";
+  if (!d) return "-";
   const date = new Date(d);
   const now = new Date();
   const diffMs = now.getTime() - date.getTime();
@@ -45,314 +60,307 @@ function formatDate(d: Date | null): string {
   return date.toLocaleDateString();
 }
 
+function formatMoney(amount: number, currency: string): string {
+  try {
+    return new Intl.NumberFormat("en-US", {
+      style: "currency",
+      currency,
+      maximumFractionDigits: 0,
+    }).format(amount);
+  } catch {
+    return `${currency} ${Math.round(amount).toLocaleString("en-US")}`;
+  }
+}
+
+function formatCaseAmount(
+  amount: string | null,
+  currency: string | null,
+): string | null {
+  if (amount === null || !currency?.trim()) return null;
+  const n = Number(amount);
+  if (!Number.isFinite(n)) return null;
+  return formatMoney(n, currency.trim().toUpperCase());
+}
+
 export async function DashboardOverview() {
   const tenantId = getTenantId();
-  const importCasesData = await fetchImportCasesAnalytics(tenantId);
+  const todayKey = todayKeyUtc();
+  const weekFromKey = shiftKey(todayKey, -6);
+  const prevToKey = shiftKey(todayKey, -7);
+  const prevFromKey = shiftKey(todayKey, -13);
 
-  const importCaseUploadSeries = buildLast7DaysUploadSeries(
-    importCasesData.casesByDay,
-  );
-  const importCaseWeekTotal = importCaseUploadSeries.reduce(
-    (s, d) => s + d.count,
+  const [
+    importCasesData,
+    outcomeRows,
+    classification,
+    sourceRows,
+    sourceWeekly,
+    invoiceValues,
+  ] = await Promise.all([
+    fetchImportCasesAnalytics(tenantId),
+    fetchImportCaseOutcomesByDay(tenantId, prevFromKey, todayKey),
+    fetchClassificationTotals(tenantId),
+    fetchCasesBySourceCountry(tenantId),
+    fetchSourceCountryWeekly(tenantId, 8),
+    fetchInvoiceValueByCurrency(tenantId),
+  ]);
+
+  const week = outcomeRows
+    ? buildOutcomeSeries(outcomeRows, weekFromKey, todayKey)
+    : null;
+  const prevWeek = outcomeRows
+    ? buildOutcomeSeries(outcomeRows, prevFromKey, prevToKey)
+    : null;
+  const weekTotal = week ? sum(week.total) : null;
+  const prevWeekTotal = prevWeek ? sum(prevWeek.total) : null;
+  const weekDelta =
+    weekTotal !== null ? pctChange(weekTotal, prevWeekTotal) : null;
+
+  const { totalCount, completedCount, inProgressCount, cancelledCount } =
+    importCasesData;
+  const otherCount = Math.max(
     0,
+    totalCount - completedCount - inProgressCount - cancelledCount,
   );
-  const importCaseCompletionRate =
-    importCasesData.totalCount > 0
-      ? Math.round(
-          (importCasesData.completedCount / importCasesData.totalCount) * 100,
-        )
-      : 0;
+  const completionRate =
+    totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0;
+  const inProgressPct =
+    totalCount > 0 ? Math.round((inProgressCount / totalCount) * 100) : 0;
+
+  const statusRows = [
+    { label: "Completed", value: completedCount, color: BENTO_COLORS.success },
+    { label: "In progress", value: inProgressCount, color: BENTO_COLORS.brand },
+    {
+      label: "Cancelled",
+      value: cancelledCount,
+      color: BENTO_COLORS.danger,
+    },
+    ...(otherCount > 0
+      ? [{ label: "Other", value: otherCount, color: BENTO_COLORS.muted }]
+      : []),
+  ];
+
+  const sourceSummary = summarizeSourceCountries(sourceRows ?? []);
+  const topSources = sourceSummary.countries.slice(0, 5);
+  const sourceTrend = sourceWeekly !== null;
+  const sourceColors = [
+    BENTO_COLORS.brand,
+    BENTO_COLORS.indigo,
+    BENTO_COLORS.sky,
+    BENTO_COLORS.success,
+    BENTO_COLORS.warning,
+  ];
+
+  const recent = importCasesData.recentInRange.slice(0, 6);
+  const valueLines = (invoiceValues ?? []).slice(0, 3).map((v) => ({
+    label: `Declared invoice value (${v.currency})`,
+    value: formatMoney(v.total, v.currency),
+  }));
+
+  const kpiCount = [
+    true,
+    true,
+    !!classification && classification.products > 0,
+    !!week && weekTotal !== null,
+  ].filter(Boolean).length;
+
+  const rowTwoCards =
+    1 + (topSources.length > 0 ? 1 : 0) + (totalCount > 0 ? 1 : 0);
 
   return (
-    <div className="w-full min-w-0 space-y-6">
-      <div className="relative overflow-hidden rounded-3xl border border-slate-200/70 bg-white shadow-[0_8px_40px_-12px_rgba(15,23,42,0.1)]">
-        <div className="pointer-events-none absolute inset-0" aria-hidden>
-          <div className="absolute -right-16 -top-16 h-48 w-48 rounded-full bg-indigo-400/15 blur-3xl" />
-          <div className="absolute -bottom-12 left-1/4 h-40 w-40 rounded-full bg-violet-400/10 blur-3xl" />
+    <div className="w-full min-w-0 space-y-4">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="min-w-0">
+          <p className="text-[11px] font-bold uppercase tracking-widest text-[#007bff]">
+            Overview
+          </p>
+          <h1 className="mt-1 text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">
+            Dashboard
+          </h1>
+          <p className="mt-1.5 max-w-xl text-sm text-slate-500">
+            Track import cases, document extraction, HS classification, and
+            declaration-ready exports.
+          </p>
         </div>
-        <div className="relative flex flex-col gap-4 px-5 py-5 sm:flex-row sm:items-center sm:justify-between sm:px-7 sm:py-6">
-          <div>
-            <p className="text-[11px] font-bold uppercase tracking-widest text-indigo-600">
-              Overview
-            </p>
-            <h1 className="mt-1 text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">
-              Dashboard
-            </h1>
-            <p className="mt-1.5 max-w-xl text-sm text-slate-500">
-              Track import cases, document extraction, HS classification, and
-              declaration-ready exports.
-            </p>
-          </div>
-          <DashButton href="/dashboard/import-cases/new" variant="primary">
-            <svg
-              className="w-5 h-5"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-              aria-hidden
-            >
-              <title>Create</title>
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M12 4v16m8-8H4"
-              />
-            </svg>
-            New import case
-          </DashButton>
-        </div>
+        <DashButton href="/dashboard/import-cases/new" variant="primary">
+          <BentoIcon name="plus" className="h-5 w-5" strokeWidth={2} />
+          New import case
+        </DashButton>
       </div>
 
-      <div>
-        <div className="mb-4 flex items-center justify-between gap-3">
-          <div>
-            <h2 className="text-lg font-bold text-slate-900">Import cases</h2>
-            <p className="text-sm text-slate-500">
-              Ethiopian customs document preparation workflow
-            </p>
-          </div>
-          {importCasesData.totalCount > 0 ? (
-            <DashLink href="/dashboard/import-cases">View all →</DashLink>
-          ) : null}
+      {/* Row 1: map + hero and KPI tiles */}
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-12">
+        <div className="min-w-0 xl:col-span-8">
+          <SourceCountryMap summary={sourceSummary} periodLabel="All time" />
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
-          <DashboardStatCard
-            label="Total cases"
-            value={importCasesData.totalCount}
-            hint={`${importCaseWeekTotal} created this week`}
-            accent="violet"
-            icon={
-              <svg
-                className="w-5 h-5"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-                aria-hidden
-              >
-                <title>Cases</title>
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={1.5}
-                  d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"
-                />
-              </svg>
-            }
+        <div className="grid min-w-0 content-start gap-4 xl:col-span-4">
+          <GradientHeroCard
+            title="Total import cases"
+            caption="Created, all time"
+            value={totalCount.toLocaleString()}
+            lines={[
+              ...(weekTotal !== null
+                ? [{ label: "Created this week", value: weekTotal.toLocaleString() }]
+                : []),
+              ...valueLines,
+            ]}
+            href="/dashboard/import-cases"
           />
-          <DashboardStatCard
-            label="Completed"
-            value={importCasesData.completedCount}
-            hint={
-              importCasesData.totalCount > 0
-                ? `${importCaseCompletionRate}% completion rate`
-                : "Ready for declaration"
-            }
-            accent="green"
-            icon={
-              <svg
-                className="w-5 h-5"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-                aria-hidden
-              >
-                <title>Completed</title>
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={1.5}
-                  d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
-                />
-              </svg>
-            }
-          />
-          <DashboardStatCard
-            label="In progress"
-            value={importCasesData.inProgressCount}
-            hint="Extraction or classification"
-            accent="blue"
-            icon={
-              <svg
-                className="w-5 h-5"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-                aria-hidden
-              >
-                <title>In progress</title>
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={1.5}
-                  d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
-                />
-              </svg>
-            }
-          />
-          <DashboardStatCard
-            label="Cancelled"
-            value={importCasesData.cancelledCount}
-            hint={
-              importCasesData.cancelledCount > 0 ? "Review cases" : "None cancelled"
-            }
-            accent={importCasesData.cancelledCount > 0 ? "red" : "default"}
-            icon={
-              <svg
-                className="w-5 h-5"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-                aria-hidden
-              >
-                <title>Cancelled</title>
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={1.5}
-                  d="M6 18L18 6M6 6l12 12"
-                />
-              </svg>
-            }
-          />
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-5 gap-4">
-        <DashCard className="lg:col-span-3">
-          <DashCardHeader
-            title="Import cases — last 7 days"
-            action={
-              <span className="rounded-full bg-violet-50 px-2.5 py-1 text-xs font-semibold text-violet-700 tabular-nums">
-                {importCaseWeekTotal} total
-              </span>
-            }
-          />
-          <div className="px-5 py-5 sm:px-6 sm:pb-6">
-            <DashboardUploadsChart data={importCaseUploadSeries} />
-          </div>
-        </DashCard>
-
-        <DashCard className="lg:col-span-2">
-          <DashCardHeader title="Case status breakdown" />
-          <div className="px-5 py-5 sm:px-6 sm:pb-6">
-            <DashboardStatusChart
-              items={importCasesData.statusBreakdown}
-              variant="import-cases"
+          <div
+            className={`grid grid-cols-1 gap-4 sm:grid-cols-2 ${
+              kpiCount % 2 === 1 ? "sm:[&>*:last-child]:col-span-2" : ""
+            }`}
+          >
+            <KpiRingTile
+              label="Completion rate"
+              value={completedCount.toLocaleString()}
+              percent={completionRate}
+              tone="green"
+              hint="Cases completed"
             />
+            <KpiProgressTile
+              label="In progress"
+              badgeValue={inProgressCount.toLocaleString()}
+              percent={inProgressPct}
+              caption={`${inProgressPct}% of all cases`}
+              hint="Extraction or classification"
+            />
+            {classification && classification.products > 0 ? (
+              <KpiRingTile
+                label="Items classified"
+                value={classification.classified.toLocaleString()}
+                percent={
+                  (classification.classified / classification.products) * 100
+                }
+                tone="blue"
+                hint={`of ${classification.products.toLocaleString()} items`}
+              />
+            ) : null}
+            {week && weekTotal !== null ? (
+              <KpiSparkTile
+                label="Cases this week"
+                value={weekTotal}
+                values={week.total}
+                delta={weekDelta}
+                tone="blue"
+                hint="vs previous 7 days"
+              />
+            ) : null}
           </div>
-        </DashCard>
+        </div>
       </div>
 
-      <DashCard>
-        <DashCardHeader
-          title="Recent import cases"
-          action={
-            importCasesData.recentInRange.length > 0 ? (
-              <DashLink href="/dashboard/import-cases">View all →</DashLink>
-            ) : undefined
-          }
-        />
-        <DashTable>
-          <DashTableHead>
-            <DashTableHeaderRow>
-              <DashTh>Case #</DashTh>
-              <DashTh>Importer</DashTh>
-              <DashTh className="w-28">Date</DashTh>
-              <DashTh className="w-40">Status</DashTh>
-              <DashTh align="right" className="w-24">
-                Action
-              </DashTh>
-            </DashTableHeaderRow>
-          </DashTableHead>
-          <DashTbody>
-            {importCasesData.recentInRange.length === 0 ? (
-              <DashTableEmpty colSpan={5} className="p-0">
-                <div className="flex flex-col items-center justify-center px-6 py-14 text-center">
-                  <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-[#007bff] text-white shadow-md shadow-blue-500/20">
-                    <svg
-                      className="h-8 w-8"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                      aria-hidden
-                    >
-                      <title>Empty</title>
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={1.5}
-                        d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"
-                      />
-                    </svg>
-                  </div>
-                  <p className="font-bold text-slate-900">
-                    No import cases yet
-                  </p>
-                  <p className="mt-1 max-w-xs text-sm text-slate-500">
-                    Create an import case to upload invoices, packing lists, and
-                    run HS classification.
-                  </p>
-                  <Link
-                    href="/dashboard/import-cases/new"
-                    className="mt-5 inline-flex items-center gap-2 rounded-xl bg-[#007bff] px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-[#0069d9]"
-                  >
-                    Create your first case
-                  </Link>
-                </div>
-              </DashTableEmpty>
-            ) : (
-              importCasesData.recentInRange.slice(0, 8).map((item) => (
-                <DashTr key={item.id}>
-                  <DashTd className="text-gray-900">
-                    <span className="block max-w-[140px] truncate font-semibold sm:max-w-xs">
-                      {item.caseNumber}
-                    </span>
-                    {item.supplierName ? (
-                      <span className="block max-w-[140px] truncate text-xs text-gray-500 sm:max-w-xs">
-                        {item.supplierName}
-                      </span>
-                    ) : null}
-                  </DashTd>
-                  <DashTd>{item.importerName ?? "—"}</DashTd>
-                  <DashTd muted nowrap>
-                    {formatDate(item.createdAt)}
-                  </DashTd>
-                  <DashTd>
+      {/* Row 2: top sources, case status donut, recent cases */}
+      <div
+        className={`grid grid-cols-1 gap-4 md:grid-cols-2 ${
+          rowTwoCards >= 3 ? "xl:grid-cols-3" : "xl:grid-cols-2"
+        }`}
+      >
+        {topSources.length > 0 ? (
+          <BentoCard label="Top source countries">
+            <BentoCardHeader
+              title="Top source countries"
+              action={<PeriodPill>All time</PeriodPill>}
+            />
+            <StatList
+              trendLabel="cases per week, last 8 weeks"
+              rows={topSources.map((c, i) => ({
+                key: c.iso2,
+                label: c.name,
+                value: `${c.count.toLocaleString()} ${c.count === 1 ? "case" : "cases"}`,
+                caption: `${formatShare(c.share)} of cases`,
+                series: sourceTrend ? weeklySeries(sourceWeekly ?? [], c.iso2) : undefined,
+                percent: c.share,
+                color: sourceColors[i % sourceColors.length],
+              }))}
+            />
+            <p className="mt-3 text-[11px] text-slate-400">
+              Trend lines show cases created per week over the last 8 weeks.
+            </p>
+          </BentoCard>
+        ) : null}
+
+        {totalCount > 0 ? (
+          <BentoCard label="Case status">
+            <BentoCardHeader
+              title="Case status"
+              action={<PeriodPill>All time</PeriodPill>}
+            />
+            <div className="flex flex-col items-center gap-5 sm:flex-row sm:items-center sm:justify-between">
+              <div className="w-full min-w-0 sm:flex-1">
+                <p className="mb-3 text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+                  Status breakdown
+                </p>
+                <DonutLegend rows={statusRows} />
+              </div>
+              <DonutChart
+                segments={statusRows}
+                centerValue={totalCount.toLocaleString()}
+                centerLabel="Cases"
+                size={168}
+                ariaLabel={`Case status: ${statusRows
+                  .map((r) => `${r.value} ${r.label.toLowerCase()}`)
+                  .join(", ")}`}
+              />
+            </div>
+          </BentoCard>
+        ) : null}
+
+        <BentoCard
+          padded={false}
+          label="Recent import cases"
+          className={rowTwoCards >= 3 ? "md:col-span-2 xl:col-span-1" : ""}
+        >
+          <BentoCardHeader
+            inset
+            title="Recent import cases"
+            action={
+              recent.length > 0 ? (
+                <DashLink href="/dashboard/import-cases">View all &rarr;</DashLink>
+              ) : undefined
+            }
+          />
+          {recent.length === 0 ? (
+            <BentoEmpty
+              icon="cases"
+              title="No import cases yet"
+              description="Create an import case to upload invoices, packing lists, and run HS classification."
+              action={
+                <DashButton href="/dashboard/import-cases/new">
+                  Create your first case
+                </DashButton>
+              }
+            />
+          ) : (
+            <ul className="divide-y divide-slate-100 px-2 pb-3 sm:px-3">
+              {recent.map((item) => (
+                <AmountListRow
+                  key={item.id}
+                  href={`/dashboard/import-cases/${item.id}`}
+                  title={item.caseNumber}
+                  subtitle={[
+                    item.importerName ?? item.supplierName,
+                    formatDate(item.createdAt),
+                  ]
+                    .filter(Boolean)
+                    .join(" \u00b7 ")}
+                  pill={
                     <StatusBadge
                       status={item.status}
                       label={formatImportCaseStatus(item.status)}
                     />
-                  </DashTd>
-                  <DashTd align="right">
-                    <DashTableAction
-                      href={`/dashboard/import-cases/${item.id}`}
-                    >
-                      Open
-                      <svg
-                        className="h-3.5 w-3.5"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                        aria-hidden
-                      >
-                        <title>Open</title>
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M9 5l7 7-7 7"
-                        />
-                      </svg>
-                    </DashTableAction>
-                  </DashTd>
-                </DashTr>
-              ))
-            )}
-          </DashTbody>
-        </DashTable>
-      </DashCard>
+                  }
+                  amount={formatCaseAmount(
+                    item.invoiceTotalAmount,
+                    item.invoiceCurrencyCode,
+                  )}
+                />
+              ))}
+            </ul>
+          )}
+        </BentoCard>
+      </div>
     </div>
   );
 }

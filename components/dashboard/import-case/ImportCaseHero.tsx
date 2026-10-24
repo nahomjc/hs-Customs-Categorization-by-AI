@@ -86,7 +86,7 @@ export function ImportCaseHero({
   ];
 
   return (
-    <section className="relative overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-[0_4px_24px_-8px_rgba(15,23,42,0.1)]">
+    <section className="relative overflow-hidden rounded-2xl border border-slate-200/80 bg-white">
       <div className="absolute inset-0 bg-gradient-to-br from-indigo-50/80 via-white to-violet-50/40 pointer-events-none" />
       <div className="absolute -top-20 -right-20 h-48 w-48 rounded-full bg-indigo-200/20 blur-3xl pointer-events-none" />
 
@@ -122,7 +122,7 @@ export function ImportCaseHero({
           </div>
 
           <div className="flex items-center gap-3 shrink-0">
-            <div className="flex items-center gap-3 rounded-xl border border-white/80 bg-white/70 backdrop-blur-sm px-3 py-2 shadow-sm">
+            <div className="flex items-center gap-3 rounded-xl border border-white/80 bg-white/70 backdrop-blur-sm px-3 py-2">
               <div
                 className="relative h-10 w-10 shrink-0"
                 role="img"
@@ -172,7 +172,7 @@ export function ImportCaseHero({
           {statCards.map((card) => (
             <div
               key={card.label}
-              className="rounded-xl border border-white/90 bg-white/80 backdrop-blur-sm px-3 py-2 shadow-sm"
+              className="rounded-xl border border-white/90 bg-white/80 backdrop-blur-sm px-3 py-2"
             >
               <p className="text-lg font-bold text-slate-900 tabular-nums leading-none">
                 {card.value}

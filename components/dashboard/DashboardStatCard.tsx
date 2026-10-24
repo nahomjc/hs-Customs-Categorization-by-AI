@@ -49,7 +49,7 @@ export function DashboardStatCard({
 
   return (
     <div
-      className={`rounded-2xl border bg-white p-5 shadow-[0_2px_16px_-6px_rgba(15,23,42,0.06)] transition-shadow hover:shadow-[0_8px_30px_-10px_rgba(15,23,42,0.1)] ${a.card}`}
+      className={`rounded-2xl border bg-white p-5 ${a.card}`}
     >
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">

@@ -129,7 +129,7 @@ export function ShipmentWorkflowStepper({
                     done
                       ? "border-emerald-500 bg-emerald-500 text-white"
                       : active
-                        ? "border-[#007bff] bg-[#007bff] text-white shadow-md shadow-blue-500/25"
+                        ? "border-[#007bff] bg-[#007bff] text-white"
                         : "border-slate-200 bg-white text-slate-400"
                   }`}
                 >

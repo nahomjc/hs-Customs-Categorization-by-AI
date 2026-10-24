@@ -21,6 +21,7 @@ export const STATUS_STYLES: Record<string, string> = {
   approved: "bg-emerald-100 text-emerald-800",
   rejected: "bg-red-100 text-red-800",
   pending: "bg-slate-100 text-slate-600",
+  needs_mapping: "bg-amber-100 text-amber-800",
   reviewed: "bg-emerald-100 text-emerald-800",
   error: "bg-red-100 text-red-800",
   warning: "bg-amber-100 text-amber-800",
@@ -185,7 +186,7 @@ export function DashCard({
 }) {
   return (
     <div
-      className={`rounded-3xl border border-slate-200/70 bg-white overflow-hidden shadow-[0_4px_24px_-8px_rgba(15,23,42,0.08)] ${className}`}
+      className={`rounded-3xl border border-slate-200/70 bg-white overflow-hidden ${className}`}
     >
       {children}
     </div>
@@ -228,7 +229,7 @@ export function DashButton({
     "inline-flex items-center justify-center gap-2 font-semibold text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed";
   const variants = {
     primary:
-      "px-5 py-2.5 rounded-xl bg-[#007bff] text-white shadow-sm hover:bg-[#0069d9]",
+      "px-5 py-2.5 rounded-xl bg-[#007bff] text-white hover:bg-[#0069d9]",
     secondary:
       "px-5 py-2.5 rounded-xl border border-gray-200 bg-white text-gray-900 hover:bg-gray-50",
     ghost:
@@ -271,10 +272,16 @@ export function DashLink({
 }
 
 export const dashInputClass =
-  "w-full py-2 pl-9 pr-3 text-sm text-gray-900 bg-white border border-gray-200 rounded-xl focus:outline-none focus:border-[#007bff] focus:ring-[3px] focus:ring-[#007bff]/12";
+  "w-full min-h-10 py-2 pl-9 pr-3 text-sm text-gray-900 bg-white border border-gray-200 rounded-xl focus:outline-none focus:border-[#007bff] focus:ring-[3px] focus:ring-[#007bff]/12";
 
+/** Native select fallback — pair with `.dashboard-page select` rules in globals.css */
 export const dashSelectClass =
-  "py-2 pl-3 pr-8 text-sm text-gray-900 bg-white border border-gray-200 rounded-xl focus:outline-none focus:border-[#007bff] focus:ring-[3px] focus:ring-[#007bff]/12";
+  "dash-native-select w-full min-h-10 py-2 pl-3 pr-10 text-sm text-gray-900 bg-white border border-gray-200 rounded-xl focus:outline-none focus:border-[#007bff] focus:ring-[3px] focus:ring-[#007bff]/12";
+
+export const dashDateInputClass =
+  "dash-date-input min-h-10 w-full min-w-[10.5rem] rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 focus:border-[#007bff] focus:outline-none focus:ring-[3px] focus:ring-[#007bff]/12";
+
+export { DashSelect } from "./DashSelect";
 
 export {
   DashTable,

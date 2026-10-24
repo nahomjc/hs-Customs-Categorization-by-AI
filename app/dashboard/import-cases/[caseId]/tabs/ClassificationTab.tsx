@@ -2,9 +2,21 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
+import { Pagination, usePagination } from "@/components/dashboard/Pagination";
 import { BulkReviewToolbar } from "@/components/dashboard/import-case/BulkReviewActions";
+import {
+  ClassifyProgressBanner,
+  ClassifyProgressDialog,
+} from "@/components/dashboard/import-case/ClassifyProgressDialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import {
   DashButton,
   DashCard,
@@ -19,15 +31,37 @@ import {
   dashInputClass,
 } from "@/components/dashboard/ui";
 import type { ProductClassificationBundle } from "@/lib/import-cases/classification-queries";
+import type { ClassifySnapshot } from "@/lib/import-cases/classify-progress";
 import type { ClassificationSource } from "@/lib/import-cases/constants";
 import { formatDutyRateFromSnapshot } from "@/lib/import-cases/duty-rate-display";
 import { useBulkReview } from "@/lib/import-cases/use-bulk-review";
+import { useClassifyJob } from "@/lib/import-cases/use-classify-job";
 
 type ClassificationTabProps = {
   caseId: string;
   initialClassifications: ProductClassificationBundle[];
   referencePopulated: boolean;
 };
+
+function classificationSearchHaystack(row: ProductClassificationBundle): string {
+  const { product, classification } = row;
+  return [
+    product.normalizedDescription,
+    product.rawDescription,
+    product.productName,
+    product.brand,
+    product.modelNumber,
+    String(product.productSequence),
+    classification?.hsCode,
+    classification?.officialDescription,
+    classification?.classificationBasis,
+    classification?.source,
+    classification?.source ? sourceLabel(classification.source) : null,
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+}
 
 function sourceLabel(source: string | null | undefined): string {
   switch (source as ClassificationSource | "rule_fallback" | undefined) {
@@ -42,6 +76,14 @@ function sourceLabel(source: string | null | undefined): string {
     default:
       return "—";
   }
+}
+
+function needsExpertReview(row: ProductClassificationBundle): boolean {
+  const { product, classification } = row;
+  if (classification?.isFinal) return false;
+  if (product.status === "needs_expert_review") return true;
+  if (classification?.source === "expert_review") return true;
+  return false;
 }
 
 function sourceBadgeStatus(source: string | null | undefined): string {
@@ -67,14 +109,16 @@ export function ClassificationTab({
   const router = useRouter();
   const [items, setItems] =
     useState<ProductClassificationBundle[]>(initialClassifications);
+  const [search, setSearch] = useState("");
   const [referencePopulated, setReferencePopulated] = useState(
     initialReferencePopulated,
   );
-  const [classifying, setClassifying] = useState(false);
+  const [progressOpen, setProgressOpen] = useState(false);
   const [aiProductId, setAiProductId] = useState<string | null>(null);
   const [approvingId, setApprovingId] = useState<string | null>(null);
   const [overrideId, setOverrideId] = useState<string | null>(null);
   const [overrideHsCode, setOverrideHsCode] = useState("");
+  const [expertModalOpen, setExpertModalOpen] = useState(false);
 
   async function refresh() {
     const res = await fetch(`/api/import-cases/${caseId}/classifications`);
@@ -90,52 +134,66 @@ export function ClassificationTab({
     router.refresh();
   }
 
-  async function handleClassify() {
-    setClassifying(true);
-    try {
-      const res = await fetch(`/api/import-cases/${caseId}/classify`, {
-        method: "POST",
-      });
-      const data = (await res.json()) as {
-        error?: string;
-        classifiedCount?: number;
-        needsReviewCount?: number;
-        referencePopulated?: boolean;
-      };
-      if (!res.ok) throw new Error(data.error ?? "Classification failed");
-      if (data.referencePopulated != null) {
-        setReferencePopulated(data.referencePopulated);
-      }
+  // Classification runs as short, resumable batches driven from here so the
+  // dialog can show real progress (see lib/import-cases/classify-progress.ts).
+  function handleJobFinished(snap: ClassifySnapshot) {
+    setProgressOpen(true);
+    if (snap.status === "success" && snap.summary) {
+      setReferencePopulated(snap.summary.referencePopulated);
       toast.success(
-        `Classified ${data.classifiedCount} product(s)${data.needsReviewCount ? `, ${data.needsReviewCount} need review` : ""}`,
+        `Classified ${snap.summary.classifiedCount} product(s)${snap.summary.needsReviewCount ? `, ${snap.summary.needsReviewCount} need review` : ""}`,
       );
-      await refresh();
-    } catch (error) {
-      toast.error(
-        error instanceof Error ? error.message : "Classification failed",
-      );
-    } finally {
-      setClassifying(false);
+    } else if (snap.status === "failed") {
+      toast.error(snap.fatalError ?? "Classification failed");
     }
+    // show whatever was saved so far behind the dialog
+    void refresh();
+  }
+
+  const job = useClassifyJob(caseId, { onFinished: handleJobFinished });
+  const classifying = job.active;
+
+  function handleClassify() {
+    setProgressOpen(true);
+    job.start();
+  }
+
+  function handleProgressDone() {
+    setProgressOpen(false);
+    job.reset();
+    void refresh();
   }
 
   async function handleAskAi(productId: string) {
     setAiProductId(productId);
     try {
       const res = await fetch(
-        `/api/import-cases/${caseId}/products/${productId}/classify`,
+        `/api/import-cases/${caseId}/products/${productId}/ai-classify`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ forceAi: true }),
         },
       );
-      const data = (await res.json()) as {
-        error?: string;
-        hsCode?: string | null;
-        needsReview?: boolean;
-      };
-      if (!res.ok) throw new Error(data.error ?? "AI classification failed");
+      const contentType = res.headers.get("content-type") ?? "";
+      const data = contentType.includes("application/json")
+        ? ((await res.json()) as {
+            error?: string;
+            hsCode?: string | null;
+            needsReview?: boolean;
+          })
+        : null;
+      if (!res.ok) {
+        throw new Error(
+          data?.error ??
+            (res.status === 404
+              ? "Classification API not found — refresh and try again"
+              : `AI classification failed (${res.status})`),
+        );
+      }
+      if (!data) {
+        throw new Error("Server returned an invalid response");
+      }
       if (data.hsCode && !data.hsCode.startsWith("9999")) {
         toast.success(`AI suggested HS ${data.hsCode}`);
       } else if (data.hsCode?.startsWith("9999")) {
@@ -187,7 +245,27 @@ export function ClassificationTab({
   }
 
   const verifiedProducts = items.filter((i) => i.product.humanVerified);
-  const tableRows = verifiedProducts;
+  const expertReviewRows = useMemo(
+    () => verifiedProducts.filter(needsExpertReview),
+    [verifiedProducts],
+  );
+
+  useEffect(() => {
+    if (expertModalOpen && expertReviewRows.length === 0) {
+      setExpertModalOpen(false);
+    }
+  }, [expertModalOpen, expertReviewRows.length]);
+
+  const filteredRows = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return verifiedProducts;
+    return verifiedProducts.filter((row) =>
+      classificationSearchHaystack(row).includes(q),
+    );
+  }, [verifiedProducts, search]);
+
+  const pagination = usePagination(filteredRows.length);
+  const pageRows = filteredRows.slice(pagination.start, pagination.end);
   const withClassification = verifiedProducts.filter((i) => i.classification);
   const approvedCount = verifiedProducts.filter(
     (i) => i.classification?.isFinal,
@@ -269,6 +347,12 @@ export function ClassificationTab({
               uploaded HS reference first.
             </p>
           )}
+          {job.snapshot && !progressOpen ? (
+            <ClassifyProgressBanner
+              snapshot={job.snapshot}
+              onShow={() => setProgressOpen(true)}
+            />
+          ) : null}
           {verifiedProducts.length > 0 ? (
             <p className="text-xs text-slate-500">
               {verifiedProducts.length} product(s) · {withClassification.length}{" "}
@@ -291,64 +375,217 @@ export function ClassificationTab({
               Go back to Products and confirm matching before classification.
             </p>
           </div>
-        ) : tableRows.length === 0 ? (
-          <div className="p-8 text-center text-slate-500">
-            <p className="font-medium text-slate-700">
-              No HS suggestions yet
-            </p>
-            <p className="mt-2 text-sm">
-              Click &quot;Run classification&quot; to generate HS code
-              candidates.
-            </p>
-          </div>
         ) : (
-          <DashTable tableClassName="table-fixed text-xs">
-            <colgroup>
-              <col className="w-8" />
-              <col className="w-[22%]" />
-              <col className="w-[32%]" />
-              <col className="w-[16%]" />
-              <col className="w-[160px]" />
-            </colgroup>
-            <DashTableHead>
-              <DashTableHeaderRow>
-                <DashTh density="compact">#</DashTh>
-                <DashTh density="compact">Product</DashTh>
-                <DashTh density="compact">HS / Tariff</DashTh>
-                <DashTh density="compact">Source</DashTh>
-                <DashTh density="compact" align="right">
-                  Actions
-                </DashTh>
-              </DashTableHeaderRow>
-            </DashTableHead>
-            <DashTbody>
-              {tableRows.map(
-                ({ product, candidates, classification, tariffSnapshot }) => (
-                  <ClassificationTableRow
-                    key={product.id}
-                    product={product}
-                    candidates={candidates}
-                    classification={classification}
-                    tariffSnapshot={tariffSnapshot}
-                    approvingId={approvingId}
-                    aiProductId={aiProductId}
-                    overrideId={overrideId}
-                    overrideHsCode={overrideHsCode}
-                    onApprove={handleApprove}
-                    onAskAi={handleAskAi}
-                    onStartOverride={(id, hsCode) => {
-                      setOverrideId(id);
-                      setOverrideHsCode(hsCode);
+          <>
+            <div className="border-b border-slate-100 px-5 py-3">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+                <div className="relative min-w-0 flex-1 max-w-md">
+                  <span
+                    className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
+                    aria-hidden
+                  >
+                    <svg
+                      className="h-4 w-4"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+                      />
+                    </svg>
+                  </span>
+                  <input
+                    type="search"
+                    value={search}
+                    onChange={(e) => {
+                      setSearch(e.target.value);
+                      pagination.reset();
                     }}
-                    onCancelOverride={() => setOverrideId(null)}
-                    onOverrideHsCodeChange={setOverrideHsCode}
+                    placeholder="Search classifications — product, HS code, description, source…"
+                    className={dashInputClass}
+                    aria-label="Search classifications"
                   />
-                ),
-              )}
-            </DashTbody>
-          </DashTable>
+                </div>
+                <DashButton
+                  type="button"
+                  variant="secondary"
+                  disabled={expertReviewRows.length === 0}
+                  onClick={() => setExpertModalOpen(true)}
+                  className="shrink-0"
+                >
+                  Expert review
+                  {expertReviewRows.length > 0
+                    ? ` (${expertReviewRows.length})`
+                    : ""}
+                </DashButton>
+              </div>
+              {search.trim() ? (
+                <p className="mt-2 text-xs text-slate-500">
+                  {filteredRows.length} of {verifiedProducts.length} product(s)
+                  match
+                </p>
+              ) : null}
+            </div>
+            <DashTable tableClassName="table-fixed text-xs">
+              <colgroup>
+                <col className="w-8" />
+                <col className="w-[22%]" />
+                <col className="w-[32%]" />
+                <col className="w-[16%]" />
+                <col className="w-[160px]" />
+              </colgroup>
+              <DashTableHead>
+                <DashTableHeaderRow>
+                  <DashTh density="compact">#</DashTh>
+                  <DashTh density="compact">Product</DashTh>
+                  <DashTh density="compact">HS / Tariff</DashTh>
+                  <DashTh density="compact">Source</DashTh>
+                  <DashTh density="compact" align="right">
+                    Actions
+                  </DashTh>
+                </DashTableHeaderRow>
+              </DashTableHead>
+              <DashTbody>
+                {pageRows.length === 0 ? (
+                  <tr>
+                    <td
+                      colSpan={5}
+                      className="px-5 py-8 text-center text-sm text-slate-500"
+                    >
+                      No classifications match your search.
+                    </td>
+                  </tr>
+                ) : null}
+                {pageRows.map(
+                  ({ product, candidates, classification, tariffSnapshot }) => (
+                    <ClassificationTableRow
+                      key={product.id}
+                      product={product}
+                      candidates={candidates}
+                      classification={classification}
+                      tariffSnapshot={tariffSnapshot}
+                      approvingId={approvingId}
+                      aiProductId={aiProductId}
+                      overrideId={overrideId}
+                      overrideHsCode={overrideHsCode}
+                      onApprove={handleApprove}
+                      onAskAi={handleAskAi}
+                      onStartOverride={(id, hsCode) => {
+                        setOverrideId(id);
+                        setOverrideHsCode(hsCode);
+                      }}
+                      onCancelOverride={() => setOverrideId(null)}
+                      onOverrideHsCodeChange={setOverrideHsCode}
+                    />
+                  ),
+                )}
+              </DashTbody>
+            </DashTable>
+            <Pagination
+              bounds={pagination}
+              onPageChange={pagination.setPage}
+              onPageSizeChange={pagination.setPageSize}
+              itemLabel="products"
+              note={
+                pendingCount > 0
+                  ? `Bulk review actions apply to all ${pendingCount} pending classification(s) (every page), not only this page.`
+                  : undefined
+              }
+            />
+          </>
         )}
       </DashCard>
+
+      <ClassifyProgressDialog
+        open={progressOpen && job.snapshot !== null}
+        snapshot={job.snapshot}
+        onHide={() => setProgressOpen(false)}
+        onDone={handleProgressDone}
+        onStop={job.stop}
+        onResume={job.resume}
+        onRetryFailed={job.retryFailed}
+      />
+
+      <Dialog
+        open={expertModalOpen}
+        onOpenChange={(open) => {
+          setExpertModalOpen(open);
+          if (!open) setOverrideId(null);
+        }}
+      >
+        <DialogContent className="flex max-h-[min(90vh,52rem)] w-[min(96vw,56rem)] max-w-[56rem] flex-col gap-0 overflow-hidden p-0">
+          <DialogHeader className="border-b border-slate-100 px-5 py-4 text-left">
+            <DialogTitle>Expert review queue</DialogTitle>
+            <DialogDescription>
+              {expertReviewRows.length === 0
+                ? "No products need expert review."
+                : `${expertReviewRows.length} product(s) need a decision — approve, ask AI, or set HS without searching the full list.`}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="min-h-0 flex-1 overflow-y-auto">
+            {expertReviewRows.length === 0 ? (
+              <p className="px-5 py-8 text-center text-sm text-slate-500">
+                You&apos;re caught up.
+              </p>
+            ) : (
+              <DashTable tableClassName="table-fixed text-xs">
+                <colgroup>
+                  <col className="w-8" />
+                  <col className="w-[24%]" />
+                  <col className="w-[30%]" />
+                  <col className="w-[16%]" />
+                  <col className="w-[160px]" />
+                </colgroup>
+                <DashTableHead>
+                  <DashTableHeaderRow>
+                    <DashTh density="compact">#</DashTh>
+                    <DashTh density="compact">Product</DashTh>
+                    <DashTh density="compact">HS / Tariff</DashTh>
+                    <DashTh density="compact">Source</DashTh>
+                    <DashTh density="compact" align="right">
+                      Actions
+                    </DashTh>
+                  </DashTableHeaderRow>
+                </DashTableHead>
+                <DashTbody>
+                  {expertReviewRows.map(
+                    ({
+                      product,
+                      candidates,
+                      classification,
+                      tariffSnapshot,
+                    }) => (
+                      <ClassificationTableRow
+                        key={product.id}
+                        product={product}
+                        candidates={candidates}
+                        classification={classification}
+                        tariffSnapshot={tariffSnapshot}
+                        approvingId={approvingId}
+                        aiProductId={aiProductId}
+                        overrideId={overrideId}
+                        overrideHsCode={overrideHsCode}
+                        onApprove={handleApprove}
+                        onAskAi={handleAskAi}
+                        onStartOverride={(id, hsCode) => {
+                          setOverrideId(id);
+                          setOverrideHsCode(hsCode);
+                        }}
+                        onCancelOverride={() => setOverrideId(null)}
+                        onOverrideHsCodeChange={setOverrideHsCode}
+                      />
+                    ),
+                  )}
+                </DashTbody>
+              </DashTable>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
@@ -439,10 +676,11 @@ function ClassificationTableRow({
             ) : null}
             {classification?.isFinal ? (
               <StatusBadge label="Approved" status="approved" />
+            ) : product.status === "needs_expert_review" ||
+              classification?.source === "expert_review" ? (
+              <StatusBadge label="Expert review" status="warning" />
             ) : classification ? (
               <StatusBadge label="Pending" status="needs_review" />
-            ) : product.status === "needs_expert_review" ? (
-              <StatusBadge label="Expert review" status="warning" />
             ) : (
               <StatusBadge label="Not classified" status="uploaded" />
             )}

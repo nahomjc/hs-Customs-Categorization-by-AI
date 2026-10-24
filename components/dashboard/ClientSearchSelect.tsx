@@ -130,7 +130,7 @@ export function ClientSearchSelect({
         <ul
           id={listId}
           role="listbox"
-          className="absolute z-20 mt-1 max-h-56 w-full overflow-auto rounded-xl border border-slate-200 bg-white py-1 shadow-lg"
+          className="absolute z-20 mt-1 max-h-56 w-full overflow-auto rounded-xl border border-slate-200 bg-white py-1"
         >
           {loading ? (
             <li className="px-3 py-2 text-sm text-slate-500">Searching…</li>

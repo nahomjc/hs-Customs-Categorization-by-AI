@@ -9,10 +9,10 @@ import {
   DEFAULT_PREFERENCES,
   type UserPreferences,
 } from "@/lib/auth/settings-meta";
-import { DashCard, DashCardHeader } from "./ui";
+import { DashCard, DashCardHeader, dashSelectClass } from "./ui";
 
 const fieldClass =
-  "w-full py-2.5 px-3 text-sm text-gray-900 bg-white border border-gray-200 rounded-xl focus:outline-none focus:border-[#007bff] focus:ring-[3px] focus:ring-[#007bff]/12";
+  "w-full min-h-10 py-2.5 px-3 text-sm text-gray-900 bg-white border border-gray-200 rounded-xl focus:outline-none focus:border-[#007bff] focus:ring-[3px] focus:ring-[#007bff]/12";
 
 type SettingsPanelProps = {
   email: string;
@@ -162,7 +162,7 @@ export function SettingsPanel({
             />
             <ToggleRow
               label="SMS shipment updates"
-              description="Send tracking updates via SMS Ethiopia to your phone."
+              description="Send tracking updates via SMS (SMSHub or SMS Ethiopia) to your phone."
               checked={prefs.notifySms}
               onChange={(v) => setPrefs((p) => ({ ...p, notifySms: v }))}
             />
@@ -198,7 +198,7 @@ export function SettingsPanel({
                         defaultExportFormat: e.target.value as "xlsx" | "csv",
                       }))
                     }
-                    className={fieldClass}
+                    className={dashSelectClass}
                   >
                     <option value="xlsx">Excel (.xlsx)</option>
                     <option value="csv">CSV</option>
@@ -223,7 +223,7 @@ export function SettingsPanel({
                           | "pre_coded",
                       }))
                     }
-                    className={fieldClass}
+                    className={dashSelectClass}
                   >
                     <option value="auto">Auto-detect from file</option>
                     <option value="ai">Always use AI classification</option>
@@ -253,7 +253,7 @@ export function SettingsPanel({
                           documentScope: e.target.value as "mine" | "tenant",
                         }))
                       }
-                      className={fieldClass}
+                      className={dashSelectClass}
                     >
                       <option value="mine">Only my uploads</option>
                       <option value="tenant">All tenant documents</option>
@@ -276,7 +276,7 @@ export function SettingsPanel({
                         historyPageSize: Number(e.target.value) as 25 | 50 | 100,
                       }))
                     }
-                    className={fieldClass}
+                    className={dashSelectClass}
                   >
                     <option value={25}>25 documents</option>
                     <option value={50}>50 documents</option>
@@ -303,7 +303,7 @@ export function SettingsPanel({
                           | "month",
                       }))
                     }
-                    className={fieldClass}
+                    className={dashSelectClass}
                   >
                     <option value="7d">Last 7 days</option>
                     <option value="30d">Last 30 days</option>
@@ -328,12 +328,6 @@ export function SettingsPanel({
                   setPrefs((p) => ({ ...p, showInactiveUsers: v }))
                 }
               />
-              <Link
-                href="/dashboard/settings/channels"
-                className="inline-flex text-sm font-medium text-[#007bff] hover:underline"
-              >
-                Configure Telegram &amp; SMS channels →
-              </Link>
             </div>
           )}
         </div>
@@ -343,7 +337,7 @@ export function SettingsPanel({
         <button
           type="submit"
           disabled={saving}
-          className="px-6 py-2.5 rounded-full bg-[#007bff] text-white text-sm font-semibold hover:bg-[#0069d9] disabled:opacity-50 transition-colors shadow-md shadow-blue-500/20"
+          className="px-6 py-2.5 rounded-full bg-[#007bff] text-white text-sm font-semibold hover:bg-[#0069d9] disabled:opacity-50 transition-colors"
         >
           {saving ? "Saving…" : "Save settings"}
         </button>
@@ -499,7 +493,7 @@ function ToggleRow({
         }`}
       >
         <span
-          className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform ${
+          className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white border border-slate-200 transition-transform ${
             checked ? "translate-x-5" : "translate-x-0"
           }`}
         />

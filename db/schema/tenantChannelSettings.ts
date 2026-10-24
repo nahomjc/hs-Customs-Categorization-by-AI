@@ -20,6 +20,11 @@ export const tenantChannelSettings = pgTable(
     telegramBotUsername: varchar("telegram_bot_username", { length: 100 }),
     telegramWebhookSecret: varchar("telegram_webhook_secret", { length: 128 }),
     smsEnabled: boolean("sms_enabled").default(false).notNull(),
+    /** Outbound SMS: smshub (default) | sms_ethiopia */
+    smsProvider: varchar("sms_provider", { length: 20 })
+      .default("smshub")
+      .notNull(),
+    smsSmshubApiKey: text("sms_smshub_api_key"),
     smsEthiopiaApiKey: text("sms_ethiopia_api_key"),
     /** Staff phones allowed to send inbound SMS status commands (251…). */
     authorizedStaffPhones: jsonb("authorized_staff_phones")

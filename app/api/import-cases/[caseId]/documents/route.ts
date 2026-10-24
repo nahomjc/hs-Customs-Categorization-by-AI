@@ -83,7 +83,11 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
   try {
     await uploadObject(storageKey, buffer, file.type || "application/octet-stream");
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
+    const raw = error instanceof Error ? error.message : String(error);
+    const message =
+      raw === "Unauthorized"
+        ? "File storage (Cloudflare R2) rejected the upload — check R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, and that the token can write to R2_BUCKET, then restart the dev server."
+        : raw;
     return NextResponse.json({ error: message }, { status: 500 });
   }
 

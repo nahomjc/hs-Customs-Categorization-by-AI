@@ -1,4 +1,4 @@
-import { eq, inArray } from "drizzle-orm";
+import { and, asc, eq, inArray, sql } from "drizzle-orm";
 import { db } from "@/db";
 import {
   importCases,
@@ -7,15 +7,20 @@ import {
   packingListLines,
   productInvoiceLines,
   productPackingListLines,
+  vddProductMatches,
 } from "@/db/schema";
 import {
-  matchInvoiceAndPackingLines,
-  type InvoiceLineInput,
-  type PackingLineInput,
-} from "./match-lines";
+  buildHarmonizePlan,
+  mapWithConcurrency,
+  type HarmonizePlan,
+  type HarmonizeSlot,
+} from "./harmonize-plan";
 import { normalizeProductDescription } from "./normalize-product";
 import { writeAuditLog } from "./queries";
-import { persistVddMatchesForProducts } from "@/lib/vdd/persist-product-matches";
+import {
+  persistVddMatchesForProduct,
+  persistVddMatchesForProducts,
+} from "@/lib/vdd/persist-product-matches";
 
 export type HarmonizeResult = {
   productCount: number;
@@ -25,100 +30,96 @@ export type HarmonizeResult = {
   vddMatchTotal: number;
 };
 
-export async function harmonizeImportCase(
-  caseId: string,
-  tenantId: string,
-  userId?: string | null,
-  options?: { replaceExisting?: boolean },
-): Promise<HarmonizeResult> {
-  const replaceExisting = options?.replaceExisting ?? true;
+type InvoiceRow = typeof invoiceLines.$inferSelect;
+type PackingRow = typeof packingListLines.$inferSelect;
+type Plan = HarmonizePlan<InvoiceRow, PackingRow>;
+type Slot = HarmonizeSlot<InvoiceRow, PackingRow>;
 
-  const [invRows, packRows, existingProducts] = await Promise.all([
-    db.select().from(invoiceLines).where(eq(invoiceLines.importCaseId, caseId)),
+/** Thrown when the source lines changed between the start and a later batch. */
+export class HarmonizePlanChangedError extends Error {
+  constructor() {
+    super(
+      "The invoice or packing lines changed while harmonizing. Start harmonization again.",
+    );
+    this.name = "HarmonizePlanChangedError";
+  }
+}
+
+/** Products normalized in parallel inside one batch request. */
+const NORMALIZE_CONCURRENCY = 3;
+
+async function loadPlan(caseId: string): Promise<Plan> {
+  const [invRows, packRows] = await Promise.all([
+    db
+      .select()
+      .from(invoiceLines)
+      .where(eq(invoiceLines.importCaseId, caseId))
+      .orderBy(
+        asc(invoiceLines.lineNumber),
+        asc(invoiceLines.createdAt),
+        asc(invoiceLines.id),
+      ),
     db
       .select()
       .from(packingListLines)
-      .where(eq(packingListLines.importCaseId, caseId)),
-    db
-      .select({ id: importProducts.id })
-      .from(importProducts)
-      .where(eq(importProducts.importCaseId, caseId)),
+      .where(eq(packingListLines.importCaseId, caseId))
+      .orderBy(
+        asc(packingListLines.lineNumber),
+        asc(packingListLines.createdAt),
+        asc(packingListLines.id),
+      ),
   ]);
 
   if (invRows.length === 0) {
     throw new Error("No invoice lines to harmonize");
   }
+  return buildHarmonizePlan(invRows, packRows);
+}
 
-  const invoiceInputs: InvoiceLineInput[] = invRows.map((r) => ({
-    id: r.id,
-    lineNumber: r.lineNumber,
-    supplierDescription: r.supplierDescription,
-    supplierSku: r.supplierSku,
-    brand: r.brand,
-    modelNumber: r.modelNumber,
-    quantity: r.quantity,
-    unitOfMeasure: r.unitOfMeasure,
-  }));
+async function createProductForSlot(
+  caseId: string,
+  slot: Slot,
+): Promise<{ status: string; reused: boolean }> {
+  // Idempotent: a sequence that already has a product is never created twice.
+  const [existing] = await db
+    .select({ id: importProducts.id, status: importProducts.status })
+    .from(importProducts)
+    .where(
+      and(
+        eq(importProducts.importCaseId, caseId),
+        eq(importProducts.productSequence, slot.sequence),
+      ),
+    )
+    .limit(1);
+  if (existing) return { status: existing.status, reused: true };
 
-  const packingInputs: PackingLineInput[] = packRows.map((r) => ({
-    id: r.id,
-    lineNumber: r.lineNumber,
-    supplierDescription: r.supplierDescription,
-    supplierSku: r.supplierSku,
-    brand: r.brand,
-    modelNumber: r.modelNumber,
-    quantity: r.quantity,
-    unitOfMeasure: r.unitOfMeasure,
-  }));
+  const inv = slot.inv;
+  const pack = slot.pack;
 
-  const matchResult = matchInvoiceAndPackingLines(
-    invoiceInputs,
-    packingInputs,
+  const normalization = await normalizeProductDescription({
+    invoiceDescription:
+      inv?.supplierDescription ?? pack?.supplierDescription ?? "",
+    packingDescription: pack?.supplierDescription ?? null,
+    supplierSku: inv?.supplierSku ?? pack?.supplierSku ?? null,
+    brand: inv?.brand ?? pack?.brand ?? null,
+    modelNumber: inv?.modelNumber ?? pack?.modelNumber ?? null,
+  });
+
+  const rawParts = [inv?.supplierDescription, pack?.supplierDescription].filter(
+    Boolean,
   );
+  const matchConfidence =
+    slot.matchConfidence !== undefined ? String(slot.matchConfidence) : null;
 
-  const invById = new Map(invRows.map((r) => [r.id, r]));
-  const packById = new Map(packRows.map((r) => [r.id, r]));
-
-  if (replaceExisting && existingProducts.length > 0) {
-    await db
-      .delete(importProducts)
-      .where(eq(importProducts.importCaseId, caseId));
-  }
-
-  let sequence = 0;
-  const createdProductIds: string[] = [];
-
-  async function createProduct(params: {
-    inv?: (typeof invRows)[0];
-    pack?: (typeof packRows)[0];
-    matchConfidence?: number;
-    status: string;
-    missingInfo?: string[];
-  }) {
-    sequence += 1;
-    const inv = params.inv;
-    const pack = params.pack;
-
-    const normalization = await normalizeProductDescription({
-      invoiceDescription:
-        inv?.supplierDescription ?? pack?.supplierDescription ?? "",
-      packingDescription: pack?.supplierDescription ?? null,
-      supplierSku: inv?.supplierSku ?? pack?.supplierSku ?? null,
-      brand: inv?.brand ?? pack?.brand ?? null,
-      modelNumber: inv?.modelNumber ?? pack?.modelNumber ?? null,
-    });
-
-    const rawParts = [
-      inv?.supplierDescription,
-      pack?.supplierDescription,
-    ].filter(Boolean);
-
-    const [product] = await db
+  // Product row and its source links are written together or not at all, so a
+  // retried slot can never leave a product without its links.
+  await db.transaction(async (tx) => {
+    const [product] = await tx
       .insert(importProducts)
       .values({
         importCaseId: caseId,
-        productSequence: sequence,
-        status: params.status,
+        productSequence: slot.sequence,
+        status: slot.status,
         rawDescription: rawParts.join(" | ") || "Unknown product",
         normalizedDescription: normalization.normalizedDescription,
         productName: normalization.productName ?? null,
@@ -141,82 +142,179 @@ export async function harmonizeImportCase(
         numberOfPackages: pack?.numberOfPackages ?? null,
         missingInformation: [
           ...(normalization.missingInformation ?? []),
-          ...(params.missingInfo ?? []),
+          ...slot.missingInfo,
         ],
         normalizationConfidence: String(
           normalization.normalizationConfidence ?? 0.5,
         ),
         humanVerified: false,
       })
+      .onConflictDoNothing()
       .returning({ id: importProducts.id });
 
     if (!product) return;
 
-    createdProductIds.push(product.id);
-
     if (inv) {
-      await db.insert(productInvoiceLines).values({
+      await tx.insert(productInvoiceLines).values({
         productId: product.id,
         invoiceLineId: inv.id,
-        matchConfidence:
-          params.matchConfidence !== undefined
-            ? String(params.matchConfidence)
-            : null,
+        matchConfidence,
         isConfirmed: false,
       });
     }
-
     if (pack) {
-      await db.insert(productPackingListLines).values({
+      await tx.insert(productPackingListLines).values({
         productId: product.id,
         packingListLineId: pack.id,
-        matchConfidence:
-          params.matchConfidence !== undefined
-            ? String(params.matchConfidence)
-            : null,
+        matchConfidence,
         isConfirmed: false,
       });
     }
+  });
+
+  return { status: slot.status, reused: false };
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+/* ------------------------------------------------------------------ */
+/* Batched run (used by the progress dialog)                           */
+/* ------------------------------------------------------------------ */
+
+export type HarmonizeStartInfo = {
+  planKey: string;
+  /** Number of products this run will create. */
+  total: number;
+  matchCount: number;
+  unmatchedInvoiceCount: number;
+  unmatchedPackingCount: number;
+};
+
+/** Step 1: build the plan and clear the previous products (same as before). */
+export async function startHarmonizeRun(
+  caseId: string,
+  options?: { replaceExisting?: boolean },
+): Promise<HarmonizeStartInfo> {
+  const replaceExisting = options?.replaceExisting ?? true;
+  const plan = await loadPlan(caseId);
+
+  if (replaceExisting) {
+    await db.delete(importProducts).where(eq(importProducts.importCaseId, caseId));
   }
 
-  // Matched pairs
-  for (const match of matchResult.matches) {
-    const inv = invById.get(match.invoiceLineId);
-    const pack = packById.get(match.packingListLineId);
-    if (!inv) continue;
+  return {
+    planKey: plan.planKey,
+    total: plan.slots.length,
+    matchCount: plan.matchCount,
+    unmatchedInvoiceCount: plan.unmatchedInvoiceCount,
+    unmatchedPackingCount: plan.unmatchedPackingCount,
+  };
+}
 
-    const qtyMismatch =
-      pack && Number(inv.quantity) !== Number(pack.quantity);
+export type HarmonizeProductResult =
+  | { sequence: number; ok: true; status: string; reused: boolean }
+  | { sequence: number; ok: false; error: string };
 
-    await createProduct({
-      inv,
-      pack,
-      matchConfidence: match.confidence,
-      status: qtyMismatch ? "needs_information" : "ready_for_hs_suggestion",
-      missingInfo: qtyMismatch ? ["quantity_mismatch_between_sources"] : [],
-    });
+/** Step 2 (repeat): create the products for these sequences. Safe to retry. */
+export async function harmonizeProductSequences(
+  caseId: string,
+  planKey: string,
+  sequences: number[],
+): Promise<HarmonizeProductResult[]> {
+  const plan = await loadPlan(caseId);
+  if (plan.planKey !== planKey) throw new HarmonizePlanChangedError();
+
+  const unique = [...new Set(sequences)].sort((a, b) => a - b);
+  return mapWithConcurrency(
+    unique,
+    NORMALIZE_CONCURRENCY,
+    async (sequence): Promise<HarmonizeProductResult> => {
+      const slot = plan.slots[sequence - 1];
+      if (!slot || slot.sequence !== sequence) {
+        return { sequence, ok: false, error: "Unknown product sequence" };
+      }
+      try {
+        const created = await createProductForSlot(caseId, slot);
+        return { sequence, ok: true, ...created };
+      } catch (error) {
+        return { sequence, ok: false, error: errorMessage(error) };
+      }
+    },
+  );
+}
+
+export type HarmonizeVddResult =
+  | { sequence: number; ok: true; matchCount: number }
+  | { sequence: number; ok: false; error: string };
+
+/** Step 3 (repeat): search and store VDD matches for these products. Safe to retry. */
+export async function harmonizeVddSequences(
+  caseId: string,
+  tenantId: string,
+  sequences: number[],
+): Promise<HarmonizeVddResult[]> {
+  const unique = [...new Set(sequences)].sort((a, b) => a - b);
+  if (unique.length === 0) return [];
+
+  const products = await db
+    .select()
+    .from(importProducts)
+    .where(
+      and(
+        eq(importProducts.importCaseId, caseId),
+        inArray(importProducts.productSequence, unique),
+      ),
+    );
+  const bySequence = new Map(products.map((p) => [p.productSequence, p]));
+
+  const results: HarmonizeVddResult[] = [];
+  for (const sequence of unique) {
+    const product = bySequence.get(sequence);
+    if (!product) {
+      results.push({ sequence, ok: false, error: "Product not found" });
+      continue;
+    }
+    try {
+      const { matchCount } = await persistVddMatchesForProduct(tenantId, product);
+      results.push({ sequence, ok: true, matchCount });
+    } catch (error) {
+      results.push({ sequence, ok: false, error: errorMessage(error) });
+    }
   }
+  return results;
+}
 
-  // Unmatched invoice lines
-  for (const id of matchResult.unmatchedInvoiceLineIds) {
-    const inv = invById.get(id);
-    if (!inv) continue;
-    await createProduct({
-      inv,
-      status: "needs_information",
-      missingInfo: ["no_packing_list_match"],
-    });
-  }
+async function countVddMatches(caseId: string): Promise<number> {
+  const [row] = await db
+    .select({ n: sql<number>`count(*)::int` })
+    .from(vddProductMatches)
+    .innerJoin(importProducts, eq(importProducts.id, vddProductMatches.productId))
+    .where(eq(importProducts.importCaseId, caseId));
+  return Number(row?.n ?? 0);
+}
 
-  // Unmatched packing lines
-  for (const id of matchResult.unmatchedPackingListLineIds) {
-    const pack = packById.get(id);
-    if (!pack) continue;
-    await createProduct({
-      pack,
-      status: "needs_information",
-      missingInfo: ["no_invoice_match"],
-    });
+/** Step 4: mark the case ready and write the audit entry (same as before). */
+export async function finalizeHarmonizeRun(
+  caseId: string,
+  tenantId: string,
+  userId: string | null | undefined,
+  planKey: string,
+  knownPlan?: Plan,
+): Promise<HarmonizeResult> {
+  const plan = knownPlan ?? (await loadPlan(caseId));
+  if (plan.planKey !== planKey) throw new HarmonizePlanChangedError();
+
+  const [row] = await db
+    .select({ n: sql<number>`count(*)::int` })
+    .from(importProducts)
+    .where(eq(importProducts.importCaseId, caseId));
+  const saved = Number(row?.n ?? 0);
+  if (saved !== plan.slots.length) {
+    throw new Error(
+      `Only ${saved} of ${plan.slots.length} products were saved. Retry the failed products first.`,
+    );
   }
 
   await db
@@ -227,19 +325,7 @@ export async function harmonizeImportCase(
     })
     .where(eq(importCases.id, caseId));
 
-  // Search VDD for each created product and persist matches (decision support).
-  let vddMatchTotal = 0;
-  if (createdProductIds.length > 0) {
-    const createdProducts = await db
-      .select()
-      .from(importProducts)
-      .where(inArray(importProducts.id, createdProductIds));
-    const { totalMatches } = await persistVddMatchesForProducts(
-      tenantId,
-      createdProducts,
-    );
-    vddMatchTotal = totalMatches;
-  }
+  const vddMatchTotal = await countVddMatches(caseId);
 
   await writeAuditLog({
     tenantId,
@@ -249,17 +335,51 @@ export async function harmonizeImportCase(
     entityId: caseId,
     action: "product_harmonized",
     newData: {
-      productCount: sequence,
-      matchCount: matchResult.matches.length,
+      productCount: plan.slots.length,
+      matchCount: plan.matchCount,
       vddMatchTotal,
     },
   });
 
   return {
-    productCount: sequence,
-    matchCount: matchResult.matches.length,
-    unmatchedInvoiceCount: matchResult.unmatchedInvoiceLineIds.length,
-    unmatchedPackingCount: matchResult.unmatchedPackingListLineIds.length,
+    productCount: plan.slots.length,
+    matchCount: plan.matchCount,
+    unmatchedInvoiceCount: plan.unmatchedInvoiceCount,
+    unmatchedPackingCount: plan.unmatchedPackingCount,
     vddMatchTotal,
   };
+}
+
+/* ------------------------------------------------------------------ */
+/* Single blocking run (kept for callers that send no batch action)    */
+/* ------------------------------------------------------------------ */
+
+export async function harmonizeImportCase(
+  caseId: string,
+  tenantId: string,
+  userId?: string | null,
+  options?: { replaceExisting?: boolean },
+): Promise<HarmonizeResult> {
+  const replaceExisting = options?.replaceExisting ?? true;
+  const plan = await loadPlan(caseId);
+
+  if (replaceExisting) {
+    await db.delete(importProducts).where(eq(importProducts.importCaseId, caseId));
+  }
+
+  for (const slot of plan.slots) {
+    await createProductForSlot(caseId, slot);
+  }
+
+  // Search VDD for each created product and persist matches (decision support).
+  const created = await db
+    .select()
+    .from(importProducts)
+    .where(eq(importProducts.importCaseId, caseId))
+    .orderBy(asc(importProducts.productSequence));
+  if (created.length > 0) {
+    await persistVddMatchesForProducts(tenantId, created);
+  }
+
+  return finalizeHarmonizeRun(caseId, tenantId, userId, plan.planKey, plan);
 }

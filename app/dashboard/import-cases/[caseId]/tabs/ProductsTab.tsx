@@ -1,9 +1,14 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { toast } from "sonner";
+import { Pagination, usePagination } from "@/components/dashboard/Pagination";
 import { BulkReviewToolbar } from "@/components/dashboard/import-case/BulkReviewActions";
+import {
+  HarmonizeProgressBanner,
+  HarmonizeProgressDialog,
+} from "@/components/dashboard/import-case/HarmonizeProgressDialog";
 import {
   DashButton,
   DashCard,
@@ -17,27 +22,66 @@ import {
   TruncatedText,
   dashInputClass,
 } from "@/components/dashboard/ui";
+import type { JobSnapshot } from "@/lib/import-cases/harmonize-progress";
 import type { CaseProductWithSources } from "@/lib/import-cases/product-queries";
 import { useBulkReview } from "@/lib/import-cases/use-bulk-review";
+import { useHarmonizeJob } from "@/lib/import-cases/use-harmonize-job";
 
 type ProductsTabProps = {
   caseId: string;
   initialProducts: CaseProductWithSources[];
 };
 
+function productSearchHaystack(row: CaseProductWithSources): string {
+  const p = row.product;
+  return [
+    p.normalizedDescription,
+    p.rawDescription,
+    p.productName,
+    p.brand,
+    p.modelNumber,
+    String(p.productSequence),
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+}
+
+function markPendingProductsVerified(
+  rows: CaseProductWithSources[],
+): CaseProductWithSources[] {
+  return rows.map((row) =>
+    row.product.humanVerified
+      ? row
+      : {
+          ...row,
+          product: {
+            ...row.product,
+            humanVerified: true,
+            status: "ready_for_hs_suggestion",
+          },
+        },
+  );
+}
+
 export function ProductsTab({ caseId, initialProducts }: ProductsTabProps) {
   const router = useRouter();
   const [products, setProducts] =
     useState<CaseProductWithSources[]>(initialProducts);
-  const [harmonizing, setHarmonizing] = useState(false);
+  const [progressOpen, setProgressOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editDescription, setEditDescription] = useState("");
   const [confirmingId, setConfirmingId] = useState<string | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [search, setSearch] = useState("");
 
   async function refreshProducts() {
-    const res = await fetch(`/api/import-cases/${caseId}/products`);
-    if (!res.ok) return;
+    const res = await fetch(`/api/import-cases/${caseId}/products`, {
+      cache: "no-store",
+    });
+    if (!res.ok) {
+      throw new Error("Failed to refresh products");
+    }
     const data = (await res.json()) as {
       products: CaseProductWithSources[];
     };
@@ -45,34 +89,41 @@ export function ProductsTab({ caseId, initialProducts }: ProductsTabProps) {
     router.refresh();
   }
 
-  async function handleHarmonize() {
-    setHarmonizing(true);
-    try {
-      const res = await fetch(`/api/import-cases/${caseId}/harmonize`, {
-        method: "POST",
-      });
-      const data = (await res.json()) as {
-        error?: string;
-        productCount?: number;
-        matchCount?: number;
-        vddMatchTotal?: number;
-      };
-      if (!res.ok) throw new Error(data.error ?? "Harmonization failed");
+  // Harmonization runs as short, resumable batches driven from here so the
+  // dialog can show real progress (see lib/import-cases/harmonize-progress.ts).
+  function handleJobFinished(snap: JobSnapshot) {
+    setProgressOpen(true);
+    if (snap.status === "success" && snap.summary) {
       const vddPart =
-        data.vddMatchTotal != null && data.vddMatchTotal > 0
-          ? ` · ${data.vddMatchTotal} VDD hit(s)`
+        snap.summary.vddMatchTotal > 0
+          ? ` \u00b7 ${snap.summary.vddMatchTotal} VDD hit(s)`
           : "";
       toast.success(
-        `Created ${data.productCount} harmonized product(s) (${data.matchCount} matched pairs)${vddPart}`,
+        `Created ${snap.summary.productCount} harmonized product(s) (${snap.summary.matchCount} matched pairs)${vddPart}`,
       );
-      await refreshProducts();
-    } catch (error) {
-      toast.error(
-        error instanceof Error ? error.message : "Harmonization failed",
-      );
-    } finally {
-      setHarmonizing(false);
+    } else if (snap.status === "failed") {
+      toast.error(snap.fatalError ?? "Harmonization failed");
     }
+    // show whatever was saved so far behind the dialog
+    void refreshProducts();
+  }
+
+  const job = useHarmonizeJob(caseId, { onFinished: handleJobFinished });
+  const harmonizing = job.active;
+
+  function handleHarmonize() {
+    setProgressOpen(true);
+    job.start();
+  }
+
+  function handleProgressDone() {
+    setProgressOpen(false);
+    job.reset();
+    void refreshProducts().catch((error) => {
+      toast.error(
+        error instanceof Error ? error.message : "Failed to refresh products",
+      );
+    });
   }
 
   async function handleConfirm(productId: string) {
@@ -115,11 +166,35 @@ export function ProductsTab({ caseId, initialProducts }: ProductsTabProps) {
 
   const verifiedCount = products.filter((p) => p.product.humanVerified).length;
   const pendingCount = products.length - verifiedCount;
+
+  const filteredProducts = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return products;
+    return products.filter((row) => productSearchHaystack(row).includes(q));
+  }, [products, search]);
+
+  const pagination = usePagination(filteredProducts.length);
+  const pageProducts = filteredProducts.slice(pagination.start, pagination.end);
+
   const bulk = useBulkReview({
     caseId,
     endpoint: "products/bulk-review",
     itemLabel: "products",
-    onSuccess: refreshProducts,
+    onSuccess: async ({ action, affectedCount }) => {
+      if (
+        (action === "approve" || action === "override") &&
+        affectedCount > 0
+      ) {
+        setProducts((prev) => markPendingProductsVerified(prev));
+      }
+      try {
+        await refreshProducts();
+      } catch (error) {
+        toast.error(
+          error instanceof Error ? error.message : "Failed to refresh products",
+        );
+      }
+    },
   });
 
   return (
@@ -132,7 +207,7 @@ export function ProductsTab({ caseId, initialProducts }: ProductsTabProps) {
               <BulkReviewToolbar
                 pendingCount={pendingCount}
                 itemLabel="products"
-                loading={bulk.loading}
+                loading={bulk.loading || harmonizing}
                 modalAction={bulk.modalAction}
                 actionMessages={bulk.actionMessages}
                 onActionClick={bulk.openModal}
@@ -163,6 +238,12 @@ export function ProductsTab({ caseId, initialProducts }: ProductsTabProps) {
             product records. Original source lines are preserved. Human
             confirmation is required before HS classification.
           </p>
+          {job.snapshot && !progressOpen ? (
+            <HarmonizeProgressBanner
+              snapshot={job.snapshot}
+              onShow={() => setProgressOpen(true)}
+            />
+          ) : null}
           {products.length > 0 ? (
             <p className="text-xs text-slate-500 mt-2">
               {products.length} product(s) · {verifiedCount} human verified
@@ -181,6 +262,45 @@ export function ProductsTab({ caseId, initialProducts }: ProductsTabProps) {
             </p>
           </div>
         ) : (
+          <>
+          <div className="border-b border-slate-100 px-5 py-3">
+            <div className="relative max-w-md">
+              <span
+                className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
+                aria-hidden
+              >
+                <svg
+                  className="h-4 w-4"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+                  />
+                </svg>
+              </span>
+              <input
+                type="search"
+                value={search}
+                onChange={(e) => {
+                  setSearch(e.target.value);
+                  pagination.reset();
+                }}
+                placeholder="Search products — description, brand, model, line #…"
+                className={dashInputClass}
+                aria-label="Search products"
+              />
+            </div>
+            {search.trim() ? (
+              <p className="mt-2 text-xs text-slate-500">
+                {filteredProducts.length} of {products.length} product(s) match
+              </p>
+            ) : null}
+          </div>
           <DashTable tableClassName="table-fixed text-xs">
             <colgroup>
               <col className="w-8" />
@@ -203,7 +323,17 @@ export function ProductsTab({ caseId, initialProducts }: ProductsTabProps) {
               </DashTableHeaderRow>
             </DashTableHead>
             <DashTbody>
-              {products.map(
+              {pageProducts.length === 0 ? (
+                <tr>
+                  <td
+                    colSpan={6}
+                    className="px-5 py-8 text-center text-sm text-slate-500"
+                  >
+                    No products match your search.
+                  </td>
+                </tr>
+              ) : null}
+              {pageProducts.map(
                 ({ product, invoiceSources, packingSources, vddMatches }) => (
                   <ProductTableRow
                     key={product.id}
@@ -231,8 +361,30 @@ export function ProductsTab({ caseId, initialProducts }: ProductsTabProps) {
               )}
             </DashTbody>
           </DashTable>
+          <Pagination
+            bounds={pagination}
+            onPageChange={pagination.setPage}
+            onPageSizeChange={pagination.setPageSize}
+            itemLabel="products"
+            note={
+              pendingCount > 0
+                ? `Approve all applies to every pending product (${pendingCount} total), not only this page.`
+                : undefined
+            }
+          />
+          </>
         )}
       </DashCard>
+
+      <HarmonizeProgressDialog
+        open={progressOpen && job.snapshot !== null}
+        snapshot={job.snapshot}
+        onHide={() => setProgressOpen(false)}
+        onDone={handleProgressDone}
+        onStop={job.stop}
+        onResume={job.resume}
+        onRetryFailed={job.retryFailed}
+      />
     </div>
   );
 }

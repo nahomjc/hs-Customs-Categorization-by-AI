@@ -92,6 +92,27 @@
       "when": 1789000000000,
       "tag": "0012_vdd_dedupe_custom_fields",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1789100000000,
+      "tag": "0013_hs_chapter_notes",
+      "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1789200000000,
+      "tag": "0014_import_column_mappings",
+      "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "version": "7",
+      "when": 1789300000000,
+      "tag": "0015_sms_provider_smshub",
+      "breakpoints": true
     }
   ]
 }

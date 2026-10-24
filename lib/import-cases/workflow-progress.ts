@@ -125,3 +125,107 @@ export function getCurrentWizardStep(
   }
   return WIZARD_STEPS[WIZARD_STEPS.length - 1].id;
 }
+
+/** Human-readable gaps for the current step (empty when ready to continue). */
+export function getWizardStepWarnings(
+  stepId: WizardStepId,
+  ctx: WizardCompletionContext,
+  openCheckCount = 0,
+): string[] {
+  const warnings: string[] = [];
+
+  const hasInvoice = ctx.documents.some(
+    (d) =>
+      d.documentType === "commercial_invoice" &&
+      d.extractionStatus === "completed",
+  );
+  const hasPacking = ctx.documents.some(
+    (d) =>
+      d.documentType === "packing_list" && d.extractionStatus === "completed",
+  );
+
+  const unreviewedInvoice = ctx.invoiceLines.filter((l) => !l.line.isReviewed);
+  const unreviewedPacking = ctx.packingLines.filter((l) => !l.line.isReviewed);
+  const unverifiedProducts = ctx.products.filter((p) => !p.product.humanVerified);
+  const verifiedClassifications = ctx.classifications.filter(
+    (c) => c.product.humanVerified,
+  );
+  const unapprovedClassifications = verifiedClassifications.filter(
+    (c) => !c.classification?.isFinal,
+  );
+
+  switch (stepId) {
+    case "case-info":
+      break;
+    case "documents":
+      if (!hasInvoice) {
+        warnings.push(
+          "Commercial invoice is missing or extraction is not completed.",
+        );
+      }
+      if (!hasPacking) {
+        warnings.push(
+          "Packing list is missing or extraction is not completed.",
+        );
+      }
+      break;
+    case "invoice-lines":
+      if (ctx.invoiceLines.length === 0) {
+        warnings.push("No invoice lines — extract or add lines first.");
+      } else if (unreviewedInvoice.length > 0) {
+        warnings.push(
+          `${unreviewedInvoice.length} invoice line(s) are not reviewed.`,
+        );
+      }
+      break;
+    case "packing-lines":
+      if (ctx.packingLines.length === 0) {
+        warnings.push("No packing list lines — extract or add lines first.");
+      } else if (unreviewedPacking.length > 0) {
+        warnings.push(
+          `${unreviewedPacking.length} packing line(s) are not reviewed.`,
+        );
+      }
+      break;
+    case "checks":
+      if (!hasInvoice || !hasPacking) {
+        warnings.push("Invoice and packing list extractions should be complete.");
+      }
+      if (unreviewedInvoice.length > 0 || unreviewedPacking.length > 0) {
+        warnings.push("Some invoice or packing lines are still unreviewed.");
+      }
+      if (openCheckCount > 0) {
+        warnings.push(`${openCheckCount} open check(s) need attention.`);
+      }
+      break;
+    case "products":
+      if (ctx.products.length === 0) {
+        warnings.push("No harmonized products — run harmonization first.");
+      } else if (unverifiedProducts.length > 0) {
+        warnings.push(
+          `${unverifiedProducts.length} product(s) are not human-verified.`,
+        );
+      }
+      break;
+    case "classification":
+      if (verifiedClassifications.length === 0) {
+        warnings.push("No verified products to classify.");
+      } else if (unapprovedClassifications.length > 0) {
+        warnings.push(
+          `${unapprovedClassifications.length} product(s) need HS approval or expert review.`,
+        );
+      }
+      break;
+    case "grouping-export":
+      if (ctx.groupings.length === 0) {
+        warnings.push("No declaration groups — run grouping before export.");
+      }
+      break;
+    case "case-history":
+      break;
+    default:
+      break;
+  }
+
+  return warnings;
+}

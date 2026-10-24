@@ -153,6 +153,32 @@ export async function searchDescriptionsByKeywords(
   return searchDescriptions(query, limit);
 }
 
+/**
+ * Reference rows restricted to the given chapters (no product-type chapter gate).
+ * Used when chapter/section notes redirect an item to another chapter.
+ */
+export async function searchDescriptionsInChapters(
+  query: string,
+  chapters: string[],
+  limit = 30,
+): Promise<HsReferenceCacheRow[]> {
+  await loadHsReferenceCache();
+  const wanted = new Set(chapters.map((c) => c.padStart(2, "0")));
+  const rows = getHsReferenceCacheRows().filter(
+    (row) => row.chapter && wanted.has(row.chapter.padStart(2, "0").slice(0, 2)),
+  );
+  if (rows.length === 0) return [];
+
+  const tokens = tokenize(query);
+  if (tokens.length === 0) return rows.slice(0, limit);
+
+  return rows
+    .map((row) => ({ row, score: scoreRow(row, tokens, query) }))
+    .sort((a, b) => b.score - a.score)
+    .slice(0, limit)
+    .map((s) => s.row);
+}
+
 export type HsReferenceListResult = {
   rows: HsCodeReferenceRow[];
   total: number;

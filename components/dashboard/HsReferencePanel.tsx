@@ -2,8 +2,17 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
+import { ChapterNotesPanel } from "@/components/dashboard/ChapterNotesPanel";
 import { HsCodeBadge } from "@/components/dashboard/document/HsCodeBadge";
-import { DashboardStatCard } from "@/components/dashboard/DashboardStatCard";
+import { HsBookView } from "@/components/dashboard/HsBookView";
+import {
+  HsReferenceOverview,
+  type HsReferenceStats,
+} from "@/components/dashboard/HsReferenceOverview";
+import {
+  HsCodeDetailDialog,
+  type HsCodeDetailRow,
+} from "@/components/dashboard/HsCodeDetailDialog";
 import {
   DashButton,
   DashCard,
@@ -16,8 +25,8 @@ import {
   DashTd,
   DashTh,
   DashTr,
+  DashSelect,
   dashInputClass,
-  dashSelectClass,
 } from "@/components/dashboard/ui";
 import {
   Dialog,
@@ -27,16 +36,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { formatBytes } from "@/lib/formatBytes";
 import type { HsReferenceSortField } from "@/lib/hsReferenceTypes";
-
-type HsReferenceStats = {
-  rowCount: number;
-  chapters: string[];
-  chapterRange: string | null;
-  lastImportedAt: string | null;
-  storageBytes: number;
-};
 
 type HsReferenceRow = {
   id: string;
@@ -51,6 +51,13 @@ type HsReferenceRow = {
 };
 
 const PAGE_SIZES = [25, 50, 100] as const;
+
+type ViewMode = "table" | "book";
+
+const VIEW_MODES: { key: ViewMode; label: string }[] = [
+  { key: "table", label: "Table view" },
+  { key: "book", label: "Book view" },
+];
 
 const SORTABLE_COLUMNS: {
   key: HsReferenceSortField;
@@ -78,17 +85,6 @@ function SortIndicator({
   );
 }
 
-function formatImportedAt(value: string | null | undefined): string {
-  if (!value) return "Not imported yet";
-  return new Date(value).toLocaleString("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  });
-}
-
 export function HsReferencePanel() {
   const [stats, setStats] = useState<HsReferenceStats | null>(null);
   const [rows, setRows] = useState<HsReferenceRow[]>([]);
@@ -108,6 +104,8 @@ export function HsReferencePanel() {
   const [error, setError] = useState<string | null>(null);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [dragActive, setDragActive] = useState(false);
+  const [selectedRow, setSelectedRow] = useState<HsCodeDetailRow | null>(null);
+  const [viewMode, setViewMode] = useState<ViewMode>("table");
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -226,87 +224,22 @@ export function HsReferencePanel() {
 
   return (
     <div className="w-full min-w-0 space-y-6">
-      {/* Hero */}
-      <div className="relative overflow-hidden rounded-3xl border border-slate-200/70 bg-white shadow-[0_8px_40px_-12px_rgba(15,23,42,0.1)]">
-        <div className="pointer-events-none absolute inset-0" aria-hidden>
-          <div className="absolute -right-16 -top-16 h-52 w-52 rounded-full bg-emerald-400/10 blur-3xl" />
-          <div className="absolute -bottom-16 left-1/4 h-44 w-44 rounded-full bg-indigo-400/10 blur-3xl" />
-        </div>
-        <div className="relative px-5 py-5 sm:px-7 sm:py-6">
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-            <div>
-              <p className="text-[11px] font-bold uppercase tracking-widest text-emerald-600">
-                Admin · Reference data
-              </p>
-              <h1 className="mt-1 text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">
-                HS tariff reference
-              </h1>
-              <p className="mt-1.5 max-w-2xl text-sm text-slate-500">
-                Upload the Ethiopian combined tariff book or an ESW tariff list Excel. Classification uses these codes as the allowed reference list — rows merge by tariff number.
-              </p>
-            </div>
-            <div className="flex shrink-0 flex-col items-stretch gap-3 sm:items-end">
-              <DashButton type="button" onClick={() => setUploadModalOpen(true)}>
-                Import tariff book
-              </DashButton>
-              <div className="flex items-center gap-2 rounded-2xl border border-amber-200/80 bg-amber-50/80 px-4 py-3 text-sm text-amber-900">
-                <svg className="h-5 w-5 shrink-0 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-                <span>Partial books only cover imported chapters. Prefer a full ECC book or ESW tariff list (chs 01–97) for apparel, furniture, and lighting.</span>
-              </div>
-            </div>
-          </div>
-        </div>
+      <div className="min-w-0">
+        <p className="text-[11px] font-bold uppercase tracking-widest text-[#007bff]">
+          Admin &middot; Reference data
+        </p>
+        <h1 className="mt-1 text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">
+          HS tariff reference
+        </h1>
+        <p className="mt-1.5 max-w-2xl text-sm text-slate-500">
+          Upload the Ethiopian combined tariff book or an ESW tariff list Excel. Classification uses these codes as the allowed reference list &mdash; rows merge by tariff number.
+        </p>
       </div>
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <DashboardStatCard
-          label="Tariff rows"
-          value={stats?.rowCount ?? "—"}
-          hint="In database"
-          accent="blue"
-          icon={
-            <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
-            </svg>
-          }
-        />
-        <DashboardStatCard
-          label="Chapter range"
-          value={stats?.chapterRange ?? "—"}
-          hint={`${stats?.chapters?.length ?? 0} chapters loaded`}
-          accent="violet"
-          icon={
-            <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 6h16M4 10h16M4 14h16M4 18h16" />
-            </svg>
-          }
-        />
-        <DashboardStatCard
-          label="Storage"
-          value={stats ? formatBytes(stats.storageBytes) : "—"}
-          hint="Data + indexes"
-          accent="default"
-          icon={
-            <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4" />
-            </svg>
-          }
-        />
-        <DashboardStatCard
-          label="Last import"
-          value={stats?.lastImportedAt ? "Synced" : "—"}
-          hint={formatImportedAt(stats?.lastImportedAt)}
-          accent={stats?.lastImportedAt ? "green" : "default"}
-          icon={
-            <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-            </svg>
-          }
-        />
-      </div>
-
+      <HsReferenceOverview
+        stats={stats}
+        onImport={() => setUploadModalOpen(true)}
+      />
       <Dialog
         open={uploadModalOpen}
         onOpenChange={(open) => {
@@ -346,7 +279,7 @@ export function HsReferencePanel() {
                   : "border-slate-200 bg-slate-50/50 hover:border-slate-300"
               }`}
             >
-              <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-600 text-white shadow-lg shadow-emerald-500/20">
+              <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-600 text-white">
                 <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
                   <title>Upload</title>
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
@@ -397,11 +330,41 @@ export function HsReferencePanel() {
         <DashCardHeader
           title="Browse reference"
           action={
-            <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold tabular-nums text-slate-600">
-              {total.toLocaleString()} rows
-            </span>
+            <div className="flex flex-wrap items-center gap-3">
+              <div
+                role="group"
+                aria-label="Reference view"
+                className="inline-flex rounded-xl border border-slate-200 bg-slate-50 p-0.5"
+              >
+                {VIEW_MODES.map((mode) => (
+                  <button
+                    key={mode.key}
+                    type="button"
+                    onClick={() => setViewMode(mode.key)}
+                    aria-pressed={viewMode === mode.key}
+                    className={`rounded-lg px-3 py-1 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#007bff]/40 ${
+                      viewMode === mode.key
+                        ? "bg-white text-slate-900"
+                        : "text-slate-500 hover:text-slate-800"
+                    }`}
+                  >
+                    {mode.label}
+                  </button>
+                ))}
+              </div>
+              <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold tabular-nums text-slate-600">
+                {total.toLocaleString()} rows
+              </span>
+            </div>
           }
         />
+        {viewMode === "book" ? (
+          <HsBookView
+            refreshKey={stats?.lastImportedAt ?? null}
+            onOpenRow={setSelectedRow}
+          />
+        ) : (
+          <>
         <div className="space-y-4 px-5 py-4 sm:px-6">
           {error ? (
             <p className="rounded-xl border border-red-100 bg-red-50 px-3 py-2 text-sm text-red-700">
@@ -423,29 +386,29 @@ export function HsReferencePanel() {
                 className={`${dashInputClass} border-slate-200/80 bg-slate-50/50 focus:bg-white`}
               />
             </div>
-            <select
+            <DashSelect
               value={chapter}
-              onChange={(e) => onChapterChange(e.target.value)}
-              className={`${dashSelectClass} border-slate-200/80 bg-slate-50/50`}
-            >
-              <option value="">All chapters</option>
-              {(stats?.chapters ?? []).map((ch) => (
-                <option key={ch} value={ch}>
-                  Chapter {ch}
-                </option>
-              ))}
-            </select>
-            <select
-              value={pageSize}
-              onChange={(e) => onPageSizeChange(Number(e.target.value))}
-              className={`${dashSelectClass} border-slate-200/80 bg-slate-50/50`}
-            >
-              {PAGE_SIZES.map((size) => (
-                <option key={size} value={size}>
-                  {size} per page
-                </option>
-              ))}
-            </select>
+              onChange={onChapterChange}
+              aria-label="Filter by chapter"
+              className="sm:min-w-[11rem]"
+              options={[
+                { value: "", label: "All chapters" },
+                ...(stats?.chapters ?? []).map((ch) => ({
+                  value: ch,
+                  label: `Chapter ${ch}`,
+                })),
+              ]}
+            />
+            <DashSelect
+              value={String(pageSize)}
+              onChange={(v) => onPageSizeChange(Number(v))}
+              aria-label="Rows per page"
+              className="sm:min-w-[9rem]"
+              options={PAGE_SIZES.map((size) => ({
+                value: String(size),
+                label: `${size} per page`,
+              }))}
+            />
           </div>
 
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between text-sm text-slate-500">
@@ -524,7 +487,20 @@ export function HsReferencePanel() {
                   rows.map((row) => {
                     const hsDisplay = row.hsCode ?? row.normalizedHs;
                     return (
-                      <DashTr key={row.id}>
+                      <DashTr
+                        key={row.id}
+                        onClick={() => setSelectedRow(row)}
+                        onKeyDown={(e) => {
+                          if (e.target !== e.currentTarget) return;
+                          if (e.key === "Enter" || e.key === " ") {
+                            e.preventDefault();
+                            setSelectedRow(row);
+                          }
+                        }}
+                        tabIndex={0}
+                        aria-label={`View details for ${row.tariffNo}`}
+                        className="focus-visible:bg-blue-50/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#007bff]/40"
+                      >
                         <DashTd muted density="compact" className="px-4 tabular-nums">
                           {row.heading ?? "—"}
                         </DashTd>
@@ -574,7 +550,16 @@ export function HsReferencePanel() {
             />
           </div>
         )}
+          </>
+        )}
       </DashCard>
+
+      <HsCodeDetailDialog
+        row={selectedRow}
+        onClose={() => setSelectedRow(null)}
+      />
+
+      <ChapterNotesPanel />
     </div>
   );
 }

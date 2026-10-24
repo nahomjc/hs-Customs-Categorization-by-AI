@@ -260,7 +260,7 @@ export function UploadForm({ autoOpenDocument }: UploadFormProps) {
         type="button"
         onClick={submit}
         disabled={!file || loading}
-        className="w-full inline-flex items-center justify-center gap-2 py-3.5 px-4 rounded-full bg-[#007bff] text-white font-semibold disabled:opacity-50 disabled:cursor-not-allowed hover:bg-[#0069d9] transition-colors shadow-md shadow-blue-500/20"
+        className="w-full inline-flex items-center justify-center gap-2 py-3.5 px-4 rounded-full bg-[#007bff] text-white font-semibold disabled:opacity-50 disabled:cursor-not-allowed hover:bg-[#0069d9] transition-colors"
       >
         {loading ? (
           <>

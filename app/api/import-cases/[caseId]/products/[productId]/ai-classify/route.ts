@@ -11,6 +11,7 @@ type RouteParams = {
   params: Promise<{ caseId: string; productId: string }>;
 };
 
+/** Single-product AI classify (not `/classify` — conflicts with case batch route in App Router). */
 export async function POST(request: NextRequest, { params }: RouteParams) {
   const user = await getAuthUser();
   if (!user?.id) return unauthorizedResponse();

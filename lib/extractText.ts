@@ -15,7 +15,9 @@ function spreadsheetBufferToText(buffer: Buffer): string {
     });
     for (const row of data) {
       const rowText = Array.isArray(row)
-        ? row.map((c) => String(c ?? "")).join("\t")
+        ? row
+            .map((c) => String(c ?? "").replace(/\s*[\r\n]+\s*/g, " ").trim())
+            .join("\t")
         : String(row);
       if (rowText.trim()) lines.push(rowText.trim());
     }

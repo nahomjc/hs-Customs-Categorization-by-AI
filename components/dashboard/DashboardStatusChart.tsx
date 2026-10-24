@@ -172,7 +172,7 @@ export function DashboardStatusChart({
       <div className="relative mx-auto shrink-0 sm:mx-0">
         <svg
           viewBox="0 0 100 100"
-          className="h-40 w-40 drop-shadow-sm"
+          className="h-40 w-40"
           role="img"
           aria-label="Document status distribution"
         >

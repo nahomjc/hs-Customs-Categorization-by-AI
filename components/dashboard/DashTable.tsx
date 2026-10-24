@@ -1,5 +1,10 @@
 import Link from "next/link";
-import type { ReactNode, TdHTMLAttributes, ThHTMLAttributes } from "react";
+import type {
+  HTMLAttributes,
+  ReactNode,
+  TdHTMLAttributes,
+  ThHTMLAttributes,
+} from "react";
 
 type Density = "default" | "compact";
 
@@ -79,15 +84,24 @@ export function DashTbody({ children }: { children: ReactNode }) {
   return <tbody>{children}</tbody>;
 }
 
-type DashTrProps = {
+type DashTrProps = Omit<
+  HTMLAttributes<HTMLTableRowElement>,
+  "onClick" | "children" | "className"
+> & {
   children: ReactNode;
   className?: string;
   onClick?: () => void;
 };
 
-export function DashTr({ children, className = "", onClick }: DashTrProps) {
+export function DashTr({
+  children,
+  className = "",
+  onClick,
+  ...rest
+}: DashTrProps) {
   return (
     <tr
+      {...rest}
       onClick={onClick}
       className={cx(
         "border-t border-gray-50 transition-colors hover:bg-gray-50/60",
