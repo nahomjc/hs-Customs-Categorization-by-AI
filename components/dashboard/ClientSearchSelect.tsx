@@ -2,12 +2,14 @@
 
 import { useEffect, useId, useRef, useState } from "react";
 import { dashInputClass } from "@/components/dashboard/ui";
+import { USER_ROLE_LABELS, type UserRole } from "@/lib/auth/roles";
 
 export type ClientOption = {
   id: string;
   fullName: string | null;
   email: string;
   phone: string | null;
+  role?: string | null;
 };
 
 type ClientSearchSelectProps = {
@@ -23,7 +25,7 @@ export function ClientSearchSelect({
   value,
   selectedLabel,
   onChange,
-  placeholder = "Search client by name, email, or phone…",
+  placeholder = "Search client or admin by name, email, or phone…",
   id,
   required,
 }: ClientSearchSelectProps) {
@@ -58,7 +60,7 @@ export function ClientSearchSelect({
     const handle = window.setTimeout(async () => {
       setLoading(true);
       try {
-        const params = new URLSearchParams({ role: "client" });
+        const params = new URLSearchParams({ roles: "client,admin" });
         if (query.trim()) params.set("q", query.trim());
         const res = await fetch(`/api/dashboard/users/search?${params}`, {
           signal: controller.signal,
@@ -136,7 +138,7 @@ export function ClientSearchSelect({
             <li className="px-3 py-2 text-sm text-slate-500">Searching…</li>
           ) : items.length === 0 ? (
             <li className="px-3 py-2 text-sm text-slate-500">
-              No clients found. Invite a user with role Client first.
+              No matching client or admin accounts.
             </li>
           ) : (
             items.map((client) => (
@@ -148,7 +150,15 @@ export function ClientSearchSelect({
                   onClick={() => handleSelect(client)}
                 >
                   <span className="font-medium text-slate-900">
-                    {client.fullName ?? "Unnamed client"}
+                    {client.fullName ?? client.email}
+                    {client.role && client.role !== "client" ? (
+                      <span className="ml-1.5 text-xs font-semibold text-slate-500">
+                        (
+                        {USER_ROLE_LABELS[client.role as UserRole] ??
+                          client.role}
+                        )
+                      </span>
+                    ) : null}
                   </span>
                   <span className="text-xs text-slate-500">
                     {client.email}

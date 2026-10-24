@@ -3,7 +3,11 @@ import { and, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { importCases, users } from "@/db/schema";
 import { ensureUserProfile } from "@/lib/auth/ensure-profile";
-import { isClientRole, isStaffRole } from "@/lib/auth/roles";
+import {
+  isClientRole,
+  isImportCaseRecipientRole,
+  isStaffRole,
+} from "@/lib/auth/roles";
 import { getSessionUserProfile } from "@/lib/auth/require-admin";
 import { getAuthUser } from "@/lib/auth/session";
 import {
@@ -101,9 +105,9 @@ export async function POST(request: NextRequest) {
     )
     .limit(1);
 
-  if (!client || !isClientRole(client.role)) {
+  if (!client || !isImportCaseRecipientRole(client.role)) {
     return NextResponse.json(
-      { error: "Selected user must be an active client" },
+      { error: "Selected user must be an active client or admin" },
       { status: 400 },
     );
   }

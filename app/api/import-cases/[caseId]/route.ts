@@ -3,7 +3,11 @@ import { and, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { importCases, users } from "@/db/schema";
 import { getSessionUserProfile } from "@/lib/auth/require-admin";
-import { isClientRole, isStaffRole } from "@/lib/auth/roles";
+import {
+  isClientRole,
+  isImportCaseRecipientRole,
+  isStaffRole,
+} from "@/lib/auth/roles";
 import { getAuthUser } from "@/lib/auth/session";
 import {
   notFoundResponse,
@@ -90,9 +94,9 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
         ),
       )
       .limit(1);
-    if (!client || !isClientRole(client.role)) {
+    if (!client || !isImportCaseRecipientRole(client.role)) {
       return NextResponse.json(
-        { error: "Selected user must be an active client" },
+        { error: "Selected user must be an active client or admin" },
         { status: 400 },
       );
     }

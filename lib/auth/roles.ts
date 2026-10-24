@@ -22,3 +22,10 @@ export function isStaffRole(role: string | null | undefined): boolean {
 export function isClientRole(role: string | null | undefined): boolean {
   return role === "client";
 }
+
+/** Users who may be linked on an import case to receive shipment updates. */
+export function isImportCaseRecipientRole(
+  role: string | null | undefined,
+): boolean {
+  return role === "client" || role === "admin";
+}

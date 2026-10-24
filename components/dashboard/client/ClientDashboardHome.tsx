@@ -1,4 +1,8 @@
 import Link from "next/link";
+import {
+  ClientNotificationsList,
+  type ClientNotificationItem,
+} from "@/components/dashboard/client/ClientNotificationsList";
 import { ClientShipmentCard } from "@/components/dashboard/client/ClientShipmentCard";
 import type { ClientShipmentSummary } from "@/components/dashboard/client/ClientShipmentCard";
 import {
@@ -19,18 +23,10 @@ import {
 } from "@/components/dashboard/ui";
 import { getTrackingLabel } from "@/lib/tracking/workflow";
 
-type NotificationItem = {
-  id: string;
-  title: string;
-  body: string;
-  createdAt: Date;
-  importCaseId: string | null;
-};
-
 type ClientDashboardHomeProps = {
   displayName: string;
   shipments: ClientShipmentSummary[];
-  notifications: NotificationItem[];
+  notifications: ClientNotificationItem[];
 };
 
 function formatUpdated(shipment: ClientShipmentSummary) {
@@ -41,13 +37,6 @@ function formatUpdated(shipment: ClientShipmentSummary) {
     month: "short",
     day: "numeric",
     year: "numeric",
-  });
-}
-
-function formatNotificationDate(value: Date) {
-  return value.toLocaleDateString(undefined, {
-    month: "short",
-    day: "numeric",
   });
 }
 
@@ -232,44 +221,9 @@ export function ClientDashboardHome({
         <DashCard>
           <DashCardHeader title="Recent updates" />
           <p className="border-b border-gray-100 px-4 py-2.5 text-sm text-gray-500 sm:px-5">
-            Status changes sent to your dashboard
+            Same messages sent by SMS and shown here when you sign in
           </p>
-          <ul className="divide-y divide-gray-50">
-            {notifications.map((n) => {
-              const inner = (
-                <>
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-start justify-between gap-3">
-                      <p className="text-sm font-semibold text-gray-900">
-                        {n.title}
-                      </p>
-                      <time className="shrink-0 text-[11px] text-gray-400">
-                        {formatNotificationDate(n.createdAt)}
-                      </time>
-                    </div>
-                    <p className="mt-0.5 line-clamp-2 text-xs text-gray-500">
-                      {n.body}
-                    </p>
-                  </div>
-                </>
-              );
-
-              return (
-                <li key={n.id}>
-                  {n.importCaseId ? (
-                    <Link
-                      href={`/dashboard/my-shipments/${n.importCaseId}`}
-                      className="flex px-4 py-3.5 transition-colors hover:bg-gray-50/80 sm:px-5 sm:py-4"
-                    >
-                      {inner}
-                    </Link>
-                  ) : (
-                    <div className="flex px-4 py-3.5 sm:px-5 sm:py-4">{inner}</div>
-                  )}
-                </li>
-              );
-            })}
-          </ul>
+          <ClientNotificationsList items={notifications} />
         </DashCard>
       ) : null}
     </div>

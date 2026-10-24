@@ -13,9 +13,11 @@ import {
 } from "@/lib/notifications/send-tenant-sms";
 import { sendTelegramMessage } from "@/lib/notifications/telegram";
 import {
-  TRACKING_STATUS_LABELS,
-  type TrackingStatus,
-} from "@/lib/tracking/constants";
+  trackingClientMessage,
+  trackingNotificationTitle,
+  trackingSmsText,
+} from "@/lib/tracking/client-message";
+import type { TrackingStatus } from "@/lib/tracking/constants";
 
 export type TrackingNotifyChannel = "dashboard" | "telegram" | "sms";
 
@@ -55,51 +57,46 @@ export async function notifyClientTrackingUpdate(params: {
 
   const prefs = await getUserPreferences(client.id);
   const channels = await getTenantChannelSettings(params.tenantId);
-  const label = TRACKING_STATUS_LABELS[params.status];
-  const title = `${params.caseNumber}: ${label}`;
-  const body = params.note?.trim()
-    ? `Your shipment is now at "${label}". Note: ${params.note.trim()}`
-    : `Your shipment is now at "${label}".`;
+  const title = trackingNotificationTitle(params.caseNumber, params.status);
+  const body = trackingClientMessage(params.status, params.note);
 
-  if (!prefs.notifyDashboard) {
-    delivery.messages.push("Client turned off dashboard notifications.");
-  } else {
-    try {
-      await db.insert(notifications).values({
-        tenantId: params.tenantId,
-        userId: client.id,
-        importCaseId: params.importCaseId,
-        title,
-        body,
-        meta: {
-          trackingStatus: params.status,
-          caseNumber: params.caseNumber,
-        },
-      });
-      await db.insert(notificationLogs).values({
-        tenantId: params.tenantId,
-        importCaseId: params.importCaseId,
-        userId: client.id,
-        channel: "dashboard",
-        status: "sent",
-        payloadSnippet: body.slice(0, 500),
-      });
-      delivery.dashboard = "sent";
-    } catch (error) {
-      delivery.dashboard = "failed";
-      delivery.messages.push(
-        error instanceof Error ? error.message : "Dashboard notification failed",
-      );
-      await db.insert(notificationLogs).values({
-        tenantId: params.tenantId,
-        importCaseId: params.importCaseId,
-        userId: client.id,
-        channel: "dashboard",
-        status: "failed",
-        payloadSnippet: body.slice(0, 500),
-        error: error instanceof Error ? error.message : "dashboard notify failed",
-      });
-    }
+  // Always store in-app so clients see the same message as SMS/Telegram on login.
+  try {
+    await db.insert(notifications).values({
+      tenantId: params.tenantId,
+      userId: client.id,
+      importCaseId: params.importCaseId,
+      title,
+      body,
+      meta: {
+        trackingStatus: params.status,
+        caseNumber: params.caseNumber,
+        message: body,
+      },
+    });
+    await db.insert(notificationLogs).values({
+      tenantId: params.tenantId,
+      importCaseId: params.importCaseId,
+      userId: client.id,
+      channel: "dashboard",
+      status: "sent",
+      payloadSnippet: body.slice(0, 500),
+    });
+    delivery.dashboard = "sent";
+  } catch (error) {
+    delivery.dashboard = "failed";
+    delivery.messages.push(
+      error instanceof Error ? error.message : "Dashboard notification failed",
+    );
+    await db.insert(notificationLogs).values({
+      tenantId: params.tenantId,
+      importCaseId: params.importCaseId,
+      userId: client.id,
+      channel: "dashboard",
+      status: "failed",
+      payloadSnippet: body.slice(0, 500),
+      error: error instanceof Error ? error.message : "dashboard notify failed",
+    });
   }
 
   if (!prefs.notifyTelegram) {
@@ -142,9 +139,11 @@ export async function notifyClientTrackingUpdate(params: {
       "Client has no phone number on their profile (use 251… format).",
     );
   } else {
-    const smsText = `${params.caseNumber}: ${label}${
-      params.note?.trim() ? ` — ${params.note.trim()}` : ""
-    }`.slice(0, 160);
+    const smsText = trackingSmsText(
+      params.caseNumber,
+      params.status,
+      params.note,
+    );
     const result = await sendTenantSms({
       tenantId: params.tenantId,
       phone: client.phone,

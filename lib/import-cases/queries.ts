@@ -14,9 +14,11 @@ import {
   desc,
   eq,
   ilike,
+  inArray,
   or,
   sql,
 } from "drizzle-orm";
+import { isImportCaseRecipientRole } from "@/lib/auth/roles";
 import type { ImportCaseStatus } from "./constants";
 import { countOpenChecks } from "./run-case-checks";
 
@@ -203,16 +205,29 @@ export async function listTenantUsers(tenantId: string) {
     .orderBy(users.fullName);
 }
 
+const DEFAULT_CASE_RECIPIENT_ROLES = ["client", "admin"] as const;
+
 export async function searchTenantClients(params: {
   tenantId: string;
   query?: string;
   limit?: number;
+  /** Defaults to client + admin for import-case linking. */
+  roles?: readonly string[];
 }) {
   const limit = params.limit ?? 20;
+  const roles = (params.roles ?? DEFAULT_CASE_RECIPIENT_ROLES).filter((r) =>
+    isImportCaseRecipientRole(r),
+  );
+  if (roles.length === 0) {
+    return [];
+  }
+
   const conditions = [
     eq(users.tenantId, params.tenantId),
     eq(users.status, "active"),
-    eq(users.role, "client"),
+    roles.length === 1
+      ? eq(users.role, roles[0]!)
+      : inArray(users.role, [...roles]),
   ];
 
   if (params.query?.trim()) {
@@ -232,6 +247,7 @@ export async function searchTenantClients(params: {
       fullName: users.fullName,
       email: users.email,
       phone: users.phone,
+      role: users.role,
     })
     .from(users)
     .where(and(...conditions))

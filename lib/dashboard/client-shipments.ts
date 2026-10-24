@@ -38,6 +38,7 @@ export async function listClientNotifications(
       id: notifications.id,
       title: notifications.title,
       body: notifications.body,
+      read: notifications.read,
       createdAt: notifications.createdAt,
       importCaseId: notifications.importCaseId,
     })

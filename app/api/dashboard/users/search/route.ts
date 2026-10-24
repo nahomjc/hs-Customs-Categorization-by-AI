@@ -17,18 +17,16 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  const role = request.nextUrl.searchParams.get("role") ?? "client";
-  if (role !== "client") {
-    return NextResponse.json(
-      { error: "Only role=client search is supported" },
-      { status: 400 },
-    );
-  }
-
   const q = request.nextUrl.searchParams.get("q") ?? undefined;
+  const rolesParam = request.nextUrl.searchParams.get("roles");
+  const roles = rolesParam
+    ? rolesParam.split(",").map((r) => r.trim()).filter(Boolean)
+    : undefined;
+
   const items = await searchTenantClients({
     tenantId: getTenantId(),
     query: q,
+    roles,
   });
 
   return NextResponse.json({ items });

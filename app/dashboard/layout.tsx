@@ -2,6 +2,7 @@ import { Inter } from "next/font/google";
 import { redirect } from "next/navigation";
 import { Suspense } from "react";
 import { BrandLogo } from "@/components/BrandLogo";
+import { ClientNotificationBell } from "@/components/dashboard/client/ClientNotificationBell";
 import { DashboardAssistantChat } from "@/components/dashboard/DashboardAssistantChat";
 import { DashboardSidebarShell } from "@/components/dashboard/DashboardSidebarShell";
 import { ensureUserProfile } from "@/lib/auth/ensure-profile";
@@ -10,8 +11,10 @@ import {
   SET_PASSWORD_PATH,
 } from "@/lib/auth/must-change-password";
 import { getSessionUserProfile } from "@/lib/auth/require-admin";
+import { isClientRole } from "@/lib/auth/roles";
 import { toUserMenuUser } from "@/lib/auth/user-display";
 import { getAuthUser } from "@/lib/auth/session";
+import { listClientNotifications } from "@/lib/dashboard/client-shipments";
 import { DashboardNav } from "./DashboardNav";
 
 const inter = Inter({ subsets: ["latin"], display: "swap" });
@@ -52,6 +55,12 @@ export default async function DashboardLayout({
     }
   }
 
+  const isClient = isClientRole(profileSession?.profile?.role);
+  const clientNotifications =
+    isClient && user?.id
+      ? await listClientNotifications(user.id, 12)
+      : [];
+
   return (
     <div
       className={`dashboard-page landing-page min-h-screen flex flex-col ${inter.className}`}
@@ -60,9 +69,14 @@ export default async function DashboardLayout({
         <div className="dashboard-container h-14 flex items-center justify-between gap-4">
           <BrandLogo href="/" size="md" className="shrink-0" />
           {user ? (
-            <DashboardNav
-              user={toUserMenuUser(user, profileSession?.profile)}
-            />
+            <div className="flex items-center gap-2">
+              {isClient ? (
+                <ClientNotificationBell initialItems={clientNotifications} />
+              ) : null}
+              <DashboardNav
+                user={toUserMenuUser(user, profileSession?.profile)}
+              />
+            </div>
           ) : null}
         </div>
       </header>
