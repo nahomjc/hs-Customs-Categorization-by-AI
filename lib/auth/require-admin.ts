@@ -46,10 +46,18 @@ export async function requireAdmin() {
     return { ok: false as const, status: 401 as const, error: "Unauthorized" };
   }
   if (!session.profile) {
-    return { ok: false as const, status: 403 as const, error: "Profile not found" };
+    return {
+      ok: false as const,
+      status: 403 as const,
+      error: "Profile not found",
+    };
   }
   if (session.profile.role !== "admin") {
-    return { ok: false as const, status: 403 as const, error: "Admin access required" };
+    return {
+      ok: false as const,
+      status: 403 as const,
+      error: "Admin access required",
+    };
   }
   return { ok: true as const, session };
 }
@@ -61,7 +69,11 @@ export async function requireAdminOrAssessor() {
     return { ok: false as const, status: 401 as const, error: "Unauthorized" };
   }
   if (!session.profile) {
-    return { ok: false as const, status: 403 as const, error: "Profile not found" };
+    return {
+      ok: false as const,
+      status: 403 as const,
+      error: "Profile not found",
+    };
   }
   const role = session.profile.role;
   if (role !== "admin" && role !== "assessor") {

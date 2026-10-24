@@ -267,7 +267,7 @@ function TableLoadingState({ label = "Loading rows…" }: { label?: string }) {
   );
 }
 
-export function VddImportPanel({ embedded = false }: { embedded?: boolean }) {
+export function VddImportPanel() {
   const [file, setFile] = useState<File | null>(null);
   const [sheetName, setSheetName] = useState("");
   const [sheetNames, setSheetNames] = useState<string[]>([]);
@@ -697,12 +697,10 @@ export function VddImportPanel({ embedded = false }: { embedded?: boolean }) {
 
   return (
     <div className="w-full min-w-0 space-y-6">
-      {!embedded ? (
-        <PageHeader
-          title="VDD import"
-          description="Import historical Valuation Details Declaration rows from Excel. These records support product review only — they do not determine the final HS code or customs value."
-        />
-      ) : null}
+      <PageHeader
+        title="VDD import"
+        description="Import historical Valuation Details Declaration rows from Excel. These records support product review only — they do not determine the final HS code or customs value."
+      />
 
       <div className="rounded-2xl border border-amber-200/80 bg-amber-50/80 px-4 py-3 text-sm text-amber-950">
         VDD references support review only. They do not determine the final HS

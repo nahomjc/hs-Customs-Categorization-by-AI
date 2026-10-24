@@ -18,12 +18,14 @@ export function canAccessHsReference(role: string | null | undefined): boolean {
   return role === "admin";
 }
 
-export function canAccessHsCodeSearch(role: string | null | undefined): boolean {
+export function canAccessHsCodeSearch(
+  role: string | null | undefined,
+): boolean {
   return role === "admin" || role === "assessor";
 }
 
 export function canAccessChannelsSettings(
-  role: string | null | undefined
+  role: string | null | undefined,
 ): boolean {
   return role === "admin";
 }
@@ -32,7 +34,9 @@ export function canAccessVddImport(role: string | null | undefined): boolean {
   return role === "admin";
 }
 
-export function canAccessStaffDashboard(role: string | null | undefined): boolean {
+export function canAccessStaffDashboard(
+  role: string | null | undefined,
+): boolean {
   return isStaffRole(role);
 }
 

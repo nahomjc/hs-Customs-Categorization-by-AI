@@ -1,9 +1,10 @@
+import { redirect } from "next/navigation";
 import { Suspense } from "react";
+import { SettingsPageContent } from "@/components/dashboard/SettingsPageContent";
 import {
-  SettingsPageContent,
+  resolveSettingsTab,
   settingsTabDescription,
-  type SettingsTabId,
-} from "@/components/dashboard/SettingsPageContent";
+} from "@/lib/settings/settings-tabs";
 import { PageHeader } from "@/components/dashboard/ui";
 import { clampPreferencesForRole } from "@/lib/auth/settings-meta";
 import { canUseTenantDocumentScope } from "@/lib/settings/document-scope";
@@ -13,15 +14,6 @@ import { DEFAULT_TENANT_ID } from "@/lib/auth/constants";
 import { getAuthUser } from "@/lib/auth/session";
 
 export const dynamic = "force-dynamic";
-
-function resolveTabFromParam(
-  raw: string | undefined,
-  isAdmin: boolean,
-): SettingsTabId {
-  if (raw === "channels" && isAdmin) return "channels";
-  if (raw === "vdd" && isAdmin) return "vdd";
-  return "general";
-}
 
 type PageProps = {
   searchParams: Promise<{ tab?: string }>;
@@ -36,6 +28,9 @@ export default async function SettingsPage({ searchParams }: PageProps) {
 
   const { tab: tabParam } = await searchParams;
 
+  // VDD import moved out of Settings to its own page.
+  if (tabParam === "vdd") redirect("/dashboard/vdd");
+
   const row = await getDashboardUserDetail(user.id);
   const profile = row ?? {
     email: user.email,
@@ -47,7 +42,7 @@ export default async function SettingsPage({ searchParams }: PageProps) {
 
   const role = profile.role ?? "user";
   const isAdmin = role === "admin";
-  const activeTab = resolveTabFromParam(tabParam, isAdmin);
+  const activeTab = resolveSettingsTab(tabParam, isAdmin);
   const preferences = clampPreferencesForRole(
     await getUserPreferences(user.id),
     role,
@@ -60,9 +55,7 @@ export default async function SettingsPage({ searchParams }: PageProps) {
         description={settingsTabDescription(activeTab, role)}
       />
       <Suspense
-        fallback={
-          <p className="text-sm text-slate-500">Loading settings…</p>
-        }
+        fallback={<p className="text-sm text-slate-500">Loading settings…</p>}
       >
         <SettingsPageContent
           email={profile.email ?? user.email}

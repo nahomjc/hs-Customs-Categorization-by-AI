@@ -216,6 +216,13 @@ export const adminNavLink: NavLink = {
   icon: icons.hsReference,
 };
 
+export const vddNavLink: NavLink = {
+  href: "/dashboard/vdd",
+  label: "VDD import",
+  exact: false,
+  icon: icons.vdd,
+};
+
 export const hsCodeSearchNavLink: NavLink = {
   href: "/dashboard/tools/hs-code-search",
   label: "HS code search",
@@ -243,7 +250,9 @@ export type DashboardNavOptions = {
   canViewUsers?: boolean;
 };
 
-export function getDashboardNavGroups(options: DashboardNavOptions): NavGroup[] {
+export function getDashboardNavGroups(
+  options: DashboardNavOptions,
+): NavGroup[] {
   if (options.isClient) {
     return [
       {
@@ -294,7 +303,7 @@ export function getDashboardNavGroups(options: DashboardNavOptions): NavGroup[] 
     managementLinks.push(usersNavLink);
   }
   if (options.isAdmin) {
-    managementLinks.push(adminNavLink);
+    managementLinks.push(adminNavLink, vddNavLink);
   }
   if (managementLinks.length > 0) {
     groups.push({
@@ -334,9 +343,7 @@ export function DashboardSidebar({
     <aside className="hidden lg:flex w-[17rem] shrink-0 flex-col overflow-hidden rounded-3xl border border-slate-200/70 bg-white sticky top-[4.5rem] max-h-[calc(100vh-6rem)] lg:ml-3">
       <div className="border-b border-slate-100/80 bg-linear-to-br from-slate-50 via-white to-blue-50/50 px-5 py-4">
         <div className="flex items-center gap-2">
-          <span
-            className="flex h-8 w-8 items-center justify-center rounded-xl bg-[#007bff]/10 text-[#007bff]"
-          >
+          <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-[#007bff]/10 text-[#007bff]">
             <svg
               className="h-4 w-4"
               fill="none"
@@ -369,13 +376,13 @@ export function DashboardSidebar({
         className="flex min-h-0 flex-1 flex-col overflow-hidden"
         aria-label="Dashboard"
       >
-        <div
-          className="flex-1 overflow-y-auto px-2 py-3 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
-        >
+        <div className="flex-1 overflow-y-auto px-2 py-3 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
           {groups.map((group, groupIndex) => (
             <div
               key={group.id}
-              className={groupIndex > 0 ? "mt-5 border-t border-slate-100/80 pt-4" : ""}
+              className={
+                groupIndex > 0 ? "mt-5 border-t border-slate-100/80 pt-4" : ""
+              }
             >
               <p
                 className="mb-1.5 px-2 text-[10px] font-bold uppercase tracking-wider text-slate-400"
@@ -465,9 +472,7 @@ export function DashboardMobileNav({
             : "bg-white text-slate-600 border border-slate-200"
         }`}
       >
-        <span className="[&>svg]:h-3.5 [&>svg]:w-3.5">
-          {settingsLink.icon}
-        </span>
+        <span className="[&>svg]:h-3.5 [&>svg]:w-3.5">{settingsLink.icon}</span>
         {settingsLink.label}
       </Link>
     </nav>

@@ -60,8 +60,7 @@ export async function GET(req: Request) {
   const sortByParam = searchParams.get("sortBy") ?? "createdAt";
   const sortBy: SortField =
     sortByParam in SORT_COLUMNS ? (sortByParam as SortField) : "createdAt";
-  const sortOrder =
-    searchParams.get("sortOrder") === "asc" ? "asc" : "desc";
+  const sortOrder = searchParams.get("sortOrder") === "asc" ? "asc" : "desc";
   const page = Math.max(
     Number.parseInt(searchParams.get("page") ?? "1", 10) || 1,
     1,
@@ -103,8 +102,7 @@ export async function GET(req: Request) {
 
   const whereClause = and(...filters);
   const sortColumn: AnyColumn = SORT_COLUMNS[sortBy];
-  const orderExpr =
-    sortOrder === "asc" ? asc(sortColumn) : desc(sortColumn);
+  const orderExpr = sortOrder === "asc" ? asc(sortColumn) : desc(sortColumn);
 
   const [totalRow] = await db
     .select({ value: count() })

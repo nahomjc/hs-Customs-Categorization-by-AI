@@ -3,34 +3,17 @@
 import { useRouter, useSearchParams } from "next/navigation";
 import { ChannelsSettingsPanel } from "@/components/dashboard/ChannelsSettingsPanel";
 import { SettingsPanel } from "@/components/dashboard/SettingsPanel";
-import { VddImportPanel } from "@/components/dashboard/VddImportPanel";
+import {
+  SettingsTabs,
+  settingsPanelId,
+  settingsTabId,
+} from "@/components/dashboard/SettingsTabs";
 import type { UserPreferences } from "@/lib/auth/settings-meta";
-
-export type SettingsTabId = "general" | "channels" | "vdd";
-
-type TabDef = { id: SettingsTabId; label: string; adminOnly: boolean };
-
-const TABS: TabDef[] = [
-  { id: "general", label: "General", adminOnly: false },
-  { id: "channels", label: "Channels", adminOnly: true },
-  { id: "vdd", label: "VDD import", adminOnly: true },
-];
-
-const TAB_DESCRIPTIONS: Record<SettingsTabId, string> = {
-  general:
-    "Profile, notifications, workflow preferences, and session.",
-  channels:
-    "Telegram bot and SMS providers for shipment and assignment alerts.",
-  vdd:
-    "Import historical Valuation Details Declaration data from Excel.",
-};
-
-function resolveTab(raw: string | null, isAdmin: boolean): SettingsTabId {
-  const match = TABS.find((t) => t.id === raw);
-  if (!match) return "general";
-  if (match.adminOnly && !isAdmin) return "general";
-  return match.id;
-}
+import {
+  resolveSettingsTab,
+  visibleSettingsTabs,
+  type SettingsTabId,
+} from "@/lib/settings/settings-tabs";
 
 type SettingsPageContentProps = {
   email: string;
@@ -51,8 +34,8 @@ export function SettingsPageContent({
 }: SettingsPageContentProps) {
   const searchParams = useSearchParams();
   const router = useRouter();
-  const tab = resolveTab(searchParams.get("tab"), isAdmin);
-  const visibleTabs = TABS.filter((t) => !t.adminOnly || isAdmin);
+  const tab = resolveSettingsTab(searchParams.get("tab"), isAdmin);
+  const visibleTabs = visibleSettingsTabs(isAdmin);
 
   function selectTab(id: SettingsTabId) {
     const params = new URLSearchParams(searchParams.toString());
@@ -69,54 +52,33 @@ export function SettingsPageContent({
 
   return (
     <div className="space-y-6">
-      <nav
-        className="flex flex-wrap gap-1 rounded-2xl border border-slate-200/70 bg-white p-1 shadow-sm"
-        aria-label="Settings sections"
-      >
-        {visibleTabs.map((t) => {
-          const active = tab === t.id;
-          return (
-            <button
-              key={t.id}
-              type="button"
-              role="tab"
-              aria-selected={active}
-              onClick={() => selectTab(t.id)}
-              className={`rounded-xl px-4 py-2 text-sm font-semibold transition-colors ${
-                active
-                  ? "bg-[#007bff] text-white shadow-sm"
-                  : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
-              }`}
-            >
-              {t.label}
-            </button>
-          );
-        })}
-      </nav>
-
-      {tab === "general" ? (
-        <SettingsPanel
-          email={email}
-          fullName={fullName}
-          role={role}
-          preferences={preferences}
-          canManageScope={canManageScope}
+      {visibleTabs.length > 1 ? (
+        <SettingsTabs
+          tabs={visibleTabs}
+          activeId={tab}
+          onSelect={selectTab}
         />
       ) : null}
 
-      {tab === "channels" && isAdmin ? <ChannelsSettingsPanel /> : null}
+      <div
+        role={visibleTabs.length > 1 ? "tabpanel" : undefined}
+        id={settingsPanelId(tab)}
+        aria-labelledby={
+          visibleTabs.length > 1 ? settingsTabId(tab) : undefined
+        }
+      >
+        {tab === "general" ? (
+          <SettingsPanel
+            email={email}
+            fullName={fullName}
+            role={role}
+            preferences={preferences}
+            canManageScope={canManageScope}
+          />
+        ) : null}
 
-      {tab === "vdd" && isAdmin ? <VddImportPanel embedded /> : null}
+        {tab === "channels" && isAdmin ? <ChannelsSettingsPanel /> : null}
+      </div>
     </div>
   );
-}
-
-export function settingsTabDescription(
-  tab: SettingsTabId,
-  role: string,
-): string {
-  if (role === "client" && tab === "general") {
-    return "Manage notification preferences and connect Telegram.";
-  }
-  return TAB_DESCRIPTIONS[tab];
 }
