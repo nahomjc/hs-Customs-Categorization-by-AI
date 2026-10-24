@@ -16,11 +16,39 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import type { TrackingNotificationDelivery } from "@/lib/notifications/notify-tracking";
 import {
   TRACKING_STATUSES,
   TRACKING_STATUS_LABELS,
   type TrackingStatus,
 } from "@/lib/tracking/constants";
+
+function toastForTrackingDelivery(
+  notifications: TrackingNotificationDelivery | null | undefined,
+) {
+  if (!notifications) {
+    toast.success("Tracking updated.");
+    return;
+  }
+  if (notifications.sms === "sent") {
+    toast.success("Tracking updated — client notified by SMS.");
+    return;
+  }
+  if (notifications.sms === "failed") {
+    const detail = notifications.messages.find((m) =>
+      m.toLowerCase().startsWith("sms:"),
+    );
+    toast.error(
+      detail ?? "Tracking saved, but the SMS could not be delivered.",
+    );
+    return;
+  }
+  const smsHint =
+    notifications.messages.find((m) =>
+      /sms|phone|channels/i.test(m),
+    ) ?? "SMS was not sent.";
+  toast.warning(`Tracking saved. ${smsHint}`);
+}
 
 type ClientShipmentTrackingHeaderActionProps = {
   caseId: string;
@@ -83,9 +111,12 @@ export function ClientShipmentTrackingHeaderAction({
           trackingNote: trackingNote.trim() || null,
         }),
       });
-      const data = (await res.json()) as { error?: string };
+      const data = (await res.json()) as {
+        error?: string;
+        notifications?: TrackingNotificationDelivery | null;
+      };
       if (!res.ok) throw new Error(data.error ?? "Failed to update tracking");
-      toast.success("Client tracking updated — notifications sent");
+      toastForTrackingDelivery(data.notifications);
       setOpen(false);
       router.refresh();
     } catch (error) {

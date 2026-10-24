@@ -2,7 +2,10 @@ import { and, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { importCases, trackingStatusEvents } from "@/db/schema";
 import { writeAuditLog } from "@/lib/import-cases/queries";
-import { notifyClientTrackingUpdate } from "@/lib/notifications/notify-tracking";
+import {
+  notifyClientTrackingUpdate,
+  type TrackingNotificationDelivery,
+} from "@/lib/notifications/notify-tracking";
 import {
   isTrackingStatus,
   type TrackingSource,
@@ -20,7 +23,13 @@ export type UpdateTrackingStatusInput = {
 };
 
 export type UpdateTrackingStatusResult =
-  | { ok: true; importCaseId: string; caseNumber: string; status: TrackingStatus }
+  | {
+      ok: true;
+      importCaseId: string;
+      caseNumber: string;
+      status: TrackingStatus;
+      notifications?: TrackingNotificationDelivery | null;
+    }
   | { ok: false; error: string };
 
 export async function updateTrackingStatus(
@@ -95,8 +104,9 @@ export async function updateTrackingStatus(
     },
   });
 
+  let notifications: TrackingNotificationDelivery | null = null;
   if (updated.clientUserId) {
-    await notifyClientTrackingUpdate({
+    notifications = await notifyClientTrackingUpdate({
       tenantId: input.tenantId,
       importCaseId: updated.id,
       caseNumber: updated.caseNumber,
@@ -111,6 +121,7 @@ export async function updateTrackingStatus(
     importCaseId: updated.id,
     caseNumber: updated.caseNumber,
     status: input.status,
+    notifications,
   };
 }
 

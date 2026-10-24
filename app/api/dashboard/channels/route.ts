@@ -75,12 +75,16 @@ export async function PATCH(request: NextRequest) {
         .filter(Boolean)
     : undefined;
 
+  const addingSmsKey = Boolean(
+    body.smsSmshubApiKey?.trim() || body.smsEthiopiaApiKey?.trim(),
+  );
+
   const next = await upsertTenantChannelSettings(tenantId, {
     telegramEnabled: body.telegramEnabled,
     telegramBotToken: body.telegramBotToken?.trim() || undefined,
     clearTelegramBotToken: body.clearTelegramBotToken,
     telegramWebhookSecret,
-    smsEnabled: body.smsEnabled,
+    smsEnabled: body.smsEnabled ?? (addingSmsKey ? true : undefined),
     smsProvider: body.smsProvider,
     smsSmshubApiKey: body.smsSmshubApiKey?.trim() || undefined,
     smsEthiopiaApiKey: body.smsEthiopiaApiKey?.trim() || undefined,

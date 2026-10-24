@@ -59,7 +59,11 @@ export async function getTenantChannelSettings(
     telegramBotToken: row?.telegramBotToken ?? envTelegram,
     telegramBotUsername: row?.telegramBotUsername ?? null,
     telegramWebhookSecret: row?.telegramWebhookSecret ?? null,
-    smsEnabled: row?.smsEnabled ?? Boolean(hasKey || hasAnyKey),
+    // Rows often have sms_enabled=false while an API key is stored — still send.
+    smsEnabled:
+      row?.smsEnabled === false && hasKey
+        ? true
+        : (row?.smsEnabled ?? Boolean(hasKey || hasAnyKey)),
     smsProvider,
     smsSmshubApiKey,
     smsEthiopiaApiKey,
