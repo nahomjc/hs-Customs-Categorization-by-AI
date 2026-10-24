@@ -27,12 +27,12 @@ import {
 import {
   DEFAULT_SHIPMENT_PAGE_SIZE,
   SHIPMENT_PAGE_SIZES,
-  SHIPMENT_VIEW_COOKIE,
   buildShipmentHaystack,
   buildShipmentListUrl,
   filterShipments,
   type ShipmentViewMode,
 } from "@/lib/shipments/shipment-search";
+import { saveShipmentView } from "@/lib/shipments/view-preference";
 import { getTrackingLabel } from "@/lib/tracking/workflow";
 
 type Props = {
@@ -164,7 +164,7 @@ export function MyShipmentsView({
 
   function changeView(next: ShipmentViewMode) {
     setView(next);
-    document.cookie = `${SHIPMENT_VIEW_COOKIE}=${next}; path=/; max-age=31536000; samesite=lax`;
+    saveShipmentView(next);
   }
 
   if (shipments.length === 0) {
