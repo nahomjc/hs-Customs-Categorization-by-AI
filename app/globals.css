@@ -71,9 +71,17 @@ body {
 	box-shadow: none;
 }
 
+.landing-page:not(.dashboard-page) .landing-nav-pill {
+	border-color: #000;
+}
+
 .landing-float-card {
 	box-shadow: none;
 	border: 1px solid rgba(255, 255, 255, 0.8);
+}
+
+.landing-page:not(.dashboard-page) .landing-float-card {
+	border-color: #000;
 }
 
 /* Dashboard preview — glassmorphism */

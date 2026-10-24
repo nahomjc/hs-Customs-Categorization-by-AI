@@ -254,6 +254,11 @@ export function getDashboardNavGroups(options: DashboardNavOptions): NavGroup[] 
     ];
   }
 
+  const workflowLinks: NavLink[] = [mainNavLinks[1]];
+  if (!options.isAdmin) {
+    workflowLinks.push(mainNavLinks[3], mainNavLinks[4]);
+  }
+
   const groups: NavGroup[] = [
     {
       id: "overview",
@@ -263,11 +268,7 @@ export function getDashboardNavGroups(options: DashboardNavOptions): NavGroup[] 
     {
       id: "workflow",
       label: "Classification workflow",
-      links: [
-        mainNavLinks[1],
-        mainNavLinks[3],
-        mainNavLinks[4],
-      ],
+      links: workflowLinks,
     },
     {
       id: "insights",
