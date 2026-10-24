@@ -12,6 +12,20 @@ export type ClientShipmentSummary = {
   supplierName: string | null;
   shipmentReference: string | null;
   updatedAt: Date | string;
+  createdAt: Date | string;
+  supplierCountryCode: string | null;
+  countryOfExportCode: string | null;
+  countryOfOriginCode: string | null;
+  billOfLadingNumber: string | null;
+  airwayBillNumber: string | null;
+  incoterm: string | null;
+  invoiceCurrencyCode: string | null;
+  /** Decimal string as stored, e.g. "1234.50". */
+  invoiceTotalAmount: string | null;
+  /** Real number of products on the case. */
+  productCount: number;
+  /** First product names on the case, used by search only. */
+  productNames: string[];
 };
 
 export function ClientShipmentCard({
