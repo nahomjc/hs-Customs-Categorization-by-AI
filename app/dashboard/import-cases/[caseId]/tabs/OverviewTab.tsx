@@ -21,11 +21,6 @@ import {
   IMPORT_CASE_STATUS_LABELS,
   type ImportCaseStatus,
 } from "@/lib/import-cases/constants";
-import {
-  TRACKING_STATUSES,
-  TRACKING_STATUS_LABELS,
-  type TrackingStatus,
-} from "@/lib/tracking/constants";
 import type { ImportCaseRow } from "@/db/schema/importCases";
 
 type AgentOption = {
@@ -90,14 +85,7 @@ export function OverviewTab({
       : "",
   );
   const [loading, setLoading] = useState(false);
-  const [trackingLoading, setTrackingLoading] = useState(false);
   const [dirty, setDirty] = useState(false);
-  const [trackingStatus, setTrackingStatus] = useState<TrackingStatus>(
-    (importCase.trackingStatus as TrackingStatus) || "received",
-  );
-  const [trackingNote, setTrackingNote] = useState(
-    importCase.trackingNote ?? "",
-  );
 
   function updateField<K extends keyof FormState>(field: K, value: FormState[K]) {
     setForm((prev) => ({ ...prev, [field]: value }));
@@ -147,75 +135,8 @@ export function OverviewTab({
     }
   }
 
-  async function handleTrackingUpdate() {
-    setTrackingLoading(true);
-    try {
-      const res = await fetch(`/api/import-cases/${importCase.id}/tracking`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          trackingStatus,
-          trackingNote: trackingNote.trim() || null,
-        }),
-      });
-      const data = (await res.json()) as { error?: string };
-      if (!res.ok) throw new Error(data.error ?? "Failed to update tracking");
-      toast.success("Client tracking updated — notifications sent");
-      router.refresh();
-    } catch (error) {
-      toast.error(
-        error instanceof Error ? error.message : "Failed to update tracking",
-      );
-    } finally {
-      setTrackingLoading(false);
-    }
-  }
-
   return (
     <div className="space-y-4">
-      <DashCard>
-        <DashCardHeader title="Client shipment tracking" />
-        <div className="px-5 py-5 space-y-4">
-          <p className="text-xs text-slate-500">
-            Updates here notify the linked client on their dashboard, Telegram,
-            and SMS (when configured).
-          </p>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <Field label="Tracking status" htmlFor="tracking-status">
-              <select
-                id="tracking-status"
-                value={trackingStatus}
-                onChange={(e) =>
-                  setTrackingStatus(e.target.value as TrackingStatus)
-                }
-                className={`w-full ${dashSelectClass}`}
-              >
-                {TRACKING_STATUSES.map((s) => (
-                  <option key={s} value={s}>
-                    {TRACKING_STATUS_LABELS[s]}
-                  </option>
-                ))}
-              </select>
-            </Field>
-            <Field label="Note for client">
-              <input
-                value={trackingNote}
-                onChange={(e) => setTrackingNote(e.target.value)}
-                placeholder="Optional note"
-                className={dashInputClass}
-              />
-            </Field>
-          </div>
-          <DashButton
-            type="button"
-            disabled={trackingLoading}
-            onClick={() => void handleTrackingUpdate()}
-          >
-            {trackingLoading ? "Updating…" : "Update tracking & notify"}
-          </DashButton>
-        </div>
-      </DashCard>
-
       <DashCard>
         <DashCardHeader
           title="Case details"

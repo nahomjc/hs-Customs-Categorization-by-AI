@@ -341,7 +341,7 @@ export function DashboardSidebar({
 
   return (
     <aside className="hidden lg:flex w-[17rem] shrink-0 flex-col overflow-hidden rounded-3xl border border-slate-200/70 bg-white sticky top-[4.5rem] max-h-[calc(100vh-6rem)] lg:ml-3">
-      <div className="border-b border-slate-100/80 bg-linear-to-br from-slate-50 via-white to-blue-50/50 px-5 py-4">
+      <div className="border-b border-slate-200/25 bg-linear-to-br from-slate-50/80 via-white to-blue-50/30 px-5 py-4">
         <div className="flex items-center gap-2">
           <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-[#007bff]/10 text-[#007bff]">
             <svg
@@ -381,7 +381,7 @@ export function DashboardSidebar({
             <div
               key={group.id}
               className={
-                groupIndex > 0 ? "mt-5 border-t border-slate-100/80 pt-4" : ""
+                groupIndex > 0 ? "mt-5 border-t border-slate-200/25 pt-4" : ""
               }
             >
               <p

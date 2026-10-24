@@ -145,7 +145,7 @@ export function LandingNav({ user }: LandingNavProps) {
       className="sticky top-0 z-50 px-3 sm:px-4 pt-3 sm:pt-4 pointer-events-none"
     >
       <LandingWrap className="pointer-events-auto">
-        <div className="landing-nav-pill flex items-center justify-between gap-3 sm:gap-4 rounded-full border border-black px-3 sm:px-5 py-2 sm:py-2.5">
+        <div className="landing-nav-pill flex items-center justify-between gap-3 sm:gap-4 rounded-full px-3 sm:px-5 py-2 sm:py-2.5">
           <motion.div
             initial={{ opacity: 0, x: -10 }}
             animate={{ opacity: 1, x: 0 }}
@@ -231,7 +231,7 @@ export function LandingNav({ user }: LandingNavProps) {
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: -8, scale: 0.98 }}
               transition={{ duration: 0.2, ease: easeOut }}
-              className="lg:hidden mt-2 rounded-2xl border border-black bg-white/90 backdrop-blur-xl p-3"
+              className="lg:hidden mt-2 rounded-2xl border border-slate-200/60 bg-white/90 backdrop-blur-xl p-3"
             >
               <nav className="flex flex-col gap-1" aria-label="Mobile navigation">
                 {navLinks.map((link) => (

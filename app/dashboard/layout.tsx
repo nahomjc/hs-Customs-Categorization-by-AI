@@ -56,7 +56,7 @@ export default async function DashboardLayout({
     <div
       className={`dashboard-page landing-page min-h-screen flex flex-col ${inter.className}`}
     >
-      <header className="sticky top-0 z-50 bg-white/80 backdrop-blur-md border-b border-gray-100">
+      <header className="sticky top-0 z-50 bg-white/80 backdrop-blur-md border-b border-slate-200/40">
         <div className="dashboard-container h-14 flex items-center justify-between gap-4">
           <BrandLogo href="/" size="md" className="shrink-0" />
           {user ? (

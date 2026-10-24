@@ -67,21 +67,13 @@ body {
 	background: rgba(255, 255, 255, 0.72);
 	backdrop-filter: blur(20px);
 	-webkit-backdrop-filter: blur(20px);
-	border: 1px solid rgba(255, 255, 255, 0.85);
+	border: 1px solid color-mix(in srgb, var(--landing-border) 55%, transparent);
 	box-shadow: none;
-}
-
-.landing-page:not(.dashboard-page) .landing-nav-pill {
-	border-color: #000;
 }
 
 .landing-float-card {
 	box-shadow: none;
-	border: 1px solid rgba(255, 255, 255, 0.8);
-}
-
-.landing-page:not(.dashboard-page) .landing-float-card {
-	border-color: #000;
+	border: 1px solid color-mix(in srgb, var(--landing-border) 50%, transparent);
 }
 
 /* Dashboard preview — glassmorphism */

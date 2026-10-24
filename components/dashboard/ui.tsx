@@ -201,7 +201,7 @@ export function DashCardHeader({
   action?: ReactNode;
 }) {
   return (
-    <div className="border-b border-slate-100 px-5 py-4 flex items-center justify-between flex-wrap gap-3">
+    <div className="border-b border-slate-200/35 px-5 py-4 flex items-center justify-between flex-wrap gap-3">
       <h2 className="font-bold text-slate-900">{title}</h2>
       {action}
     </div>

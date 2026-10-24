@@ -5,6 +5,7 @@ import {
 } from "@/components/dashboard/bento/BentoCard";
 import { BENTO_COLORS, RingChart } from "@/components/dashboard/bento/charts";
 import { BentoIcon } from "@/components/dashboard/bento/icons";
+import { ClientShipmentTrackingHeaderAction } from "@/components/dashboard/import-case/ClientShipmentTrackingHeaderAction";
 import type { ImportCaseHeroStats } from "@/components/dashboard/import-case/ImportCaseHero";
 import { Breadcrumbs, DashButton, StatusBadge } from "@/components/dashboard/ui";
 import type { ImportCaseRow } from "@/db/schema/importCases";
@@ -30,6 +31,7 @@ type ImportCaseBentoHeaderProps = {
   invoiceLineCount: number;
   packingLineCount: number;
   invoiceValue: CaseInvoiceValue | null;
+  clientLabel?: string | null;
 };
 
 function formatDate(value: Date | string | null | undefined): string | null {
@@ -62,6 +64,7 @@ export function ImportCaseBentoHeader({
   invoiceLineCount,
   packingLineCount,
   invoiceValue,
+  clientLabel = null,
 }: ImportCaseBentoHeaderProps) {
   const status = (importCase.status as ImportCaseStatus) ?? "draft";
   const created = formatDate(importCase.createdAt);
@@ -158,7 +161,14 @@ export function ImportCaseBentoHeader({
                 ) : null}
               </div>
             </div>
-            <div className="flex flex-wrap gap-2">
+            <div className="flex flex-col gap-2 sm:items-end">
+              <ClientShipmentTrackingHeaderAction
+                caseId={importCase.id}
+                trackingStatus={importCase.trackingStatus}
+                trackingNote={importCase.trackingNote}
+                clientLabel={clientLabel}
+              />
+              <div className="flex flex-wrap gap-2 sm:justify-end">
               <DashButton href="/dashboard/import-cases" variant="secondary">
                 All cases
               </DashButton>
@@ -166,6 +176,7 @@ export function ImportCaseBentoHeader({
                 <BentoIcon name="plus" className="h-4 w-4" strokeWidth={2} />
                 New case
               </DashButton>
+              </div>
             </div>
           </div>
         </div>

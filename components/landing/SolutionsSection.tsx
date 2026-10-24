@@ -69,7 +69,7 @@ export function SolutionsSection() {
             initial="hidden"
             whileInView="visible"
             viewport={{ once: true, margin: "-60px" }}
-            className="relative landing-float-card rounded-2xl border border-black p-6 lg:max-w-xs w-full overflow-hidden"
+            className="relative landing-float-card rounded-2xl p-6 lg:max-w-xs w-full overflow-hidden"
           >
             <div
               className="pointer-events-none absolute -right-6 -top-6 h-24 w-24 rounded-full bg-[#007bff]/10 blur-2xl"
@@ -113,7 +113,7 @@ export function SolutionsSection() {
               <motion.article
                 whileHover={{ y: -6 }}
                 transition={{ duration: 0.25 }}
-                className="group landing-float-card rounded-2xl border border-black bg-white h-full flex flex-col overflow-hidden"
+                className="group landing-float-card rounded-2xl bg-white h-full flex flex-col overflow-hidden"
               >
                 <div className="relative">
                   {item.visual}

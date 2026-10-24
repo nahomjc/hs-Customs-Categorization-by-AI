@@ -181,6 +181,11 @@ export default async function ImportCaseDetailPage({ params }: PageProps) {
         invoiceLineCount={invoiceLines.length}
         packingLineCount={packingLines.length}
         invoiceValue={invoiceValue}
+        clientLabel={
+          client
+            ? client.fullName ?? client.email
+            : null
+        }
       />
 
       <Suspense

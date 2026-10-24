@@ -362,7 +362,7 @@ function FeatureCardStack() {
                   }}
                 >
                   <div
-                    className="landing-float-card relative overflow-hidden rounded-2xl border border-black bg-white p-7 sm:p-8 h-[300px] sm:h-[320px] flex flex-col"
+                    className="landing-float-card relative overflow-hidden rounded-2xl bg-white p-7 sm:p-8 h-[300px] sm:h-[320px] flex flex-col"
                   >
                     <div
                       className="pointer-events-none absolute -right-10 -top-10 h-36 w-36 rounded-full bg-gradient-to-br from-blue-100/70 to-transparent"
@@ -458,7 +458,7 @@ function FeatureCardStack() {
               type="button"
               onClick={goPrev}
               aria-label="Previous feature"
-              className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-black bg-white text-gray-600 transition hover:bg-gray-50 hover:text-gray-900"
+              className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-slate-200/60 bg-white text-gray-600 transition hover:bg-gray-50 hover:text-gray-900"
             >
               <ChevronIcon direction="left" />
             </button>
@@ -469,7 +469,7 @@ function FeatureCardStack() {
               type="button"
               onClick={goNext}
               aria-label="Next feature"
-              className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-black bg-white text-gray-600 transition hover:bg-gray-50 hover:text-gray-900"
+              className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-slate-200/60 bg-white text-gray-600 transition hover:bg-gray-50 hover:text-gray-900"
             >
               <ChevronIcon direction="right" />
             </button>

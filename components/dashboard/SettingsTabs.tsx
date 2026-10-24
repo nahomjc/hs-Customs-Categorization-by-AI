@@ -74,7 +74,7 @@ export function SettingsTabs({ tabs, activeId, onSelect }: SettingsTabsProps) {
   }
 
   return (
-    <div className="rounded-2xl border border-slate-200/70 bg-white px-2">
+    <div className="border-b border-slate-200/40">
       <div
         role="tablist"
         aria-label="Settings sections"
@@ -98,8 +98,8 @@ export function SettingsTabs({ tabs, activeId, onSelect }: SettingsTabsProps) {
               onKeyDown={(event) => handleKeyDown(event, index)}
               className={`group flex shrink-0 items-center gap-3 border-b-2 px-4 py-3 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#007bff]/40 ${
                 active
-                  ? "border-[#007bff]"
-                  : "border-transparent hover:border-slate-200"
+                  ? "border-[#007bff]/75"
+                  : "border-transparent hover:border-slate-200/50"
               }`}
             >
               <span
