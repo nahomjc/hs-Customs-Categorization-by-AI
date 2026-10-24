@@ -12,6 +12,7 @@ import {
   writeGroupingSequences,
 } from "@/lib/import-cases/group-products";
 import { getImportCaseById, getTenantId } from "@/lib/import-cases/queries";
+import { importCaseJson } from "@/lib/import-cases/revalidate-import-case-page";
 
 type RouteParams = { params: Promise<{ caseId: string }> };
 
@@ -71,11 +72,11 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
         const result = await groupImportCaseProducts(caseId, tenantId, user.id, {
           replaceExisting: true,
         });
-        return NextResponse.json(result);
+        return importCaseJson(caseId, result);
       }
       case "start": {
         const info = await startGroupingRun(caseId, { replaceExisting: true });
-        return NextResponse.json(info);
+        return importCaseJson(caseId, info);
       }
       case "products": {
         const sequences = parseSequences(body.sequences);
@@ -90,7 +91,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
           body.planKey,
           sequences,
         );
-        return NextResponse.json({ results });
+        return importCaseJson(caseId, { results });
       }
       case "finalize": {
         if (typeof body.planKey !== "string") {
@@ -105,7 +106,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
           user.id,
           body.planKey,
         );
-        return NextResponse.json(result);
+        return importCaseJson(caseId, result);
       }
       default:
         return NextResponse.json({ error: "Unknown action" }, { status: 400 });

@@ -10,6 +10,7 @@ import {
   getImportCaseById,
   getTenantId,
 } from "@/lib/import-cases/queries";
+import { revalidateImportCasePage } from "@/lib/import-cases/revalidate-import-case-page";
 import { bulkReviewSchema } from "@/lib/import-cases/validation";
 
 type BulkReviewHandler = (
@@ -55,6 +56,7 @@ export function createBulkReviewRoute(handler: BulkReviewHandler) {
         },
       );
 
+      revalidateImportCasePage(caseId);
       return NextResponse.json(result);
     } catch (error) {
       return NextResponse.json(

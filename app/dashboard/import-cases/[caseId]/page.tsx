@@ -11,7 +11,11 @@ import { getSessionUserProfile } from "@/lib/auth/require-admin";
 import { isClientRole, isStaffRole } from "@/lib/auth/roles";
 import { getCaseAuditLogs } from "@/lib/import-cases/audit-queries";
 import { getCaseClassifications } from "@/lib/import-cases/classification-queries";
-import { getCaseGroupings } from "@/lib/import-cases/grouping-queries";
+import {
+  getCaseGroupings,
+  getUnclassifiedProducts,
+} from "@/lib/import-cases/grouping-queries";
+import type { UnclassifiedProduct } from "@/lib/import-cases/unclassified";
 import { isHsReferenceAvailable } from "@/lib/import-cases/classify-product-description";
 import { getCaseProducts } from "@/lib/import-cases/product-queries";
 import {
@@ -57,6 +61,7 @@ export default async function ImportCaseDetailPage({ params }: PageProps) {
   let products: Awaited<ReturnType<typeof getCaseProducts>> = [];
   let classifications: Awaited<ReturnType<typeof getCaseClassifications>> = [];
   let groupings: Awaited<ReturnType<typeof getCaseGroupings>> = [];
+  let unclassified: UnclassifiedProduct[] = [];
   let referencePopulated = false;
   let agents: Awaited<ReturnType<typeof listTenantUsers>> = [];
   let auditLogs: Awaited<ReturnType<typeof getCaseAuditLogs>> = [];
@@ -83,6 +88,7 @@ export default async function ImportCaseDetailPage({ params }: PageProps) {
       products,
       classifications,
       groupings,
+      unclassified,
       referencePopulated,
       agents,
       auditLogs,
@@ -94,6 +100,7 @@ export default async function ImportCaseDetailPage({ params }: PageProps) {
       getCaseProducts(caseId),
       getCaseClassifications(caseId),
       getCaseGroupings(caseId),
+      getUnclassifiedProducts(caseId),
       isHsReferenceAvailable(),
       listTenantUsers(tenantId),
       getCaseAuditLogs(caseId, tenantId),
@@ -204,6 +211,7 @@ export default async function ImportCaseDetailPage({ params }: PageProps) {
           products={products}
           classifications={classifications}
           groupings={groupings}
+          unclassified={unclassified}
           referencePopulated={referencePopulated}
           agents={agents.map((agent) => ({
             id: agent.id,

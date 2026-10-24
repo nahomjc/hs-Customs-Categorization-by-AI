@@ -41,6 +41,10 @@ export type ClassifyStartResponse = {
   total: number;
   sequences: number[];
   referencePopulated: boolean;
+  /** Re-check run: approved products that went back to review. */
+  resetApproved?: number;
+  /** Re-check run: declaration groups exist and must be built again. */
+  groupingStale?: boolean;
 };
 
 export type ClassifyBatchResult =

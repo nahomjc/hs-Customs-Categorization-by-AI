@@ -7,6 +7,7 @@ import {
 } from "@/lib/import-cases/api-helpers";
 import { approveProductClassification } from "@/lib/import-cases/approve-classification";
 import { getImportCaseById, getTenantId } from "@/lib/import-cases/queries";
+import { revalidateImportCasePage } from "@/lib/import-cases/revalidate-import-case-page";
 import { approveClassificationSchema } from "@/lib/import-cases/validation";
 
 type RouteParams = {
@@ -40,6 +41,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       user.id,
       parsed.data,
     );
+    revalidateImportCasePage(caseId);
     return NextResponse.json(result);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);

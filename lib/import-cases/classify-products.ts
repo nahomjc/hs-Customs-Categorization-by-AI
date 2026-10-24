@@ -5,9 +5,15 @@ import {
   importCases,
   importProducts,
   productClassifications,
+  productGroupings,
   tariffSnapshots,
 } from "@/db/schema";
+import { checkPlausibility, needsRecheck, type PlausibilityVerdict } from "@/lib/hs-plausibility";
 import { isExcludedHsCode } from "@/lib/allowedHsCodes";
+import { completeHsCode } from "@/lib/hs-code-format";
+import { getHsReferenceCacheRows } from "@/lib/hsReferenceCache";
+import { NO_CLEAR_TARIFF_MATCH, isCatchAllHsCode } from "@/lib/hs-catch-all";
+import type { WebSource } from "@/lib/hs-web-search";
 import {
   classifyProductDescription,
   isHsReferenceAvailable,
@@ -16,10 +22,20 @@ import {
 import type { ClassificationSource } from "./constants";
 import { TARIFF_VERSION } from "./constants";
 import { mapWithConcurrency, stableHash } from "./harmonize-plan";
+import type { SuggestionReview } from "./hs-web-step";
 import { AI_MODEL_NAME, PROMPT_VERSION } from "./extraction-schemas";
 import { lookupTariffForHsCode, parseDutyRate, dutyRateOtherCharges } from "./tariff-lookup";
 import { writeAuditLog } from "./queries";
 import { persistVddMatchesForProduct } from "@/lib/vdd/persist-product-matches";
+import {
+  getReviewerNote,
+  sanitizeNote,
+} from "./product-context";
+import {
+  loadProductContext,
+  loadSupplierHsByProduct,
+  saveProductNote,
+} from "./product-context-load";
 import type { VddScoredMatch } from "@/lib/vdd/score-match";
 import { vddProductMatches } from "@/db/schema";
 
@@ -96,7 +112,17 @@ function buildReasoning(
   const noteNote = result.noteReference
     ? ` HS note applied: ${result.noteReference}.`
     : "";
-  return `AI classification: ${result.category}. ${result.cleanDescription}.${noteNote}${vddNote}`;
+  const review = result.review;
+  const webNote = review?.web.used
+    ? ` Web search${review.web.reasoning ? `: ${review.web.reasoning}` : " used."}${
+        review.web.sources.length > 0
+          ? ` (${review.web.sources.length} source${review.web.sources.length === 1 ? "" : "s"})`
+          : ""
+      }`
+    : "";
+  const reviewNote =
+    review?.required && review.reason ? ` Needs review: ${review.reason}` : "";
+  return `AI classification: ${result.category}. ${result.cleanDescription}.${noteNote}${webNote}${reviewNote}${vddNote}`;
 }
 
 function buildClassificationEvidence(
@@ -129,8 +155,26 @@ function buildClassificationEvidence(
     category: result.category,
     aiRawResponse: result.aiRawResponse ?? null,
     ...(result.noteReference ? { noteReference: result.noteReference } : {}),
+    ...(effectiveReview(result) ? { review: effectiveReview(result) } : {}),
     ...vddBlock,
   };
+}
+
+/** Review info stored with the suggestion; catch-alls always get a plain reason. */
+function effectiveReview(
+  result: Awaited<ReturnType<typeof classifyProductDescription>>,
+): SuggestionReview | undefined {
+  if (result.review) return result.review;
+  if (isCatchAllHsCode(result.hsCode) && result.isImportItem) {
+    return {
+      required: true,
+      reason: `${NO_CLEAR_TARIFF_MATCH}. Set the code by hand or add more detail to the product description.`,
+      confidenceNote: "No code suggested",
+      alternatives: [],
+      web: { attempted: false, used: false, sources: [] },
+    };
+  }
+  return undefined;
 }
 
 async function clearProductClassificationData(productIds: string[]) {
@@ -148,8 +192,8 @@ async function clearProductClassificationData(productIds: string[]) {
 }
 
 type PersistClassificationOutcome =
-  | { kind: "classified" }
-  | { kind: "needs_review" }
+  | { kind: "classified"; review?: SuggestionReview }
+  | { kind: "needs_review"; review?: SuggestionReview }
   | { kind: "skipped" };
 
 async function persistProductClassification(
@@ -167,7 +211,20 @@ async function persistProductClassification(
     return { kind: "needs_review" };
   }
 
+  // One display format: a short code becomes the full 8 digit code when the book has exactly one.
+  if (!isCatchAllHsCode(result.hsCode)) {
+    const done = completeHsCode(result.hsCode, getHsReferenceCacheRows());
+    if (done.digits.length >= 4) result.hsCode = done.display;
+  }
+
   const confidence = result.confidence ?? 0.7;
+  const review = effectiveReview(result);
+  // A catch-all (9999 and friends) is never "classified": it always needs review.
+  const needsReview =
+    confidence < 0.6 ||
+    result.source === "rule_fallback" ||
+    isCatchAllHsCode(result.hsCode) ||
+    review?.required === true;
   const tariff = await lookupTariffForHsCode(result.hsCode);
   const tariffVersion = tariff.tariffVersion || TARIFF_VERSION || "ETH-2024";
   const officialDescription =
@@ -180,7 +237,9 @@ async function persistProductClassification(
         ? "reference_match"
         : result.source === "rule_fallback"
           ? "rule_fallback"
-          : AI_MODEL_NAME;
+          : review?.web.used && review.web.model
+            ? review.web.model.slice(0, 100)
+            : AI_MODEL_NAME;
 
   const [candidate] = await db
     .insert(hsCodeCandidates)
@@ -200,12 +259,34 @@ async function persistProductClassification(
     })
     .returning();
 
+  // Other real tariff codes the reviewer can choose instead (rank 2+).
+  const alternatives = (review?.alternatives ?? []).slice(0, 3);
+  for (let i = 0; i < alternatives.length; i++) {
+    const alt = alternatives[i];
+    await db.insert(hsCodeCandidates).values({
+      productId: product.id,
+      tariffVersion,
+      hsCode: alt.hsCode,
+      officialDescription: alt.officialDescription || alt.hsCode,
+      rank: i + 2,
+      // not scored: only the first suggestion carries a confidence
+      confidenceScore: "0.0000",
+      confidenceLevel: "low",
+      reasoning: alt.reason ?? "Alternative suggestion",
+      classificationEvidence: {
+        role: "alternative",
+        scored: false,
+        inTariffBook: alt.inTariffBook,
+      },
+      missingInformation: [],
+      aiModelName,
+      promptVersion: PROMPT_VERSION,
+    });
+  }
+
   await db.insert(productClassifications).values({
     productId: product.id,
-    status:
-      confidence < 0.6 || result.source === "rule_fallback"
-        ? "needs_review"
-        : "suggested",
+    status: needsReview ? "needs_review" : "suggested",
     hsCode: result.hsCode,
     tariffVersion,
     officialDescription,
@@ -225,12 +306,7 @@ async function persistProductClassification(
     sourceReference: tariff.sourceReference,
   });
 
-  const productStatus =
-    confidence < 0.6 ||
-    result.hsCode.startsWith("9999") ||
-    result.source === "rule_fallback"
-      ? "needs_expert_review"
-      : "hs_suggested";
+  const productStatus = needsReview ? "needs_expert_review" : "hs_suggested";
 
   await db
     .update(importProducts)
@@ -241,8 +317,8 @@ async function persistProductClassification(
     .where(eq(importProducts.id, product.id));
 
   return productStatus === "needs_expert_review"
-    ? { kind: "needs_review" }
-    : { kind: "classified" };
+    ? { kind: "needs_review", review }
+    : { kind: "classified", review };
 }
 
 type ProductRow = typeof importProducts.$inferSelect;
@@ -253,10 +329,15 @@ const ELIGIBLE_STATUSES = new Set([
   "needs_expert_review",
 ]);
 
-/** Human-verified products of a case that can be (re)classified, in sequence order. */
+/**
+ * Human-verified products of a case that can be (re)classified, in sequence order.
+ * `scopeSequences` limits the run to those products (the "re-check suspicious
+ * codes" run): the plan key then covers only them.
+ */
 async function loadEligibleProducts(
   caseId: string,
   productIds?: string[],
+  scopeSequences?: number[],
 ): Promise<ProductRow[]> {
   let products = await db
     .select()
@@ -273,8 +354,79 @@ async function loadEligibleProducts(
     const idSet = new Set(productIds);
     products = products.filter((p) => idSet.has(p.id));
   }
+  if (scopeSequences) {
+    const seqSet = new Set(scopeSequences);
+    products = products.filter((p) => seqSet.has(p.productSequence));
+  }
 
   return products.filter((p) => ELIGIBLE_STATUSES.has(p.status));
+}
+
+/* ------------------------------------------------------------------ */
+/* Suspicious codes: a current code that does not fit the product      */
+/* ------------------------------------------------------------------ */
+
+export type SuspiciousProduct = {
+  productId: string;
+  sequence: number;
+  name: string;
+  hsCode: string;
+  status: string;
+  /** True when the code was typed by a person (never reset automatically). */
+  manual: boolean;
+  verdict: PlausibilityVerdict;
+};
+
+/**
+ * Products whose CURRENT code fails the plausibility check (chapter / section
+ * does not fit, or differs from the supplier's invoice code). Read only.
+ */
+export async function findSuspiciousProducts(
+  caseId: string,
+): Promise<SuspiciousProduct[]> {
+  const products = await db
+    .select()
+    .from(importProducts)
+    .where(
+      and(
+        eq(importProducts.importCaseId, caseId),
+        eq(importProducts.humanVerified, true),
+      ),
+    )
+    .orderBy(importProducts.productSequence);
+  if (products.length === 0) return [];
+
+  const ids = products.map((p) => p.id);
+  const [classifications, supplierHs] = await Promise.all([
+    db
+      .select()
+      .from(productClassifications)
+      .where(inArray(productClassifications.productId, ids)),
+    loadSupplierHsByProduct(caseId),
+  ]);
+  const byProduct = new Map(classifications.map((c) => [c.productId, c]));
+
+  const out: SuspiciousProduct[] = [];
+  for (const p of products) {
+    const c = byProduct.get(p.id);
+    if (!c) continue;
+    const verdict = checkPlausibility({
+      hsCode: c.hsCode,
+      texts: [p.productName, p.rawDescription, p.normalizedDescription],
+      supplierHsCode: supplierHs.get(p.id) ?? null,
+    });
+    if (!needsRecheck(verdict)) continue;
+    out.push({
+      productId: p.id,
+      sequence: p.productSequence,
+      name: (p.productName ?? p.normalizedDescription ?? p.rawDescription ?? "").slice(0, 120),
+      hsCode: c.hsCode,
+      status: p.status,
+      manual: c.source === "manual_override",
+      verdict,
+    });
+  }
+  return out;
 }
 
 /**
@@ -295,12 +447,17 @@ async function classifyProductRow(
 
   const vddResult = await persistVddMatchesForProduct(tenantId, product);
   const vddMatches: VddScoredMatch[] = vddResult.matches.slice(0, 5);
+  const productContext = await loadProductContext(product);
 
   const result = await classifyProductDescription(description, {
     country: product.countryOfOriginCode ?? undefined,
     unit: product.unitOfMeasure ?? undefined,
     forceAi,
     vddMatches,
+    userNote: productContext.userNote,
+    context: { text: productContext.text, hints: productContext.hints },
+    assumeImportItem: true,
+    nameTexts: [product.productName, product.rawDescription],
   });
 
   // Mark whether suggested HS aligns with any top VDD HS (informational only)
@@ -389,7 +546,7 @@ export async function classifyImportCaseProducts(
 /* ------------------------------------------------------------------ */
 
 /** Products classified in parallel inside one batch request. */
-const CLASSIFY_CONCURRENCY = 3;
+const CLASSIFY_CONCURRENCY = 4;
 
 export class ClassifyPlanChangedError extends Error {
   constructor() {
@@ -410,13 +567,28 @@ export type ClassifyStartInfo = {
   /** product_sequence of every product this run classifies, in order. */
   sequences: number[];
   referencePopulated: boolean;
+  /** Re-check run only: how many already approved products were sent back to review. */
+  resetApproved?: number;
+  /** Re-check run only: declaration groups exist and must be built again. */
+  groupingStale?: boolean;
 };
 
 /** Step 1: choose the products and clear their old suggestions (same as before). */
 export async function startClassifyRun(
   caseId: string,
-  options?: { replaceExisting?: boolean },
+  options?: {
+    replaceExisting?: boolean;
+    /**
+     * Re-check run: only products whose current code fails the plausibility
+     * check. Approved ones among them go back to review; good approved items and
+     * codes typed by hand are not touched.
+     */
+    onlySuspicious?: boolean;
+    audit?: { tenantId: string; userId: string | null };
+  },
 ): Promise<ClassifyStartInfo> {
+  if (options?.onlySuspicious) return startRecheckRun(caseId, options.audit);
+
   const replaceExisting = options?.replaceExisting ?? true;
   const referencePopulated = await isHsReferenceAvailable();
   const eligible = await loadEligibleProducts(caseId);
@@ -434,6 +606,62 @@ export async function startClassifyRun(
     total: eligible.length,
     sequences: eligible.map((p) => p.productSequence),
     referencePopulated,
+  };
+}
+
+async function startRecheckRun(
+  caseId: string,
+  audit?: { tenantId: string; userId: string | null },
+): Promise<ClassifyStartInfo> {
+  const referencePopulated = await isHsReferenceAvailable();
+  const suspicious = (await findSuspiciousProducts(caseId)).filter((s) => !s.manual);
+  if (suspicious.length === 0) {
+    throw new Error("No suspicious codes found: every code fits its product.");
+  }
+
+  const ids = suspicious.map((s) => s.productId);
+  const resetApproved = suspicious.filter((s) => s.status === "approved_for_declaration").length;
+
+  await clearProductClassificationData(ids);
+  await db
+    .update(importProducts)
+    .set({ status: "ready_for_hs_suggestion", updatedAt: new Date() })
+    .where(inArray(importProducts.id, ids));
+
+  const groupings = await db
+    .select({ id: productGroupings.id })
+    .from(productGroupings)
+    .where(eq(productGroupings.importCaseId, caseId))
+    .limit(1);
+
+  if (audit) {
+    await writeAuditLog({
+      tenantId: audit.tenantId,
+      importCaseId: caseId,
+      userId: audit.userId,
+      entityType: "import_case",
+      entityId: caseId,
+      action: "classification_recheck_suspicious",
+      newData: {
+        count: suspicious.length,
+        resetApproved,
+        previous: suspicious.map((s) => ({
+          sequence: s.sequence,
+          hsCode: s.hsCode,
+          reasons: s.verdict.reasons.slice(0, 2),
+        })),
+      },
+    });
+  }
+
+  const eligible = await loadEligibleProducts(caseId, ids);
+  return {
+    planKey: classifyPlanKey(eligible),
+    total: eligible.length,
+    sequences: eligible.map((p) => p.productSequence),
+    referencePopulated,
+    resetApproved,
+    groupingStale: groupings.length > 0,
   };
 }
 
@@ -459,10 +687,10 @@ export async function classifyProductSequences(
   tenantId: string,
   planKey: string,
   sequences: number[],
-  options?: { forceAi?: boolean },
+  options?: { forceAi?: boolean; scopeSequences?: number[] },
 ): Promise<ClassifyProductResult[]> {
   const forceAi = options?.forceAi ?? false;
-  const eligible = await loadEligibleProducts(caseId);
+  const eligible = await loadEligibleProducts(caseId, undefined, options?.scopeSequences);
   if (classifyPlanKey(eligible) !== planKey) throw new ClassifyPlanChangedError();
 
   const bySequence = new Map(eligible.map((p) => [p.productSequence, p]));
@@ -525,8 +753,9 @@ export async function finalizeClassifyRun(
   tenantId: string,
   userId: string | null | undefined,
   planKey: string,
+  scopeSequences?: number[],
 ): Promise<ClassifyResult> {
-  const eligible = await loadEligibleProducts(caseId);
+  const eligible = await loadEligibleProducts(caseId, undefined, scopeSequences);
   if (classifyPlanKey(eligible) !== planKey) throw new ClassifyPlanChangedError();
 
   const ids = eligible.map((p) => p.id);
@@ -582,9 +811,27 @@ export async function finalizeClassifyRun(
 
 export type SingleClassifyResult = {
   productId: string;
+  /** The suggested code; null when no real code could be supported (catch-all / excluded). */
   hsCode: string | null;
   source: ProductClassifySource | null;
   needsReview: boolean;
+  /** Plain-language reason a human must look closer, e.g. "No clear tariff match". */
+  reviewReason: string | null;
+  confidenceNote: string | null;
+  reasoning: string | null;
+  /** Web sources the suggestion relied on (empty when no web search was used). */
+  sources: WebSource[];
+  /** Code the AI/web proposed that is not in the tariff book (never auto-used). */
+  proposedHsCode: string | null;
+  webSearchUsed: boolean;
+  /** True when the reviewer must choose between `options` / answer `question`. */
+  decisionRequired: boolean;
+  /** The one question that would settle it. */
+  question: string | null;
+  /** Ranked, validated options (best first). */
+  options: Array<{ hsCode: string; officialDescription: string; reason: string | null }>;
+  /** The reviewer's note was part of the context. */
+  userNoteUsed: boolean;
 };
 
 /** Classify one product, optionally forcing AI instead of tariff reference. */
@@ -593,7 +840,11 @@ export async function classifySingleImportProduct(
   tenantId: string,
   productId: string,
   userId?: string | null,
-  options?: { forceAi?: boolean },
+  options?: {
+    forceAi?: boolean;
+    /** Reviewer note: saved with the product, then used as top-priority context. undefined = keep the saved note, "" = clear it. */
+    note?: string;
+  },
 ): Promise<SingleClassifyResult> {
   const forceAi = options?.forceAi ?? true;
 
@@ -623,16 +874,39 @@ export async function classifySingleImportProduct(
     throw new Error("Product has no description to classify");
   }
 
+  // Save the reviewer's note first, so it also applies to later re-classification.
+  let current = product;
+  if (options?.note !== undefined) {
+    const cleanNote = sanitizeNote(options.note);
+    if (cleanNote !== getReviewerNote(product.technicalSpecifications)) {
+      current = await saveProductNote(product, cleanNote, userId ?? null);
+      await writeAuditLog({
+        tenantId,
+        importCaseId: caseId,
+        userId: userId ?? null,
+        entityType: "import_product",
+        entityId: productId,
+        action: cleanNote ? "classification_note_saved" : "classification_note_cleared",
+        newData: { note: cleanNote || null },
+      });
+    }
+  }
+
   await clearProductClassificationData([product.id]);
 
   const vddResult = await persistVddMatchesForProduct(tenantId, product);
   const vddMatches: VddScoredMatch[] = vddResult.matches.slice(0, 5);
+  const productContext = await loadProductContext(current);
 
   const result = await classifyProductDescription(description, {
     country: product.countryOfOriginCode ?? undefined,
     unit: product.unitOfMeasure ?? undefined,
     forceAi,
     vddMatches,
+    userNote: productContext.userNote,
+    context: { text: productContext.text, hints: productContext.hints },
+    assumeImportItem: true,
+    nameTexts: [product.productName, product.rawDescription],
   });
 
   if (vddMatches.length > 0 && result.hsCode && !isExcludedHsCode(result.hsCode)) {
@@ -660,13 +934,32 @@ export async function classifySingleImportProduct(
       source: result.source,
       hsCode: isExcludedHsCode(result.hsCode) ? null : result.hsCode,
       forceAi,
+      noteUsed: Boolean(productContext.userNote),
+      decisionRequired: result.review?.decisionRequired === true,
     },
   });
 
+  const review = outcome.kind === "skipped" ? undefined : outcome.review;
+  const noCode =
+    isExcludedHsCode(result.hsCode) || isCatchAllHsCode(result.hsCode);
   return {
     productId,
-    hsCode: isExcludedHsCode(result.hsCode) ? null : result.hsCode,
+    hsCode: noCode ? null : result.hsCode,
     source: result.source,
     needsReview: outcome.kind === "needs_review",
+    reviewReason: review?.required ? (review.reason ?? null) : null,
+    confidenceNote: review?.confidenceNote ?? null,
+    reasoning: review?.web.reasoning ?? result.cleanDescription ?? null,
+    sources: review?.web.sources ?? [],
+    proposedHsCode: review?.proposedCode?.hsCode ?? null,
+    webSearchUsed: review?.web.used === true,
+    decisionRequired: review?.decisionRequired === true,
+    question: review?.question ?? null,
+    options: (review?.alternatives ?? []).map((a) => ({
+      hsCode: a.hsCode,
+      officialDescription: a.officialDescription,
+      reason: a.reason ?? null,
+    })),
+    userNoteUsed: Boolean(productContext.userNote),
   };
 }

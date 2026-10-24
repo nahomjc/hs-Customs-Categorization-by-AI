@@ -25,6 +25,7 @@ import type { ImportCaseDocumentRow } from "@/db/schema/importCaseDocuments";
 import type { PackingListLineRow } from "@/db/schema/packingListLines";
 import { collectExtraKeys } from "@/lib/import-cases/extra-columns";
 import { useBulkReview } from "@/lib/import-cases/use-bulk-review";
+import { useSyncServerProp } from "@/lib/import-cases/use-sync-server-prop";
 
 type PackingLineWithDoc = {
   line: PackingListLineRow;
@@ -66,6 +67,7 @@ export function PackingListLinesTab({
 }: PackingListLinesTabProps) {
   const router = useRouter();
   const [lines, setLines] = useState(initialLines);
+  useSyncServerProp(initialLines, setLines);
   const [search, setSearch] = useState("");
   const [showForm, setShowForm] = useState(false);
   const [loading, setLoading] = useState(false);

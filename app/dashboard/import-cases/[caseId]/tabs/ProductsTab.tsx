@@ -9,6 +9,7 @@ import {
   HarmonizeProgressBanner,
   HarmonizeProgressDialog,
 } from "@/components/dashboard/import-case/HarmonizeProgressDialog";
+import { RerunWorkflowJobDialog } from "@/components/dashboard/import-case/RerunWorkflowJobDialog";
 import {
   DashButton,
   DashCard,
@@ -26,6 +27,7 @@ import type { JobSnapshot } from "@/lib/import-cases/harmonize-progress";
 import type { CaseProductWithSources } from "@/lib/import-cases/product-queries";
 import { useBulkReview } from "@/lib/import-cases/use-bulk-review";
 import { useHarmonizeJob } from "@/lib/import-cases/use-harmonize-job";
+import { useSyncServerProp } from "@/lib/import-cases/use-sync-server-prop";
 
 type ProductsTabProps = {
   caseId: string;
@@ -68,7 +70,9 @@ export function ProductsTab({ caseId, initialProducts }: ProductsTabProps) {
   const router = useRouter();
   const [products, setProducts] =
     useState<CaseProductWithSources[]>(initialProducts);
+  useSyncServerProp(initialProducts, setProducts);
   const [progressOpen, setProgressOpen] = useState(false);
+  const [rerunConfirmOpen, setRerunConfirmOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editDescription, setEditDescription] = useState("");
   const [confirmingId, setConfirmingId] = useState<string | null>(null);
@@ -111,9 +115,22 @@ export function ProductsTab({ caseId, initialProducts }: ProductsTabProps) {
   const job = useHarmonizeJob(caseId, { onFinished: handleJobFinished });
   const harmonizing = job.active;
 
-  function handleHarmonize() {
+  function startHarmonizeJob() {
     setProgressOpen(true);
     job.start();
+  }
+
+  function handleHarmonize() {
+    if (products.length > 0) {
+      setRerunConfirmOpen(true);
+      return;
+    }
+    startHarmonizeJob();
+  }
+
+  function confirmRerunHarmonize() {
+    setRerunConfirmOpen(false);
+    startHarmonizeJob();
   }
 
   function handleProgressDone() {
@@ -384,6 +401,14 @@ export function ProductsTab({ caseId, initialProducts }: ProductsTabProps) {
         onStop={job.stop}
         onResume={job.resume}
         onRetryFailed={job.retryFailed}
+      />
+
+      <RerunWorkflowJobDialog
+        job="harmonize"
+        open={rerunConfirmOpen}
+        onOpenChange={setRerunConfirmOpen}
+        onConfirm={confirmRerunHarmonize}
+        loading={harmonizing}
       />
     </div>
   );

@@ -33,6 +33,7 @@ import {
 } from "@/lib/import-cases/constants";
 import type { ImportCaseDocumentRow } from "@/db/schema/importCaseDocuments";
 import { formatBytes } from "@/lib/formatBytes";
+import { useSyncServerProp } from "@/lib/import-cases/use-sync-server-prop";
 
 type DocumentsTabProps = {
   caseId: string;
@@ -98,6 +99,7 @@ export function DocumentsTab({
 }: DocumentsTabProps) {
   const router = useRouter();
   const [documents, setDocuments] = useState(initialDocuments);
+  useSyncServerProp(initialDocuments, setDocuments);
   const [uploadType, setUploadType] = useState<DocumentType>("commercial_invoice");
   const [uploadOpen, setUploadOpen] = useState(false);
   const [loading, setLoading] = useState(false);

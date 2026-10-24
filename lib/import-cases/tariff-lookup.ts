@@ -2,6 +2,7 @@ import { findInCacheSync, findReferenceForHsCode } from "@/lib/hsReferenceCache"
 import { loadHsReferenceCache } from "@/lib/hsReference";
 import { TARIFF_VERSION } from "./constants";
 import { formatDutyRateFromSnapshot } from "./duty-rate-display";
+import { normalizeDutyRate } from "./duty-format";
 import type { TariffSnapshotRow } from "@/db/schema/tariffSnapshots";
 
 const DEFAULT_TARIFF_VERSION = TARIFF_VERSION || "ETH-2024";
@@ -24,12 +25,11 @@ export function parseDutyRate(
   const trimmed = dutyRate.trim();
   if (!trimmed) return null;
 
-  if (/^(free|nil|exempt|0%?)$/i.test(trimmed)) {
-    return "0.0000";
-  }
+  // percent as a number: "30%" and "0.35" (a fraction) both mean what they say
+  const { percent } = normalizeDutyRate(trimmed);
+  if (percent !== null) return percent.toFixed(4);
 
-  const cleaned = trimmed.replace(/%/g, "").trim();
-  const num = Number.parseFloat(cleaned);
+  const num = Number.parseFloat(trimmed.replace(/%/g, "").trim());
   return Number.isFinite(num) ? num.toFixed(4) : null;
 }
 
@@ -42,7 +42,7 @@ function buildResultFromReference(
     tariffVersion: DEFAULT_TARIFF_VERSION,
     officialDescription: ref.description.replace(/^[-\s]+/, "").trim(),
     customsDutyRate: parseDutyRate(rawDuty),
-    dutyRateDisplay: rawDuty,
+    dutyRateDisplay: rawDuty ? normalizeDutyRate(rawDuty).display || rawDuty : null,
     stdUnit: ref.stdUnit ?? null,
     sourceReference: ref.tariffNo,
   };
@@ -83,7 +83,8 @@ export function resolveDutyRateDisplay(snapshot: DutyRateSnapshot): string {
   const ref =
     findInCacheSync(snapshot.hsCode) ??
     findReferenceForHsCode(snapshot.hsCode);
-  return ref?.dutyRate?.trim() ?? "";
+  const raw = ref?.dutyRate?.trim() ?? "";
+  return raw ? normalizeDutyRate(raw).display || raw : "";
 }
 
 export function dutyRateOtherCharges(

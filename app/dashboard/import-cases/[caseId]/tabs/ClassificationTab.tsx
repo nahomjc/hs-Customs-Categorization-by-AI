@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Pagination, usePagination } from "@/components/dashboard/Pagination";
 import { BulkReviewToolbar } from "@/components/dashboard/import-case/BulkReviewActions";
@@ -10,6 +10,7 @@ import {
   ClassifyProgressBanner,
   ClassifyProgressDialog,
 } from "@/components/dashboard/import-case/ClassifyProgressDialog";
+import { RerunWorkflowJobDialog } from "@/components/dashboard/import-case/RerunWorkflowJobDialog";
 import {
   Dialog,
   DialogContent,
@@ -33,14 +34,24 @@ import {
 import type { ProductClassificationBundle } from "@/lib/import-cases/classification-queries";
 import type { ClassifySnapshot } from "@/lib/import-cases/classify-progress";
 import type { ClassificationSource } from "@/lib/import-cases/constants";
+import { isCatchAllHsCode } from "@/lib/hs-catch-all";
+import { getReviewerNote } from "@/lib/import-cases/product-context";
+import {
+  buildClassificationReviewView,
+  type ClassificationReviewView,
+} from "@/lib/import-cases/classification-review-view";
 import { formatDutyRateFromSnapshot } from "@/lib/import-cases/duty-rate-display";
 import { useBulkReview } from "@/lib/import-cases/use-bulk-review";
 import { useClassifyJob } from "@/lib/import-cases/use-classify-job";
+import { useSyncServerProp } from "@/lib/import-cases/use-sync-server-prop";
+import { needsRecheck } from "@/lib/hs-plausibility";
+import { formatHsCode } from "@/lib/hs-code-format";
 
 type ClassificationTabProps = {
   caseId: string;
-  initialClassifications: ProductClassificationBundle[];
+  classifications: ProductClassificationBundle[];
   referencePopulated: boolean;
+  onClassificationsChange?: (items: ProductClassificationBundle[]) => void;
 };
 
 function classificationSearchHaystack(row: ProductClassificationBundle): string {
@@ -103,17 +114,21 @@ function sourceBadgeStatus(source: string | null | undefined): string {
 
 export function ClassificationTab({
   caseId,
-  initialClassifications,
+  classifications: classificationsFromParent,
   referencePopulated: initialReferencePopulated,
+  onClassificationsChange,
 }: ClassificationTabProps) {
   const router = useRouter();
   const [items, setItems] =
-    useState<ProductClassificationBundle[]>(initialClassifications);
+    useState<ProductClassificationBundle[]>(classificationsFromParent);
+  useSyncServerProp(classificationsFromParent, setItems);
   const [search, setSearch] = useState("");
   const [referencePopulated, setReferencePopulated] = useState(
     initialReferencePopulated,
   );
+  useSyncServerProp(initialReferencePopulated, setReferencePopulated);
   const [progressOpen, setProgressOpen] = useState(false);
+  const [rerunConfirmOpen, setRerunConfirmOpen] = useState(false);
   const [aiProductId, setAiProductId] = useState<string | null>(null);
   const [approvingId, setApprovingId] = useState<string | null>(null);
   const [overrideId, setOverrideId] = useState<string | null>(null);
@@ -121,13 +136,16 @@ export function ClassificationTab({
   const [expertModalOpen, setExpertModalOpen] = useState(false);
 
   async function refresh() {
-    const res = await fetch(`/api/import-cases/${caseId}/classifications`);
+    const res = await fetch(`/api/import-cases/${caseId}/classifications`, {
+      cache: "no-store",
+    });
     if (!res.ok) return;
     const data = (await res.json()) as {
       classifications: ProductClassificationBundle[];
       referencePopulated?: boolean;
     };
     setItems(data.classifications);
+    onClassificationsChange?.(data.classifications);
     if (data.referencePopulated != null) {
       setReferencePopulated(data.referencePopulated);
     }
@@ -150,10 +168,16 @@ export function ClassificationTab({
     void refresh();
   }
 
-  const job = useClassifyJob(caseId, { onFinished: handleJobFinished });
+  // "suspicious" = the re-check run: only codes that do not fit their product.
+  const scopeRef = useRef<"suspicious" | undefined>(undefined);
+  const job = useClassifyJob(caseId, {
+    onFinished: handleJobFinished,
+    getScope: () => scopeRef.current,
+  });
   const classifying = job.active;
 
-  function handleClassify() {
+  function startClassifyJob(scope?: "suspicious") {
+    scopeRef.current = scope;
     setProgressOpen(true);
     job.start();
   }
@@ -164,7 +188,7 @@ export function ClassificationTab({
     void refresh();
   }
 
-  async function handleAskAi(productId: string) {
+  async function handleAskAi(productId: string, note?: string) {
     setAiProductId(productId);
     try {
       const res = await fetch(
@@ -172,7 +196,10 @@ export function ClassificationTab({
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ forceAi: true }),
+          body: JSON.stringify({
+            forceAi: true,
+            ...(note !== undefined ? { note } : {}),
+          }),
         },
       );
       const contentType = res.headers.get("content-type") ?? "";
@@ -181,6 +208,15 @@ export function ClassificationTab({
             error?: string;
             hsCode?: string | null;
             needsReview?: boolean;
+            reviewReason?: string | null;
+            webSearchUsed?: boolean;
+            proposedHsCode?: string | null;
+            decisionRequired?: boolean;
+            question?: string | null;
+            options?: Array<{
+              hsCode: string;
+              reason?: string | null;
+            }>;
           })
         : null;
       if (!res.ok) {
@@ -194,8 +230,22 @@ export function ClassificationTab({
       if (!data) {
         throw new Error("Server returned an invalid response");
       }
-      if (data.hsCode && !data.hsCode.startsWith("9999")) {
-        toast.success(`AI suggested HS ${data.hsCode}`);
+      if (data.decisionRequired) {
+        const optionText = (data.options ?? [])
+          .map((o, i) => `${i + 1}. ${o.hsCode}${o.reason ? ` (${o.reason})` : ""}`)
+          .join("  ");
+        toast.warning("Needs your decision", {
+          description: [data.question, optionText].filter(Boolean).join("  "),
+          duration: 15000,
+        });
+      } else if (data.hsCode && !isCatchAllHsCode(data.hsCode)) {
+        toast.success(
+          `AI suggested HS ${data.hsCode}${data.webSearchUsed ? " (web search)" : ""}${
+            data.needsReview ? " - needs your review" : ""
+          }`,
+        );
+      } else if (data.reviewReason) {
+        toast.warning(data.reviewReason);
       } else if (data.hsCode?.startsWith("9999")) {
         toast.warning(
           `AI returned unclassified (9999) — try uploading the tariff book or set HS manually`,
@@ -245,6 +295,49 @@ export function ClassificationTab({
   }
 
   const verifiedProducts = items.filter((i) => i.product.humanVerified);
+  const hasPriorClassification = verifiedProducts.some(
+    (row) => row.classification != null || row.candidates.length > 0,
+  );
+
+  function handleClassify() {
+    if (hasPriorClassification) {
+      setRerunConfirmOpen(true);
+      return;
+    }
+    startClassifyJob();
+  }
+
+  function confirmRerunClassify() {
+    setRerunConfirmOpen(false);
+    startClassifyJob();
+  }
+
+  // Products whose CURRENT code does not fit them (checked on the server).
+  const suspiciousRows = verifiedProducts.filter(
+    (row) => row.plausibility != null && needsRecheck(row.plausibility),
+  );
+  const suspiciousRechecked = suspiciousRows.filter(
+    (row) => row.classification?.source !== "manual_override",
+  );
+  const suspiciousManualCount =
+    suspiciousRows.length - suspiciousRechecked.length;
+  const suspiciousApprovedCount = suspiciousRechecked.filter(
+    (row) => row.classification?.isFinal,
+  ).length;
+
+  function handleRecheckSuspicious() {
+    if (suspiciousRechecked.length === 0) return;
+    if (
+      suspiciousApprovedCount > 0 &&
+      !window.confirm(
+        `${suspiciousApprovedCount} of these codes are already approved. They will go back to review and need approval again (grouping must be run again afterwards). Continue?`,
+      )
+    ) {
+      return;
+    }
+    startClassifyJob("suspicious");
+  }
+
   const expertReviewRows = useMemo(
     () => verifiedProducts.filter(needsExpertReview),
     [verifiedProducts],
@@ -266,12 +359,16 @@ export function ClassificationTab({
 
   const pagination = usePagination(filteredRows.length);
   const pageRows = filteredRows.slice(pagination.start, pagination.end);
-  const withClassification = verifiedProducts.filter((i) => i.classification);
+  const withClassification = verifiedProducts.filter(
+    (i) => i.classification && !isCatchAllHsCode(i.classification.hsCode),
+  );
   const approvedCount = verifiedProducts.filter(
     (i) => i.classification?.isFinal,
   ).length;
   const unclassifiedCount = verifiedProducts.filter(
-    (i) => !i.classification && i.candidates.length === 0,
+    (i) =>
+      (!i.classification && i.candidates.length === 0) ||
+      (i.classification != null && isCatchAllHsCode(i.classification.hsCode)),
   ).length;
   const pendingCount = verifiedProducts.filter(
     (i) => !i.classification?.isFinal,
@@ -311,7 +408,10 @@ export function ClassificationTab({
               />
               <DashButton
                 variant="primary"
-                onClick={handleClassify}
+                onClick={() => {
+                  scopeRef.current = undefined;
+                  handleClassify();
+                }}
                 disabled={classifying || verifiedProducts.length === 0}
               >
                 {classifying
@@ -327,8 +427,10 @@ export function ClassificationTab({
           <p className="text-sm text-slate-600">
             Matches products against the tariff reference table first. Use{" "}
             <span className="font-medium">Ask AI</span> on any row to skip the
-            reference and get an OpenRouter suggestion instead. Human approval
-            is required before declaration grouping.
+            reference and get an OpenRouter suggestion with web search instead.
+            Items with no confident tariff match are searched on the web and
+            marked for review. Human approval is required before declaration
+            grouping.
           </p>
           {!referencePopulated ? (
             <p className="text-xs text-amber-700 bg-amber-50 rounded-lg px-3 py-2">
@@ -352,6 +454,62 @@ export function ClassificationTab({
               snapshot={job.snapshot}
               onShow={() => setProgressOpen(true)}
             />
+          ) : null}
+          {suspiciousRows.length > 0 ? (
+            <div
+              className="whitespace-normal rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 text-xs text-amber-800"
+              role="alert"
+            >
+              <div className="flex flex-wrap items-start justify-between gap-2">
+                <div className="min-w-0 flex-1">
+                  <p className="font-medium">
+                    {suspiciousRows.length} code(s) may not fit the product
+                  </p>
+                  <p className="mt-0.5">
+                    The chapter or section of the code does not match what the
+                    product description says, or it differs from the HS code on
+                    the supplier invoice. Re-checking looks only at these
+                    products; every other approved code stays as it is.
+                    {suspiciousManualCount > 0
+                      ? ` ${suspiciousManualCount} code(s) typed by hand are listed but never changed.`
+                      : ""}
+                  </p>
+                </div>
+                <DashButton
+                  type="button"
+                  variant="secondary"
+                  onClick={handleRecheckSuspicious}
+                  disabled={classifying || suspiciousRechecked.length === 0}
+                  className="shrink-0"
+                >
+                  Re-check suspicious codes ({suspiciousRechecked.length})
+                </DashButton>
+              </div>
+              <ul className="mt-2 space-y-0.5">
+                {suspiciousRows.slice(0, 8).map((row) => (
+                  <li key={row.product.id} className="min-w-0 truncate">
+                    <span className="text-amber-700">
+                      #{row.product.productSequence}
+                    </span>{" "}
+                    {row.product.productName ??
+                      row.product.normalizedDescription ??
+                      row.product.rawDescription ??
+                      "Product"}{" "}
+                    <span className="font-mono text-slate-900">
+                      {row.classification?.hsCode}
+                    </span>
+                    {row.plausibility?.reasons[0]
+                      ? ` - ${row.plausibility.reasons[0]}`
+                      : ""}
+                  </li>
+                ))}
+                {suspiciousRows.length > 8 ? (
+                  <li className="text-amber-700">
+                    and {suspiciousRows.length - 8} more
+                  </li>
+                ) : null}
+              </ul>
+            </div>
           ) : null}
           {verifiedProducts.length > 0 ? (
             <p className="text-xs text-slate-500">
@@ -461,13 +619,14 @@ export function ClassificationTab({
                   </tr>
                 ) : null}
                 {pageRows.map(
-                  ({ product, candidates, classification, tariffSnapshot }) => (
+                  ({ product, candidates, classification, tariffSnapshot, plausibility }) => (
                     <ClassificationTableRow
                       key={product.id}
                       product={product}
                       candidates={candidates}
                       classification={classification}
                       tariffSnapshot={tariffSnapshot}
+                      plausibility={plausibility}
                       approvingId={approvingId}
                       aiProductId={aiProductId}
                       overrideId={overrideId}
@@ -510,6 +669,14 @@ export function ClassificationTab({
         onRetryFailed={job.retryFailed}
       />
 
+      <RerunWorkflowJobDialog
+        job="classification"
+        open={rerunConfirmOpen}
+        onOpenChange={setRerunConfirmOpen}
+        onConfirm={confirmRerunClassify}
+        loading={classifying}
+      />
+
       <Dialog
         open={expertModalOpen}
         onOpenChange={(open) => {
@@ -517,8 +684,8 @@ export function ClassificationTab({
           if (!open) setOverrideId(null);
         }}
       >
-        <DialogContent className="flex max-h-[min(90vh,52rem)] w-[min(96vw,56rem)] max-w-[56rem] flex-col gap-0 overflow-hidden p-0">
-          <DialogHeader className="border-b border-slate-100 px-5 py-4 text-left">
+        <DialogContent className="!flex h-auto max-h-[min(90vh,52rem)] w-[min(96vw,56rem)] max-w-[56rem] flex-col gap-0 overflow-hidden p-0">
+          <DialogHeader className="shrink-0 border-b border-slate-100 px-5 py-4 text-left">
             <DialogTitle>Expert review queue</DialogTitle>
             <DialogDescription>
               {expertReviewRows.length === 0
@@ -526,7 +693,7 @@ export function ClassificationTab({
                 : `${expertReviewRows.length} product(s) need a decision — approve, ask AI, or set HS without searching the full list.`}
             </DialogDescription>
           </DialogHeader>
-          <div className="min-h-0 flex-1 overflow-y-auto">
+          <div className="min-h-0 max-h-[calc(min(90vh,52rem)-6.5rem)] flex-1 overflow-y-auto overscroll-y-contain">
             {expertReviewRows.length === 0 ? (
               <p className="px-5 py-8 text-center text-sm text-slate-500">
                 You&apos;re caught up.
@@ -558,6 +725,7 @@ export function ClassificationTab({
                       candidates,
                       classification,
                       tariffSnapshot,
+                      plausibility,
                     }) => (
                       <ClassificationTableRow
                         key={product.id}
@@ -565,6 +733,7 @@ export function ClassificationTab({
                         candidates={candidates}
                         classification={classification}
                         tariffSnapshot={tariffSnapshot}
+                        plausibility={plausibility}
                         approvingId={approvingId}
                         aiProductId={aiProductId}
                         overrideId={overrideId}
@@ -595,12 +764,13 @@ type ClassificationTableRowProps = {
   candidates: ProductClassificationBundle["candidates"];
   classification: ProductClassificationBundle["classification"];
   tariffSnapshot: ProductClassificationBundle["tariffSnapshot"];
+  plausibility?: ProductClassificationBundle["plausibility"];
   approvingId: string | null;
   aiProductId: string | null;
   overrideId: string | null;
   overrideHsCode: string;
   onApprove: (productId: string, candidateId?: string, hsCode?: string) => void;
-  onAskAi: (productId: string) => void;
+  onAskAi: (productId: string, note?: string) => void;
   onStartOverride: (productId: string, hsCode: string) => void;
   onCancelOverride: () => void;
   onOverrideHsCodeChange: (value: string) => void;
@@ -611,6 +781,7 @@ function ClassificationTableRow({
   candidates,
   classification,
   tariffSnapshot,
+  plausibility,
   approvingId,
   aiProductId,
   overrideId,
@@ -626,6 +797,7 @@ function ClassificationTableRow({
   const isOverriding = overrideId === product.id;
   const isApproving = approvingId === product.id;
   const isAskingAi = aiProductId === product.id;
+  const review = buildClassificationReviewView(candidates, classification);
 
   return (
     <>
@@ -648,11 +820,27 @@ function ClassificationTableRow({
           ) : null}
         </td>
         <td className="px-3 py-2 max-w-0">
-          <p className="font-mono font-semibold text-indigo-700 truncate" title={classification?.hsCode ?? undefined}>
-            {classification?.hsCode ?? "—"}
+          <p
+            className={`font-mono font-semibold truncate ${
+              review.noCode ? "text-amber-700" : "text-indigo-700"
+            }`}
+            title={classification?.hsCode ?? undefined}
+          >
+            {review.noCode
+              ? "No code suggested"
+              : classification?.hsCode
+                ? formatHsCode(classification.hsCode).display
+                : "-"}
+            {!review.noCode &&
+            classification?.hsCode &&
+            formatHsCode(classification.hsCode).incomplete ? (
+              <span className="ml-1.5 font-sans text-[11px] font-medium text-amber-700">
+                incomplete
+              </span>
+            ) : null}
           </p>
           <TruncatedText
-            text={classification?.officialDescription ?? "—"}
+            text={review.noCode ? "" : classification?.officialDescription ?? "—"}
             className="text-slate-500 mt-0.5"
           />
           <p className="text-slate-400 mt-0.5 truncate">
@@ -665,20 +853,70 @@ function ClassificationTableRow({
               return parts.length > 0 ? parts.join(" · ") : null;
             })()}
           </p>
+          {plausibility && needsRecheck(plausibility) && !review.noCode ? (
+            <p className="mt-1 whitespace-normal text-amber-700">
+              {plausibility.reasons[0] ?? "This code may not fit the product."}
+            </p>
+          ) : null}
+          <ReviewDetails
+            productId={product.id}
+            review={review}
+            isApproving={isApproving}
+            onApprove={onApprove}
+          />
+          {!classification ? (
+            <p className="mt-1 whitespace-normal text-amber-700">
+              No suggestion saved yet. Use Ask AI, optionally with a note
+              about what the product is.
+            </p>
+          ) : null}
+          {!classification?.isFinal ? (
+            <NoteBox
+              productId={product.id}
+              savedNote={getReviewerNote(product.technicalSpecifications)}
+              busy={isAskingAi || isApproving}
+              defaultOpen={review.decisionRequired || !classification}
+              onAskAi={onAskAi}
+            />
+          ) : null}
         </td>
         <td className="px-3 py-2">
           <div className="flex flex-wrap items-center gap-1">
             {classification ? (
               <StatusBadge
-                label={sourceLabel(classification.source)}
+                label={
+                  review.webUsed && classification.source === "ai_suggestion"
+                    ? "AI + web"
+                    : sourceLabel(classification.source)
+                }
                 status={sourceBadgeStatus(classification.source)}
+              />
+            ) : null}
+            {classification &&
+            !review.noCode &&
+            plausibility &&
+            needsRecheck(plausibility) ? (
+              <StatusBadge
+                label={
+                  plausibility.status === "implausible"
+                    ? "Code doesn't fit"
+                    : "Check code"
+                }
+                status="warning"
               />
             ) : null}
             {classification?.isFinal ? (
               <StatusBadge label="Approved" status="approved" />
             ) : product.status === "needs_expert_review" ||
               classification?.source === "expert_review" ? (
-              <StatusBadge label="Expert review" status="warning" />
+              <StatusBadge
+                label={
+                  review.decisionRequired
+                    ? "Needs your decision"
+                    : "Expert review"
+                }
+                status="warning"
+              />
             ) : classification ? (
               <StatusBadge label="Pending" status="needs_review" />
             ) : (
@@ -694,11 +932,11 @@ function ClassificationTableRow({
                 onClick={() => onAskAi(product.id)}
                 disabled={isAskingAi || isApproving}
                 className="text-xs font-medium text-indigo-700 bg-indigo-50 hover:bg-indigo-100 disabled:opacity-50 rounded-lg px-2.5 py-1 whitespace-nowrap"
-                title="Skip tariff reference and classify with OpenRouter AI"
+                title="Skip the tariff reference and classify with OpenRouter AI and web search"
               >
                 {isAskingAi ? "..." : "Ask AI"}
               </button>
-              {classification ? (
+              {classification && !review.noCode ? (
                 <button
                   type="button"
                   onClick={() =>
@@ -716,11 +954,16 @@ function ClassificationTableRow({
               <button
                 type="button"
                 onClick={() =>
-                  onStartOverride(product.id, classification?.hsCode ?? "")
+                  onStartOverride(
+                    product.id,
+                    review.noCode
+                      ? (review.proposedHsCode ?? "")
+                      : (classification?.hsCode ?? ""),
+                  )
                 }
                 className="text-xs font-medium text-white bg-orange-500 hover:bg-orange-600 rounded-lg px-2.5 py-1 whitespace-nowrap"
               >
-                {classification ? "Override" : "Set HS"}
+                {classification && !review.noCode ? "Override" : "Set HS"}
               </button>
             </div>
           ) : null}
@@ -764,6 +1007,252 @@ function ClassificationTableRow({
         </tr>
       ) : null}
     </>
+  );
+}
+
+function ReviewDetails({
+  productId,
+  review,
+  isApproving,
+  onApprove,
+}: {
+  productId: string;
+  review: ClassificationReviewView;
+  isApproving: boolean;
+  onApprove: (productId: string, candidateId?: string, hsCode?: string) => void;
+}) {
+  const hasDetails =
+    review.sources.length > 0 ||
+    review.alternatives.length > 0 ||
+    review.previousHsCode != null ||
+    review.proposedHsCode != null ||
+    review.rejectedCode != null ||
+    review.confidenceNote != null ||
+    review.userNoteUsed ||
+    review.searchQueries.length > 0 ||
+    review.webError != null;
+  if (!review.reason && !hasDetails && !review.decisionRequired) return null;
+
+  return (
+    <div className="mt-1 space-y-1">
+      {review.decisionRequired ? (
+        <div className="max-h-56 overflow-y-auto overscroll-y-contain whitespace-normal rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-2 text-amber-800">
+          <p className="font-medium">Needs your decision</p>
+          {review.question ? (
+            <p className="mt-0.5">{review.question}</p>
+          ) : null}
+          {review.alternatives.length > 0 ? (
+            <ol className="mt-1.5 space-y-1.5" aria-label="Most likely HS codes, best first">
+              {review.alternatives.map((alt, index) => (
+                <li key={alt.candidateId} className="flex items-start gap-2">
+                  <span className="min-w-0 flex-1">
+                    <span className="text-amber-700">{index + 1}. </span>
+                    <span className="font-mono text-slate-900">
+                      {alt.hsCode}
+                    </span>
+                    {alt.officialDescription
+                      ? ` - ${alt.officialDescription}`
+                      : ""}
+                    {alt.reason ? (
+                      <span className="block text-amber-700">{alt.reason}</span>
+                    ) : null}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => onApprove(productId, alt.candidateId)}
+                    disabled={isApproving}
+                    className="shrink-0 rounded-lg bg-white px-2 py-0.5 font-medium text-indigo-700 hover:bg-indigo-50 disabled:opacity-50"
+                    title={`Approve ${alt.hsCode}`}
+                    aria-label={`Approve HS code ${alt.hsCode}`}
+                  >
+                    Approve this
+                  </button>
+                </li>
+              ))}
+            </ol>
+          ) : (
+            <p className="mt-0.5">
+              No tariff code could be supported yet. Add a note below or set the
+              code by hand.
+            </p>
+          )}
+        </div>
+      ) : null}
+      {review.reason ? (
+        <p className="text-amber-700 whitespace-normal">{review.reason}</p>
+      ) : null}
+      {hasDetails ? (
+        <details>
+          <summary className="cursor-pointer select-none text-slate-500 hover:text-slate-700">
+            Why this suggestion
+          </summary>
+          <div className="mt-1 max-h-48 space-y-1.5 overflow-y-auto overscroll-y-contain whitespace-normal rounded-lg border border-slate-100 bg-slate-50 px-2.5 py-2 text-slate-600">
+            {review.confidenceNote ? <p>{review.confidenceNote}</p> : null}
+            {review.proposedHsCode ? (
+              <p>
+                Proposed by AI / web:{" "}
+                <span className="font-mono text-slate-800">
+                  {review.proposedHsCode}
+                </span>{" "}
+                (not an exact tariff-book code)
+              </p>
+            ) : null}
+            {review.rejectedCode ? (
+              <p>
+                Dropped because it does not fit the product:{" "}
+                <span className="font-mono text-slate-800">
+                  {review.rejectedCode.hsCode}
+                </span>
+                {review.rejectedCode.reasons[0]
+                  ? ` - ${review.rejectedCode.reasons[0]}`
+                  : ""}
+              </p>
+            ) : null}
+            {review.previousHsCode ? (
+              <p>
+                Previous suggestion:{" "}
+                <span className="font-mono text-slate-800">
+                  {review.previousHsCode}
+                </span>
+              </p>
+            ) : null}
+            {review.sources.length > 0 ? (
+              <div>
+                <p className="font-medium text-slate-700">Sources</p>
+                <ul className="space-y-0.5">
+                  {review.sources.slice(0, 5).map((source) => (
+                    <li key={source.url} className="min-w-0 truncate">
+                      <a
+                        href={source.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-indigo-700 underline"
+                        title={source.url}
+                      >
+                        {source.title}
+                      </a>
+                      {source.title !== source.host ? (
+                        <span className="text-slate-400"> {source.host}</span>
+                      ) : null}
+                      {!source.fromSearch ? (
+                        <span className="text-slate-400">
+                          {" "}
+                          (named by the AI, not confirmed by search)
+                        </span>
+                      ) : null}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
+            {review.userNoteUsed ? (
+              <p>Your note for the AI was used for this suggestion.</p>
+            ) : null}
+            {review.searchQueries.length > 0 ? (
+              <p>Searches tried: {review.searchQueries.join(" | ")}</p>
+            ) : null}
+            {review.webError ? (
+              <p className="text-slate-500">
+                Web search was not available: {review.webError}
+              </p>
+            ) : null}
+            {review.alternatives.length > 0 ? (
+              <div>
+                <p className="font-medium text-slate-700">Other possible codes</p>
+                <ul className="space-y-1">
+                  {review.alternatives.map((alt) => (
+                    <li key={alt.candidateId} className="flex items-start gap-2">
+                      <span className="min-w-0 flex-1">
+                        <span className="font-mono text-slate-800">
+                          {alt.hsCode}
+                        </span>
+                        {alt.officialDescription
+                          ? ` - ${alt.officialDescription}`
+                          : ""}
+                        {alt.reason ? (
+                          <span className="block text-slate-400">
+                            {alt.reason}
+                          </span>
+                        ) : null}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => onApprove(productId, alt.candidateId)}
+                        disabled={isApproving}
+                        className="shrink-0 rounded-lg bg-white px-2 py-0.5 font-medium text-indigo-700 hover:bg-indigo-50 disabled:opacity-50"
+                        title="Approve this code instead"
+                      >
+                        Approve this
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
+          </div>
+        </details>
+      ) : null}
+    </div>
+  );
+}
+
+function NoteBox({
+  productId,
+  savedNote,
+  busy,
+  defaultOpen,
+  onAskAi,
+}: {
+  productId: string;
+  savedNote: string;
+  busy: boolean;
+  defaultOpen: boolean;
+  onAskAi: (productId: string, note?: string) => void;
+}) {
+  const [text, setText] = useState(savedNote);
+  const [open, setOpen] = useState(defaultOpen);
+  useEffect(() => {
+    setText(savedNote);
+  }, [savedNote]);
+  const fieldId = `ai-note-${productId}`;
+
+  return (
+    <details
+      className="mt-2"
+      open={open}
+      onToggle={(e) => setOpen(e.currentTarget.open)}
+    >
+      <summary className="cursor-pointer select-none text-slate-500 hover:text-slate-700">
+        {savedNote ? "Your note for the AI (saved)" : "Add a note for the AI"}
+      </summary>
+      <div className="mt-1 space-y-1.5 whitespace-normal">
+        <label htmlFor={fieldId} className="block text-slate-500">
+          What is this product? Anything the AI should know.
+        </label>
+        <textarea
+          id={fieldId}
+          value={text}
+          onChange={(e) => setText(e.target.value.slice(0, 500))}
+          rows={2}
+          maxLength={500}
+          placeholder="e.g. dried fish snack"
+          aria-describedby={`${fieldId}-hint`}
+          className={`${dashInputClass} pl-3 w-full text-xs`}
+        />
+        <p id={`${fieldId}-hint`} className="text-slate-400">
+          {text.length}/500. Saved with this product and used every time it is
+          classified again.
+        </p>
+        <button
+          type="button"
+          onClick={() => onAskAi(productId, text)}
+          disabled={busy}
+          className="text-xs font-medium text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 rounded-lg px-2.5 py-1 whitespace-nowrap"
+        >
+          {busy ? "Asking..." : "Ask AI again"}
+        </button>
+      </div>
+    </details>
   );
 }
 

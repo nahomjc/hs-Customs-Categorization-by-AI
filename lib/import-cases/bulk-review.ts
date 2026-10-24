@@ -343,6 +343,7 @@ export async function bulkReviewClassifications(
           await approveProductClassification(caseId, row.productId, tenantId, userId, {
             hsCode: row.hsCode ?? undefined,
             reviewerReason: options?.reason ?? undefined,
+            enforcePlausibility: true,
           });
         }
         affectedCount++;

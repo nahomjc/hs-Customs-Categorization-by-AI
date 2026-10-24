@@ -6,10 +6,12 @@ import { BulkReviewToolbar } from "@/components/dashboard/import-case/BulkReview
 import { DashCard, StatusBadge, dashInputClass } from "@/components/dashboard/ui";
 import type { DocumentCheckRow } from "@/db/schema/documentChecks";
 import { useBulkReview } from "@/lib/import-cases/use-bulk-review";
+import { useSyncServerProp } from "@/lib/import-cases/use-sync-server-prop";
 
 type ChecksTabProps = {
   caseId: string;
   checks: DocumentCheckRow[];
+  onChecksChange?: (checks: DocumentCheckRow[]) => void;
 };
 
 function checkSearchHaystack(check: DocumentCheckRow): string {
@@ -26,36 +28,41 @@ function checkSearchHaystack(check: DocumentCheckRow): string {
     .toLowerCase();
 }
 
-export function ChecksTab({ caseId, checks: initialChecks }: ChecksTabProps) {
+export function ChecksTab({
+  caseId,
+  checks: initialChecks,
+  onChecksChange,
+}: ChecksTabProps) {
   const router = useRouter();
   const [checks, setChecks] = useState(initialChecks);
+  useSyncServerProp(initialChecks, setChecks);
   const [search, setSearch] = useState("");
   const [revalidating, setRevalidating] = useState(false);
 
   const refreshChecks = useCallback(
-    async (options?: { silent?: boolean }) => {
+    async (options?: { silent?: boolean; skipRecompute?: boolean }) => {
       if (!options?.silent) setRevalidating(true);
       try {
-        const res = await fetch(`/api/import-cases/${caseId}/checks`);
+        const qs = options?.skipRecompute ? "?refresh=0" : "";
+        const res = await fetch(`/api/import-cases/${caseId}/checks${qs}`, {
+          cache: "no-store",
+        });
         if (!res.ok) return;
         const data = (await res.json()) as { checks: DocumentCheckRow[] };
         setChecks(data.checks);
+        onChecksChange?.(data.checks);
         router.refresh();
       } finally {
         if (!options?.silent) setRevalidating(false);
       }
     },
-    [caseId, router],
+    [caseId, onChecksChange, router],
   );
 
   // Recompute against current invoice/packing lines whenever this step opens.
   useEffect(() => {
     void refreshChecks({ silent: true });
   }, [refreshChecks]);
-
-  useEffect(() => {
-    setChecks(initialChecks);
-  }, [initialChecks]);
 
   const filteredChecks = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -70,7 +77,7 @@ export function ChecksTab({ caseId, checks: initialChecks }: ChecksTabProps) {
     endpoint: "checks/bulk-review",
     itemLabel: "checks",
     onSuccess: () => {
-      void refreshChecks();
+      void refreshChecks({ skipRecompute: true });
     },
   });
 

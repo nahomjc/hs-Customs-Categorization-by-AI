@@ -26,6 +26,7 @@ import type { ImportCaseDocumentRow } from "@/db/schema/importCaseDocuments";
 import type { ProductClassificationBundle } from "@/lib/import-cases/classification-queries";
 import type { GroupingWithProducts } from "@/lib/import-cases/grouping-queries";
 import type { CaseProductWithSources } from "@/lib/import-cases/product-queries";
+import { useSyncServerProp } from "@/lib/import-cases/use-sync-server-prop";
 import {
   getCurrentWizardStep,
   getWizardStepWarnings,
@@ -54,6 +55,7 @@ import { InvoiceLinesTab } from "./tabs/InvoiceLinesTab";
 import { OverviewTab } from "./tabs/OverviewTab";
 import { PackingListLinesTab } from "./tabs/PackingListLinesTab";
 import { GroupingExportTab } from "./tabs/GroupingExportTab";
+import type { UnclassifiedProduct } from "@/lib/import-cases/unclassified";
 import { ProductsTab } from "./tabs/ProductsTab";
 
 type InvoiceLineWithDoc = {
@@ -110,6 +112,8 @@ type ImportCaseWizardProps = {
   products: CaseProductWithSources[];
   classifications: ProductClassificationBundle[];
   groupings: GroupingWithProducts[];
+  /** Products that are in no declaration group (shown as a warning). */
+  unclassified?: UnclassifiedProduct[];
   referencePopulated: boolean;
   agents: AgentOption[];
   client?: ClientOption | null;
@@ -147,6 +151,7 @@ export function ImportCaseWizard({
   products,
   classifications,
   groupings,
+  unclassified = [],
   referencePopulated,
   agents,
   client = null,
@@ -156,16 +161,27 @@ export function ImportCaseWizard({
   const searchParams = useSearchParams();
   const stepParam = searchParams.get("step");
 
+  const [classificationsState, setClassificationsState] =
+    useState(classifications);
+  useSyncServerProp(classifications, setClassificationsState);
+
   const completionCtx = useMemo(
     () => ({
       documents,
       invoiceLines,
       packingLines,
       products,
-      classifications,
+      classifications: classificationsState,
       groupings,
     }),
-    [documents, invoiceLines, packingLines, products, classifications, groupings],
+    [
+      documents,
+      invoiceLines,
+      packingLines,
+      products,
+      classificationsState,
+      groupings,
+    ],
   );
 
   const progressStep = useMemo(
@@ -189,6 +205,8 @@ export function ImportCaseWizard({
   );
   const [continueWarningOpen, setContinueWarningOpen] = useState(false);
   const [continueWarnings, setContinueWarnings] = useState<string[]>([]);
+  const [checksState, setChecksState] = useState(checks);
+  useSyncServerProp(checks, setChecksState);
 
   // Open on the furthest incomplete step when URL has no valid ?step=
   useEffect(() => {
@@ -208,7 +226,7 @@ export function ImportCaseWizard({
 
   const currentIndex = getWizardStepIndex(currentStep);
   const activeSteps = ACTIVE_WIZARD_STEPS;
-  const openCheckCount = checks.filter((c) => c.status === "open").length;
+  const openCheckCount = checksState.filter((c) => c.status === "open").length;
 
   const invoiceDocuments = documents.filter(
     (d) =>
@@ -223,7 +241,7 @@ export function ImportCaseWizard({
     (p) => p.product.humanVerified,
   ).length;
 
-  const approvedClassificationCount = classifications.filter(
+  const approvedClassificationCount = classificationsState.filter(
     (c) => c.product.humanVerified && c.classification?.isFinal,
   ).length;
 
@@ -248,14 +266,56 @@ export function ImportCaseWizard({
     setContinueWarnings([]);
   }
 
-  function goNext() {
+  async function goNext() {
     const idx = activeSteps.findIndex((s) => s.id === currentStep);
     if (idx < 0 || idx >= activeSteps.length - 1) return;
 
+    let checkCountForWarnings = openCheckCount;
+    let warningCtx = completionCtx;
+    if (currentStep === "checks") {
+      try {
+        const res = await fetch(
+          `/api/import-cases/${importCase.id}/checks?refresh=0`,
+          { cache: "no-store" },
+        );
+        if (res.ok) {
+          const data = (await res.json()) as {
+            checks: DocumentCheckRow[];
+          };
+          setChecksState(data.checks);
+          checkCountForWarnings = data.checks.filter(
+            (c) => c.status === "open",
+          ).length;
+        }
+      } catch {
+        // use in-memory checks
+      }
+    }
+    if (currentStep === "classification") {
+      try {
+        const res = await fetch(
+          `/api/import-cases/${importCase.id}/classifications`,
+          { cache: "no-store" },
+        );
+        if (res.ok) {
+          const data = (await res.json()) as {
+            classifications: ProductClassificationBundle[];
+          };
+          setClassificationsState(data.classifications);
+          warningCtx = {
+            ...completionCtx,
+            classifications: data.classifications,
+          };
+        }
+      } catch {
+        // use in-memory classifications
+      }
+    }
+
     const warnings = getWizardStepWarnings(
       currentStep,
-      completionCtx,
-      openCheckCount,
+      warningCtx,
+      checkCountForWarnings,
     );
     if (warnings.length > 0) {
       setContinueWarnings(warnings);
@@ -407,7 +467,7 @@ export function ImportCaseWizard({
                 packingLines={packingLines}
                 openCheckCount={openCheckCount}
                 products={products}
-                classifications={classifications}
+                classifications={classificationsState}
                 groupings={groupings}
               />
 
@@ -440,7 +500,11 @@ export function ImportCaseWizard({
                   />
                 ) : null}
                 {currentStep === "checks" ? (
-                  <ChecksTab caseId={importCase.id} checks={checks} />
+                  <ChecksTab
+                    caseId={importCase.id}
+                    checks={checksState}
+                    onChecksChange={setChecksState}
+                  />
                 ) : null}
                 {currentStep === "products" ? (
                   <ProductsTab
@@ -451,8 +515,9 @@ export function ImportCaseWizard({
                 {currentStep === "classification" ? (
                   <ClassificationTab
                     caseId={importCase.id}
-                    initialClassifications={classifications}
+                    classifications={classificationsState}
                     referencePopulated={referencePopulated}
+                    onClassificationsChange={setClassificationsState}
                   />
                 ) : null}
                 {currentStep === "grouping-export" ? (
@@ -460,6 +525,7 @@ export function ImportCaseWizard({
                     caseId={importCase.id}
                     caseNumber={importCase.caseNumber}
                     initialGroupings={groupings}
+                    initialUnclassified={unclassified}
                   />
                 ) : null}
                 {currentStep === "case-history" ? (

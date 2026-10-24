@@ -13,6 +13,7 @@ import {
   getTenantId,
   writeAuditLog,
 } from "@/lib/import-cases/queries";
+import { revalidateImportCasePage } from "@/lib/import-cases/revalidate-import-case-page";
 import { updateProductSchema } from "@/lib/import-cases/validation";
 
 type RouteParams = {
@@ -63,5 +64,6 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     newData: parsed.data as Record<string, unknown>,
   });
 
+  revalidateImportCasePage(caseId);
   return NextResponse.json(updated);
 }

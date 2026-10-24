@@ -5,7 +5,11 @@ import {
   unauthorizedResponse,
 } from "@/lib/import-cases/api-helpers";
 import { generateDeclarationCsv } from "@/lib/import-cases/export-declaration";
-import { getCaseGroupings } from "@/lib/import-cases/grouping-queries";
+import {
+  getCaseGroupings,
+  getUnclassifiedProducts,
+} from "@/lib/import-cases/grouping-queries";
+import { loadCaseOriginData } from "@/lib/import-cases/origin-load";
 import { loadHsReferenceCache } from "@/lib/hsReference";
 import { getImportCaseById, getTenantId, writeAuditLog } from "@/lib/import-cases/queries";
 
@@ -30,7 +34,15 @@ export async function GET(_request: NextRequest, { params }: RouteParams) {
 
   await loadHsReferenceCache();
 
-  const buffer = generateDeclarationCsv(importCase.caseNumber, groupings);
+  const [unclassified, origins] = await Promise.all([
+    getUnclassifiedProducts(caseId),
+    loadCaseOriginData(caseId),
+  ]);
+
+  const buffer = generateDeclarationCsv(importCase.caseNumber, groupings, {
+    unclassified,
+    origins,
+  });
   const filename = `${importCase.caseNumber}-declaration.csv`;
 
   await writeAuditLog({
@@ -40,7 +52,11 @@ export async function GET(_request: NextRequest, { params }: RouteParams) {
     entityType: "import_case",
     entityId: caseId,
     action: "export_generated",
-    newData: { format: "csv", groupCount: groupings.length },
+    newData: {
+      format: "csv",
+      groupCount: groupings.length,
+      unclassifiedCount: unclassified.length,
+    },
   });
 
   return new NextResponse(new Uint8Array(buffer), {

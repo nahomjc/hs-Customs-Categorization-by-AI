@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 import { db } from "@/db";
 import {
   importProducts,
@@ -7,6 +7,8 @@ import {
   productGroupings,
   tariffSnapshots,
 } from "@/db/schema";
+
+import { findUnclassifiedProducts, type UnclassifiedProduct } from "./unclassified";
 
 export type GroupingWithProducts = {
   grouping: typeof productGroupings.$inferSelect;
@@ -17,6 +19,40 @@ export type GroupingWithProducts = {
   }>;
   totalQuantity: number;
 };
+
+/** Every product of the case that is not in any declaration group (with the reason). */
+export async function getUnclassifiedProducts(
+  caseId: string,
+): Promise<UnclassifiedProduct[]> {
+  const products = await db
+    .select()
+    .from(importProducts)
+    .where(eq(importProducts.importCaseId, caseId))
+    .orderBy(importProducts.productSequence);
+  if (products.length === 0) return [];
+
+  const ids = products.map((p) => p.id);
+  const [grouped, classifications] = await Promise.all([
+    db
+      .select({ productId: productGroupingItems.productId })
+      .from(productGroupingItems)
+      .innerJoin(productGroupings, eq(productGroupings.id, productGroupingItems.groupingId))
+      .where(eq(productGroupings.importCaseId, caseId)),
+    db
+      .select({
+        productId: productClassifications.productId,
+        hsCode: productClassifications.hsCode,
+      })
+      .from(productClassifications)
+      .where(inArray(productClassifications.productId, ids)),
+  ]);
+
+  return findUnclassifiedProducts(
+    products,
+    new Set(grouped.map((g) => g.productId)),
+    new Map(classifications.map((c) => [c.productId, c.hsCode])),
+  );
+}
 
 export async function getCaseGroupings(
   caseId: string,

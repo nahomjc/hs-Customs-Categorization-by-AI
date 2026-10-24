@@ -7,6 +7,12 @@ import {
   productClassifications,
   tariffSnapshots,
 } from "@/db/schema";
+import { approvalBlockReason } from "@/lib/hs-catch-all";
+import { completeHsCode } from "@/lib/hs-code-format";
+import { blocksApproval, checkPlausibility } from "@/lib/hs-plausibility";
+import { loadHsReferenceCache } from "@/lib/hsReference";
+import { findInCacheSync, getHsReferenceCacheRows } from "@/lib/hsReferenceCache";
+import { loadSupplierHsByProduct } from "./product-context-load";
 import { lookupTariffForHsCode, parseDutyRate, dutyRateOtherCharges } from "./tariff-lookup";
 import { writeAuditLog } from "./queries";
 
@@ -15,6 +21,11 @@ export type ApproveClassificationInput = {
   hsCode?: string;
   officialDescription?: string;
   reviewerReason?: string;
+  /**
+   * Also run the "does the code fit the product" check for a typed code (bulk
+   * approve does this). A code the reviewer types by hand is otherwise trusted.
+   */
+  enforcePlausibility?: boolean;
 };
 
 export async function approveProductClassification(
@@ -66,7 +77,11 @@ export async function approveProductClassification(
     officialDescription = candidate.officialDescription;
     tariffVersion = candidate.tariffVersion;
     selectedCandidateId = candidate.id;
-    source = "ai_suggestion";
+    // keep the real source (e.g. reference match) when approving the suggestion as is
+    source =
+      existing && existing.selectedCandidateId === candidate.id
+        ? existing.source
+        : "ai_suggestion";
   } else if (input.hsCode) {
     const tariff = await lookupTariffForHsCode(input.hsCode);
     hsCode = input.hsCode;
@@ -82,6 +97,36 @@ export async function approveProductClassification(
     source = existing.source;
   } else {
     throw new Error("No classification to approve — provide candidateId or hsCode");
+  }
+
+  // A catch-all is never a real classification (see lib/hs-catch-all.ts).
+  if (!input.hsCode) await loadHsReferenceCache();
+  const blocked = approvalBlockReason(hsCode, {
+    manual: Boolean(input.hsCode),
+    referenceRow: input.hsCode ? null : findInCacheSync(hsCode),
+  });
+  if (blocked) throw new Error(blocked);
+
+  // A suggested code must fit the product (HS chapter / section). A code the
+  // reviewer typed by hand is trusted, except in bulk approve.
+  if (!input.hsCode || input.enforcePlausibility) {
+    const supplierHs = (await loadSupplierHsByProduct(caseId)).get(productId) ?? null;
+    const verdict = checkPlausibility({
+      hsCode,
+      texts: [product.productName, product.rawDescription, product.normalizedDescription],
+      supplierHsCode: supplierHs,
+    });
+    if (blocksApproval(verdict)) {
+      throw new Error(
+        `This code does not fit the product. ${verdict.reasons[0] ?? ""} Pick another option or set the code by hand.`.trim(),
+      );
+    }
+  }
+
+  // One display format: a short code becomes the full 8 digit code when the book has exactly one.
+  {
+    const done = completeHsCode(hsCode, getHsReferenceCacheRows());
+    if (done.digits.length >= 4) hsCode = done.display;
   }
 
   let classification;

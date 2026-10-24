@@ -9,6 +9,7 @@ import {
   GroupingProgressBanner,
   GroupingProgressDialog,
 } from "@/components/dashboard/import-case/GroupingProgressDialog";
+import { RerunWorkflowJobDialog } from "@/components/dashboard/import-case/RerunWorkflowJobDialog";
 import {
   DashButton,
   DashCard,
@@ -23,6 +24,9 @@ import {
   dashInputClass,
 } from "@/components/dashboard/ui";
 import { getCountryLabel } from "@/lib/countries";
+import { formatHsCode } from "@/lib/hs-code-format";
+import { displayOrigin, ORIGIN_NOT_PROVIDED } from "@/lib/import-cases/origin";
+import type { UnclassifiedProduct } from "@/lib/import-cases/unclassified";
 import {
   GROUPING_STATUS_LABELS,
   type GroupingStatus,
@@ -31,12 +35,21 @@ import { formatDutyRateFromSnapshot } from "@/lib/import-cases/duty-rate-display
 import type { GroupingSnapshot } from "@/lib/import-cases/grouping-progress";
 import type { GroupingWithProducts } from "@/lib/import-cases/grouping-queries";
 import { useGroupingJob } from "@/lib/import-cases/use-grouping-job";
+import { useSyncServerProp } from "@/lib/import-cases/use-sync-server-prop";
 
 type GroupingExportTabProps = {
   caseId: string;
   caseNumber: string;
   initialGroupings: GroupingWithProducts[];
+  /** Products that are in no group: listed with a warning, also in the CSV. */
+  initialUnclassified?: UnclassifiedProduct[];
 };
+
+/** Country name from a stored code, or "Not provided" (never "UNK"). */
+function originLabel(code: string | null | undefined): string {
+  const shown = displayOrigin(code);
+  return shown === ORIGIN_NOT_PROVIDED ? shown : getCountryLabel(shown);
+}
 
 function groupingSearchHaystack(row: GroupingWithProducts): string {
   const g = row.grouping;
@@ -72,11 +85,17 @@ export function GroupingExportTab({
   caseId,
   caseNumber,
   initialGroupings,
+  initialUnclassified = [],
 }: GroupingExportTabProps) {
   const router = useRouter();
   const [groupings, setGroupings] =
     useState<GroupingWithProducts[]>(initialGroupings);
+  useSyncServerProp(initialGroupings, setGroupings);
+  const [unclassified, setUnclassified] =
+    useState<UnclassifiedProduct[]>(initialUnclassified);
+  useSyncServerProp(initialUnclassified, setUnclassified);
   const [progressOpen, setProgressOpen] = useState(false);
+  const [rerunConfirmOpen, setRerunConfirmOpen] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [expandedGroupId, setExpandedGroupId] = useState<string | null>(null);
   const [search, setSearch] = useState("");
@@ -103,7 +122,9 @@ export function GroupingExportTab({
   );
 
   async function refresh() {
-    const res = await fetch(`/api/import-cases/${caseId}/groupings`);
+    const res = await fetch(`/api/import-cases/${caseId}/groupings`, {
+      cache: "no-store",
+    });
     if (!res.ok) return;
     const data = (await res.json()) as {
       groupings: GroupingWithProducts[];
@@ -130,9 +151,22 @@ export function GroupingExportTab({
   const job = useGroupingJob(caseId, { onFinished: handleJobFinished });
   const grouping = job.active;
 
-  function handleGroup() {
+  function startGroupingJob() {
     setProgressOpen(true);
     job.start();
+  }
+
+  function handleGroup() {
+    if (groupings.length > 0) {
+      setRerunConfirmOpen(true);
+      return;
+    }
+    startGroupingJob();
+  }
+
+  function confirmRerunGrouping() {
+    setRerunConfirmOpen(false);
+    startGroupingJob();
   }
 
   function handleProgressDone() {
@@ -221,6 +255,48 @@ export function GroupingExportTab({
           </div>
         ) : null}
       </section>
+
+      {unclassified.length > 0 ? (
+        <section
+          className="border-b border-slate-100 px-5 py-4"
+          aria-label="Products without a declaration group"
+        >
+          <div
+            className="whitespace-normal rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 text-xs text-amber-800"
+            role="alert"
+          >
+            <p className="font-medium">
+              {unclassified.length} product(s) are not in any declaration group
+            </p>
+            <p className="mt-0.5">
+              They are not covered by the groups below. The CSV lists them in a
+              separate Unclassified section, so nothing is dropped silently.
+              Approve their HS codes in the classification step, then run
+              grouping again.
+            </p>
+            <details className="mt-1.5">
+              <summary className="cursor-pointer select-none font-medium">
+                Show the products
+              </summary>
+              <ul className="mt-1.5 space-y-0.5">
+                {unclassified.map((u) => (
+                  <li key={u.productId} className="min-w-0 truncate">
+                    <span className="text-amber-700">#{u.sequence}</span>{" "}
+                    {u.description || "Product"}
+                    {u.hsCode ? (
+                      <span className="font-mono text-slate-900">
+                        {" "}
+                        {formatHsCode(u.hsCode).display}
+                      </span>
+                    ) : null}{" "}
+                    - {u.reason}
+                  </li>
+                ))}
+              </ul>
+            </details>
+          </div>
+        </section>
+      ) : null}
 
       {groupings.length === 0 ? (
         <div className="flex flex-col items-center justify-center px-6 py-12 text-center">
@@ -368,6 +444,14 @@ export function GroupingExportTab({
         onResume={job.resume}
         onRetryFailed={job.retryFailed}
       />
+
+      <RerunWorkflowJobDialog
+        job="grouping"
+        open={rerunConfirmOpen}
+        onOpenChange={setRerunConfirmOpen}
+        onConfirm={confirmRerunGrouping}
+        loading={grouping}
+      />
     </DashCard>
   );
 }
@@ -403,12 +487,21 @@ function GroupingTableRow({
           ) : null}
         </td>
         <td className="px-3 py-3.5">
-          {group.hsCode ? <HsCodeBadge code={group.hsCode} /> : "—"}
+          {group.hsCode ? (
+            <>
+              <HsCodeBadge code={formatHsCode(group.hsCode).display} />
+              {formatHsCode(group.hsCode).incomplete ? (
+                <p className="mt-0.5 text-[11px] text-amber-700">
+                  Incomplete code (under 8 digits)
+                </p>
+              ) : null}
+            </>
+          ) : (
+            "-"
+          )}
         </td>
         <td className="px-3 py-3.5 text-slate-600">
-          {group.countryOfOriginCode
-            ? getCountryLabel(group.countryOfOriginCode)
-            : "—"}
+          {originLabel(group.countryOfOriginCode)}
         </td>
         <td className="px-3 py-3.5 text-slate-600">
           {group.unitOfMeasure ?? "—"}

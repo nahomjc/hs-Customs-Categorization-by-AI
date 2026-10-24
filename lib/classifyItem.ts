@@ -1,4 +1,10 @@
-import { ALLOWED_HS_CODES, validateClassification } from "./allowedHsCodes";
+import {
+  ALLOWED_HS_CODES,
+  isNonItemCategory,
+  validateClassification,
+} from "./allowedHsCodes";
+import { parseOptions, parseQuestion } from "./hs-options";
+import { buildContextPromptBlock } from "./import-cases/product-context";
 import { applyAssessorRules } from "./assessorRules";
 import { applyGriRuleEngine, type HsFeatures } from "./griRuleEngine";
 import {
@@ -8,8 +14,10 @@ import {
   searchDescriptionsInChapters,
 } from "./hsReference";
 import {
+  getHsReferenceCacheRows,
   isReferencePopulated,
   type HsReferenceCacheRow,
+  type MatchHints,
 } from "./hsReferenceCache";
 import {
   buildChapterNotesPromptBlock,
@@ -32,6 +40,13 @@ export interface ClassificationResult {
    * e.g. "Chapter 4 Note 1(a)". Only set when a note was applied.
    */
   noteReference?: string;
+  /**
+   * Tariff mode: when the model is unsure, its 2-3 most likely codes (best
+   * first, NOT yet validated against the tariff book) ...
+   */
+  options?: Array<{ hsCode: string; reason?: string }>;
+  /** ... and the one question that would settle it. */
+  question?: string;
 }
 
 export type ClassifyItemMode = "furniture" | "tariff";
@@ -48,6 +63,16 @@ export interface ClassifyItemOptions {
   vddEvidenceText?: string;
   /** When true, skip legacy FORCE_RULES inside applyAssessorRules. */
   skipAssessorForceRules?: boolean;
+  /** Bounded product / shipment context block (see import-cases/product-context.ts). */
+  contextText?: string;
+  /** Reviewer note: highest-priority context. */
+  userNote?: string;
+  /** A person already confirmed this is a product: never answer "not an item". */
+  assumeImportItem?: boolean;
+  /** Extra words for the tariff-book candidate search (e.g. product type). */
+  searchHint?: string;
+  /** The supplier's HS code (digits) from the invoice: ranks its chapter / heading first. A hint only. */
+  supplierHsCode?: string;
 }
 
 const ALLOWED_HS_LIST = [...ALLOWED_HS_CODES].join(", ");
@@ -87,6 +112,7 @@ function buildTariffSystemPrompt(
   /** Legal chapter/section notes block (import classification). Omitted = unchanged prompt. */
   notesText?: string,
   allowRedirect = true,
+  assumeProduct = false,
 ): string {
   const step4 = hasReferenceCandidates
     ? `Step 4 — Pick the BEST matching HS code from the tariff reference candidates below.
@@ -120,8 +146,19 @@ How to use the notes:
 - The notes never allow inventing codes: still choose only from the candidates above (or the allowed format).`
     : "";
   const jsonFormat = notesText
-    ? `{"isImportItem":true|false,"category":"Category Name","hsCode":"####.## or EXCLUDE or 9999","cleanDescription":"Short product description","noteReference":""${allowRedirect ? ',"redirectChapter":""' : ""}}`
-    : `{"isImportItem":true|false,"category":"Category Name","hsCode":"####.## or EXCLUDE or 9999","cleanDescription":"Short product description"}`;
+    ? `{"isImportItem":true|false,"category":"Category Name","hsCode":"####.## or EXCLUDE or 9999","cleanDescription":"Short product description","confidence":0.0-1.0,"options":[{"hsCode":"","reason":""}],"question":"","noteReference":""${allowRedirect ? ',"redirectChapter":""' : ""}}`
+    : `{"isImportItem":true|false,"category":"Category Name","hsCode":"####.## or EXCLUDE or 9999","cleanDescription":"Short product description","confidence":0.0-1.0,"options":[{"hsCode":"","reason":""}],"question":""}`;
+
+  const assumeRule = assumeProduct
+    ? `
+
+This line was already confirmed by a person as a real product: always set "isImportItem" to true and never answer EXCLUDE for it.`
+    : "";
+  const optionsRule = `
+
+When the product name is unclear (a brand, nickname or translated name), use the context lines and any reviewer note to work out what it most likely is. If you are still not sure, do not answer 9999 silently: put your best code in "hsCode" with a LOW "confidence" (below 0.5), list the 2-3 most likely real codes in "options" (best first, each with a short reason; only codes from the candidates above when candidates are given) and put the one short question that would settle it in "question". When you are sure, leave "options" empty and "question" empty.
+
+If the context shows a supplier HS code, treat it only as a HINT about the right chapter (suppliers are often wrong). Never copy it blindly, and never choose a code from a chapter that does not fit the kind of product (food and drink belong in chapters 02-24, not in machinery, vehicles, glass or clothing).`;
 
   return `You are a customs HS classifier for import shipments (WCO Harmonized System / Ethiopian tariff).
 
@@ -135,7 +172,7 @@ Step 3 — Assign a product category (e.g. Vegetable oils, Tea, Sugar, Prepared 
 
 ${step4}
 
-Never use 0000.00 or 9999.99.${notesSection}
+Never use 0000.00 or 9999.99.${notesSection}${assumeRule}${optionsRule}
 
 Return ONLY valid JSON, no markdown:
 ${jsonFormat}`;
@@ -145,6 +182,8 @@ async function buildAllowedListForItem(
   description: string,
   features: HsFeatures & { isImportItem?: boolean },
   mode: ClassifyItemMode,
+  extraQuery = "",
+  supplierHsCode = "",
 ): Promise<{
   list: string;
   hasReferenceCandidates: boolean;
@@ -154,15 +193,37 @@ async function buildAllowedListForItem(
   await loadHsReferenceCache();
 
   const keywords = Array.isArray(features.keywords) ? features.keywords : [];
-  const searchQuery = [description, features.itemType, features.material, features.use]
+  const searchQuery = [description, features.itemType, features.material, features.use, extraQuery]
     .filter(Boolean)
     .join(" ");
 
   if (isReferencePopulated()) {
-    const candidates = await searchDescriptions(
+    const supplierDigits = supplierHsCode.replace(/\D/g, "");
+    const hints: MatchHints | undefined =
+      supplierDigits.length >= 4
+        ? { supplierChapter: supplierDigits.slice(0, 2), supplierHeading: supplierDigits.slice(0, 4) }
+        : undefined;
+    let candidates = await searchDescriptions(
       `${searchQuery} ${keywords.join(" ")}`,
       mode === "tariff" ? 30 : 40,
+      hints,
     );
+
+    // the supplier's heading is a hint: offer a few of its real codes first
+    if (hints?.supplierHeading) {
+      const heading = hints.supplierHeading;
+      const own = getHsReferenceCacheRows()
+        .filter((r) => {
+          const d = (r.normalizedHs ?? r.hsCode ?? r.tariffNo ?? "").replace(/\D/g, "");
+          return d.length >= 8 && d.startsWith(heading);
+        })
+        .slice(0, 6);
+      const seen = new Set(own.map((r) => r.tariffNo));
+      candidates = [...own, ...candidates.filter((r) => !seen.has(r.tariffNo))].slice(
+        0,
+        mode === "tariff" ? 30 : 40,
+      );
+    }
 
     if (candidates.length > 0) {
       const fromReference = candidates.map((row) =>
@@ -196,6 +257,8 @@ async function buildAllowedListForItem(
 const FEATURE_EXTRACTOR_PROMPT = `You are a feature extractor for HS classification.
 Extract product features from one packing-list line.
 If the line is not a physical import item, still return JSON and set isImportItem=false.
+If the text says a person already confirmed it is a product, set isImportItem=true.
+If the name is a brand, nickname or translated name, use the context to guess the most likely product type and put your guesses in "keywords".
 
 Return ONLY valid JSON:
 {"isImportItem":true|false,"itemType":"short noun","material":"material or unknown","use":"main use or unknown","keywords":["k1","k2"]}`;
@@ -250,7 +313,7 @@ async function callOpenRouter(
 }
 
 /** Larger completion budget when the notes fields (noteReference/redirectChapter) are requested. */
-const NOTES_MAX_TOKENS = 400;
+const NOTES_MAX_TOKENS = 600;
 
 type NotedClassification = ClassificationResult & { redirectChapter?: string };
 
@@ -376,6 +439,13 @@ export async function classifyItem(
     featureUserContent += `\nUnit: ${options.unit}`;
   }
 
+  const contextBlock = buildContextPromptBlock({
+    contextText: options?.contextText,
+    userNote: options?.userNote,
+    assumeImportItem: options?.assumeImportItem,
+  });
+  if (contextBlock) featureUserContent += `\n\n${contextBlock}`;
+
   // Step 1: Feature extractor (AI)
   const featureContent = await callOpenRouter([
     { role: "system", content: FEATURE_EXTRACTOR_PROMPT },
@@ -411,6 +481,8 @@ export async function classifyItem(
   }
   reasoningUserContent += `\nExtracted features JSON: ${JSON.stringify(features)}\nGRI rule-engine candidate HS: ${gri.suggestedHsCodes.join(", ")}\nGRI rationale: ${gri.rationale}`;
 
+  if (contextBlock) reasoningUserContent += `\n\n${contextBlock}`;
+
   if (options?.vddEvidenceText?.trim()) {
     reasoningUserContent += `\n\n${options.vddEvidenceText.trim()}\nRules for VDD: use only as supporting evidence. Do NOT automatically copy an HS code from a VDD record. Do NOT choose a code because it has a lower duty. Historical data does not guarantee the current classification.`;
   }
@@ -419,14 +491,25 @@ export async function classifyItem(
     list: allowedList,
     hasReferenceCandidates,
     candidates,
-  } = await buildAllowedListForItem(description, features, mode);
+  } = await buildAllowedListForItem(
+    description,
+    features,
+    mode,
+    [options?.userNote, options?.searchHint].filter(Boolean).join(" "),
+    options?.supplierHsCode ?? "",
+  );
 
   // Import (tariff) mode only: legal Chapter/Section notes for the likely chapters.
   // No notes in the database => notesBlock is null and the prompt is unchanged.
   let notesBlock: ChapterNotesPromptBlock | null = null;
   if (mode === "tariff") {
     notesBlock = await buildChapterNotesPromptBlock(
-      pickCandidateChapters(candidates, gri.suggestedHsCodes),
+      pickCandidateChapters(
+        candidates,
+        options?.supplierHsCode
+          ? [options.supplierHsCode, ...gri.suggestedHsCodes]
+          : gri.suggestedHsCodes,
+      ),
     );
     if (notesBlock) {
       console.log(
@@ -442,6 +525,8 @@ export async function classifyItem(
           allowedList,
           hasReferenceCandidates,
           notesBlock?.text,
+          true,
+          options?.assumeImportItem === true,
         )
       : buildFurnitureSystemPrompt(allowedList);
 
@@ -450,7 +535,7 @@ export async function classifyItem(
       { role: "system", content: systemPrompt },
       { role: "user", content: reasoningUserContent },
     ],
-    notesBlock ? NOTES_MAX_TOKENS : undefined,
+    notesBlock ? NOTES_MAX_TOKENS : mode === "tariff" ? 500 : undefined,
   );
 
   let parsed: NotedClassification;
@@ -484,8 +569,20 @@ export async function classifyItem(
     parsed.isImportItem,
   );
 
+  // A person already confirmed this is a product: "not an item" is not allowed,
+  // an unsure answer becomes a catch-all that the review step turns into options.
+  const assume = options?.assumeImportItem === true;
+  if (assume) {
+    parsed.isImportItem = true;
+    if (!parsed.hsCode || parsed.hsCode === "EXCLUDE") parsed.hsCode = "9999";
+    if (isNonItemCategory(parsed.category)) parsed.category = "Other";
+  }
+
   // Normalize: non-items must have EXCLUDE and consistent category
-  if (parsed.isImportItem === false || features.isImportItem === false) {
+  if (
+    !assume &&
+    (parsed.isImportItem === false || features.isImportItem === false)
+  ) {
     parsed.hsCode = "EXCLUDE";
     parsed.category = "Non-item";
     parsed.isImportItem = false;
@@ -513,10 +610,13 @@ export async function classifyItem(
     hsCode: final.hsCode,
     category: final.category,
   });
-  if (validated.status === "exclude") {
+  if (validated.status === "exclude" && !assume) {
     final.hsCode = validated.hsCode;
     final.category = "Non-item";
     final.isImportItem = false;
+  } else if (validated.status === "exclude") {
+    final.hsCode = "9999";
+    final.isImportItem = true;
   } else if (
     validated.status === "review" &&
     validated.hsCode !== final.hsCode
@@ -532,9 +632,17 @@ export async function classifyItem(
     final.hsCode = validated.hsCode;
   }
 
+  if (assume && (final.hsCode === "EXCLUDE" || final.isImportItem === false)) {
+    final.hsCode = "9999";
+    final.isImportItem = true;
+    if (isNonItemCategory(final.category)) final.category = "Other";
+  }
+
   return {
     ...final,
     isImportItem: final.isImportItem !== false,
+    options: parseOptions(parsed.options),
+    question: parseQuestion(parsed.question),
     confidence: final.confidence ?? parsed.confidence ?? 0.9,
     aiRawResponse: content,
     noteReference:

@@ -14,7 +14,16 @@ import {
   type GroupingPlan,
   type PlannedGroup,
 } from "./grouping-plan";
+import { formatHsCode } from "@/lib/hs-code-format";
+import { loadCaseOriginData } from "./origin-load";
+import { resolveProductOrigin } from "./origin";
 import { writeAuditLog } from "./queries";
+
+/** Same code, one spelling ("1601.00.00" and "1601.0000" are one group). */
+function canonicalHsCode(code: string): string {
+  const f = formatHsCode(code);
+  return f.digits.length >= 4 ? f.display : code;
+}
 
 export type GroupResult = {
   groupCount: number;
@@ -105,20 +114,28 @@ async function loadGroupingPlan(caseId: string): Promise<GroupingPlan> {
     );
   }
 
+  // real origin data only: product, invoice / packing lines, then the case
+  const originData = await loadCaseOriginData(caseId);
+
   return buildGroupingPlan(
     approvedProducts.map((p) => {
       const snapshot = snapshotByProduct.get(p.id);
+      const lineOrigins = originData.byProduct.get(p.id);
       return {
         productId: p.id,
-        hsCode: classificationByProduct.get(p.id)!.hsCode,
-        countryOfOriginCode: p.countryOfOriginCode,
+        hsCode: canonicalHsCode(classificationByProduct.get(p.id)!.hsCode),
+        countryOfOriginCode: resolveProductOrigin({
+          productOrigin: p.countryOfOriginCode,
+          invoiceOrigins: lineOrigins?.invoice,
+          packingOrigins: lineOrigins?.packing,
+        }),
         unitOfMeasure: p.unitOfMeasure,
         quantity: p.quantity,
         snapshot: snapshot ? { customsDutyRate: snapshot.customsDutyRate } : null,
       };
     }),
     {
-      caseCountryOfOriginCode: importCase.countryOfOriginCode,
+      caseCountryOfOriginCode: originData.caseOrigin ?? importCase.countryOfOriginCode,
       procedureCode: importCase.importProcedureCode ?? "IM4",
     },
   );

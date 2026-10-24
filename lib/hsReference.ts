@@ -8,13 +8,13 @@ import {
   findInCacheSync,
   getHsReferenceCacheRows,
   invalidateHsReferenceCache,
+  scoreReferenceRow,
   setHsReferenceCache,
+  tokenizeForMatch,
   type HsReferenceCacheRow,
+  type MatchHints,
 } from "./hsReferenceCache";
-import {
-  expectedChapters,
-  isChapterCompatible,
-} from "./hsProductChapter";
+import { isChapterCompatible } from "./hsProductChapter";
 import type {
   HsReferenceListParams,
   HsReferenceSortField,
@@ -97,37 +97,27 @@ export async function isInReference(code: string): Promise<boolean> {
 }
 
 function tokenize(text: string): string[] {
-  return text
-    .toLowerCase()
-    .replace(/[^a-z0-9\s]/g, " ")
-    .split(/\s+/)
-    .filter((t) => t.length >= 3);
+  return tokenizeForMatch(text);
 }
 
 function scoreRow(
   row: HsReferenceCacheRow,
   tokens: string[],
   query: string,
+  hints?: MatchHints,
 ): number {
-  const desc = row.description.toLowerCase();
-  let score = 0;
-  for (const t of tokens) {
-    if (desc.includes(t)) score += 1;
-  }
-  const expected = expectedChapters(query);
-  if (
-    expected &&
-    row.chapter &&
-    expected.includes(row.chapter.padStart(2, "0").slice(0, 2))
-  ) {
-    score += 3;
-  }
-  return score;
+  return scoreReferenceRow(row, tokens, query, hints);
 }
 
+/**
+ * Candidate rows for the AI: whole-word matches only (no substring hits such as
+ * "tea" in "stearin"), rows whose chapter does not fit the product are left out,
+ * and the supplier's HS code chapter / heading (a hint) ranks first.
+ */
 export async function searchDescriptions(
   query: string,
   limit = 40,
+  hints?: MatchHints,
 ): Promise<HsReferenceCacheRow[]> {
   await loadHsReferenceCache();
   const rows = getHsReferenceCacheRows();
@@ -138,7 +128,7 @@ export async function searchDescriptions(
 
   const scored = rows
     .filter((row) => isChapterCompatible(query, row.chapter))
-    .map((row) => ({ row, score: scoreRow(row, tokens, query) }))
+    .map((row) => ({ row, score: scoreRow(row, tokens, query, hints) }))
     .filter((s) => s.score > 0)
     .sort((a, b) => b.score - a.score);
 

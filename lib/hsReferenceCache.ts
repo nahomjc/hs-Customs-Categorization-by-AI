@@ -3,6 +3,7 @@ import { tariffNoToHs } from "./importHsTariffBook";
 import {
   expectedChapters,
   isChapterCompatible,
+  preferredChapters,
 } from "./hsProductChapter";
 
 /** Minimal row shape for in-memory HS reference lookup (client-safe). */
@@ -167,15 +168,45 @@ export type ReferenceEnrichableRow = {
   sourceHsCode: string | null;
 };
 
+/** Filler words that say nothing about the product ("made from", "used for"). */
+const FILLER_WORDS = new Set([
+  "the", "and", "for", "with", "from", "made", "make", "makes", "used", "use", "uses", "using",
+  "various", "type", "types", "known", "popular", "typically", "usually", "often", "such",
+  "are", "its", "that", "this", "into", "over", "each", "also", "has", "have", "can", "not",
+  "per", "kind", "style", "form", "like", "some", "whole", "one", "two", "very", "more",
+  "most", "any", "all", "other", "others", "nes", "etc", "about", "than", "then", "which",
+  "dishes", "dish", "variety", "range", "quality", "good", "fresh", "pure", "natural",
+]);
+
 function tokenize(text: string): string[] {
   return text
     .toLowerCase()
     .replace(/[^a-z0-9\s]/g, " ")
     .split(/\s+/)
-    .filter((t) => t.length >= 3);
+    .filter((t) => t.length >= 3 && !FILLER_WORDS.has(t));
 }
 
-/** Colors / size fluff that often match fabric rows incorrectly (e.g. "plain" → plain weave). */
+/** Every word of a tariff description (any length), for whole-word matching. */
+function wordSet(text: string): Set<string> {
+  return new Set(
+    text
+      .toLowerCase()
+      .replace(/[^a-z0-9\s]/g, " ")
+      .split(/\s+/)
+      .filter(Boolean),
+  );
+}
+
+/** Whole-word match with simple plurals ("nut" matches "nuts"); never a substring. */
+function wordMatches(words: Set<string>, token: string): boolean {
+  if (words.has(token) || words.has(`${token}s`) || words.has(`${token}es`)) return true;
+  if (token.endsWith("ies") && words.has(`${token.slice(0, -3)}y`)) return true;
+  if (token.endsWith("es") && words.has(token.slice(0, -2))) return true;
+  if (token.endsWith("s") && words.has(token.slice(0, -1))) return true;
+  return false;
+}
+
+/** Colors / size fluff that often match fabric rows incorrectly (e.g. "plain" -> plain weave). */
 const SCORE_STOPWORDS = new Set([
   "white",
   "black",
@@ -199,7 +230,7 @@ const SCORE_STOPWORDS = new Set([
   "gsm",
 ]);
 
-/** Strong garment nouns — boost when present in both query and tariff row. */
+/** Strong garment nouns: boost when present in both query and tariff row. */
 const APPAREL_TOKEN_RE =
   /^(?:t-?shirts?|shirts?|jeans?|trousers?|pants?|shorts?|skirts?|dresses?|jackets?|coats?|hoodies?|sweaters?|garments?|apparel|clothing|underwear|socks?)$/;
 
@@ -216,6 +247,12 @@ const TOKEN_SYNONYMS: Record<string, string[]> = {
   tee: ["t-shirt", "t-shirts", "singlets"],
   hoodie: ["sweatshirt", "pullover", "jersey"],
   sweatshirt: ["hoodie", "pullover", "jersey"],
+  soy: ["soya", "soybeans"],
+  soya: ["soy"],
+  chilli: ["chili", "capsicum"],
+  chili: ["chilli", "capsicum"],
+  peanut: ["groundnut", "groundnuts"],
+  peanuts: ["groundnut", "groundnuts"],
 };
 
 function expandTokens(tokens: string[]): string[] {
@@ -228,20 +265,68 @@ function expandTokens(tokens: string[]): string[] {
   return [...out];
 }
 
+/** Generic one-word tariff labels that must never decide a match on their own. */
+const GENERIC_LABELS = new Set([
+  "unbleached",
+  "bleached",
+  "printed",
+  "dyed",
+  "yarn",
+  "plain",
+  "other",
+  "others",
+  "nes",
+  "cotton",
+  "wool",
+  "silk",
+  "used",
+  "new",
+  "nuts",
+  "parts",
+  "part",
+  "seed",
+  "seeds",
+  "fresh",
+  "dried",
+  "frozen",
+  "liquid",
+  "powder",
+  "oil",
+  "oils",
+]);
+
+/** Hints from the product's own documents (the supplier's HS code). */
+export type MatchHints = {
+  /** Chapter of the supplier's HS code (two digits). */
+  supplierChapter?: string | null;
+  /** Heading of the supplier's HS code (four digits). */
+  supplierHeading?: string | null;
+};
+
 function scoreRow(
   row: HsReferenceCacheRow,
   tokens: string[],
   description: string,
+  hints?: MatchHints,
+  /** Candidate-list mode: no "half of the words" rule, short rows kept but ranked last. */
+  lenient = false,
 ): number {
   const desc = row.description.toLowerCase().replace(/^[-\s]+/, "").trim();
+  const words = wordSet(desc);
   const expanded = expandTokens(tokens);
 
   let tokenScore = 0;
+  const matchedOriginals = new Set<string>();
   for (const t of expanded) {
     if (SCORE_STOPWORDS.has(t)) continue;
-    if (!desc.includes(t)) continue;
+    if (!wordMatches(words, t)) continue;
     // Original query tokens that are apparel nouns count heavier than synonyms.
     const isOriginal = tokens.includes(t);
+    if (isOriginal) matchedOriginals.add(t);
+    else {
+      // a synonym counts for the original token that produced it
+      for (const o of tokens) if ((TOKEN_SYNONYMS[o] ?? []).includes(t)) matchedOriginals.add(o);
+    }
     if (APPAREL_TOKEN_RE.test(t) && isOriginal) tokenScore += 3;
     else if (APPAREL_TOKEN_RE.test(t)) tokenScore += 2;
     else tokenScore += isOriginal ? 1 : 0.5;
@@ -250,49 +335,52 @@ function scoreRow(
   // Chapter bonus alone must not pick a random 61/62 row.
   if (tokenScore <= 0) return 0;
 
-  let score = tokenScore;
-  const expected = expectedChapters(description);
+  // At least half of the product words must appear in the tariff text.
+  const queryTokens = tokens.filter((t) => !SCORE_STOPWORDS.has(t));
   if (
-    expected &&
-    row.chapter &&
-    expected.includes(row.chapter.padStart(2, "0").slice(0, 2))
+    !lenient &&
+    queryTokens.length > 0 &&
+    matchedOriginals.size < Math.ceil(queryTokens.length / 2)
   ) {
-    score += 2;
+    return 0;
   }
 
-  // Ultra-short official text ("Other") is weak — but a one-word exact
-  // product label like "Denim" that appears in the query is a strong hit.
   const meaningfulLen = desc.replace(/[^a-z0-9]/gi, "").length;
   const labelKey = desc.replace(/[^a-z0-9]/gi, "");
-  const exactLabelHit = expanded.some(
-    (t) => !SCORE_STOPWORDS.has(t) && labelKey === t,
-  );
-  const weakExactLabels = new Set([
-    "unbleached",
-    "bleached",
-    "printed",
-    "dyed",
-    "yarn",
-    "plain",
-    "other",
-    "nes",
-    "cotton",
-    "wool",
-    "silk",
-  ]);
-  if (meaningfulLen > 0 && meaningfulLen < 12 && !exactLabelHit) {
-    score -= 2;
-  }
-  if (/^(?:other|nes|n\.?e\.?s\.?)$/i.test(desc)) {
-    score -= 3;
-  }
-  if (exactLabelHit && !weakExactLabels.has(labelKey)) {
-    score += 3;
+  const wholeQuery = queryTokens.join("");
+  // A very short official text ("Used", "Nuts", "Other") only counts when it IS the
+  // whole product name ("Denim" for the query "denim"); otherwise it says nothing.
+  const exactWholeLabel =
+    meaningfulLen > 0 && labelKey === wholeQuery && !GENERIC_LABELS.has(labelKey);
+  if (/^(?:other|nes|n\.?e\.?s\.?)$/i.test(desc)) return 0;
+  if (meaningfulLen < 12 && !exactWholeLabel) {
+    // lenient: keep the row for the candidate list, but behind every real match
+    return lenient && !GENERIC_LABELS.has(labelKey) ? 0.25 : 0;
   }
 
+  let score = tokenScore;
+  const expected = expectedChapters(description);
+  const rowChapter = (row.chapter ?? "").padStart(2, "0").slice(0, 2);
+  if (expected && row.chapter && expected.includes(rowChapter)) {
+    score += 2;
+  }
+  // The narrower chapter a food word points to ("rice" -> 10) ranks first.
+  const preferred = preferredChapters(description);
+  if (preferred.length > 0 && row.chapter) {
+    const at = preferred.indexOf(rowChapter);
+    if (at === 0) score += 2;
+    else if (at > 0) score += 1;
+  }
+  // The supplier's own HS code is a hint, not the truth: a small bonus only.
+  if (hints?.supplierChapter && rowChapter === hints.supplierChapter) score += 1;
+  const rowDigits = (row.normalizedHs ?? row.hsCode ?? row.tariffNo ?? "").replace(/\D/g, "");
+  if (hints?.supplierHeading && rowDigits.startsWith(hints.supplierHeading)) score += 1;
+
+  if (exactWholeLabel) score += 3;
+
   const d = description.toLowerCase();
-  const ch = (row.chapter ?? "").padStart(2, "0").slice(0, 2);
-  // Jeans / denim trousers are almost always woven cotton → prefer ch 62 + cotton.
+  const ch = rowChapter;
+  // Jeans / denim trousers are almost always woven cotton -> prefer ch 62 + cotton.
   if (/\bjeans?\b|denim/.test(d) && !/knit|crochet/.test(d)) {
     if (ch === "62") score += 2;
     if (ch === "61") score -= 1;
@@ -303,7 +391,7 @@ function scoreRow(
   if (/\bdenim\b/.test(d) && /\bdenim\b/.test(desc)) {
     score += 3;
   }
-  // T-shirts are typically knitted → prefer ch 61.
+  // T-shirts are typically knitted -> prefer ch 61.
   if (/t-?\s*shirts?/.test(d) || /\btee\s*shirts?\b/.test(d)) {
     if (ch === "61") score += 2;
     if (ch === "62") score -= 1;
@@ -312,21 +400,50 @@ function scoreRow(
   return score;
 }
 
-/** Best tariff-book match for a product description (sync, uses loaded cache). */
+/** Words of a query as the matcher sees them (whole words, filler removed). */
+export function tokenizeForMatch(text: string): string[] {
+  return tokenize(text);
+}
+
+/** Candidate-list score of one row: whole words only, never a substring. */
+export function scoreReferenceRow(
+  row: HsReferenceCacheRow,
+  tokens: string[],
+  description: string,
+  hints?: MatchHints,
+): number {
+  const s = scoreRow(row, tokens, description, hints, true);
+  return isCompleteRow(row) ? s : Math.max(0, s - 0.5);
+}
+
+/** A tariff row with a full 8 digit code (the book also holds old 4 / 6 digit rows). */
+function isCompleteRow(row: HsReferenceCacheRow): boolean {
+  return (row.normalizedHs ?? row.hsCode ?? row.tariffNo ?? "").replace(/\D/g, "").length >= 8;
+}
+
+/**
+ * Best tariff-book match for a product description (sync, uses loaded cache).
+ * Whole-word matching only; old short rows are skipped when the book has full
+ * 8 digit rows; a code whose chapter does not fit the product is never returned.
+ */
 export function findBestReferenceMatch(
   description: string,
   minScore = 2,
+  hints?: MatchHints,
 ): ReferenceMatch | null {
   if (!cache || cache.rows.length === 0) return null;
 
   const tokens = tokenize(description);
   if (tokens.length === 0) return null;
 
+  const hasComplete = cache.rows.some(isCompleteRow);
+
   let best: ReferenceMatch | null = null;
   for (const row of cache.rows) {
+    if (hasComplete && !isCompleteRow(row)) continue;
     if (!isChapterCompatible(description, row.chapter)) continue;
 
-    const score = scoreRow(row, tokens, description);
+    const score = scoreRow(row, tokens, description, hints);
     if (score < minScore) continue;
     if (!best || score > best.score) {
       best = { row, score };

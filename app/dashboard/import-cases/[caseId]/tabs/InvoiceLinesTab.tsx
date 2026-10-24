@@ -25,6 +25,7 @@ import type { ImportCaseDocumentRow } from "@/db/schema/importCaseDocuments";
 import type { InvoiceLineRow } from "@/db/schema/invoiceLines";
 import { collectExtraKeys } from "@/lib/import-cases/extra-columns";
 import { useBulkReview } from "@/lib/import-cases/use-bulk-review";
+import { useSyncServerProp } from "@/lib/import-cases/use-sync-server-prop";
 
 type InvoiceLineWithDoc = {
   line: InvoiceLineRow;
@@ -68,6 +69,7 @@ export function InvoiceLinesTab({
 }: InvoiceLinesTabProps) {
   const router = useRouter();
   const [lines, setLines] = useState(initialLines);
+  useSyncServerProp(initialLines, setLines);
   const [search, setSearch] = useState("");
   const [showForm, setShowForm] = useState(false);
   const [loading, setLoading] = useState(false);

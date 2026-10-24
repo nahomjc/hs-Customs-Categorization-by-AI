@@ -16,6 +16,7 @@ import {
   getTenantId,
   writeAuditLog,
 } from "@/lib/import-cases/queries";
+import { revalidateImportCasePage } from "@/lib/import-cases/revalidate-import-case-page";
 
 type RouteParams = {
   params: Promise<{ caseId: string; productId: string }>;
@@ -77,5 +78,6 @@ export async function POST(_request: NextRequest, { params }: RouteParams) {
     newData: { humanVerified: true },
   });
 
+  revalidateImportCasePage(caseId);
   return NextResponse.json(updated);
 }

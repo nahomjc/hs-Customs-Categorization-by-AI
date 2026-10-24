@@ -1,5 +1,7 @@
 import { eq } from "drizzle-orm";
 import { db } from "@/db";
+import { checkPlausibility, type PlausibilityVerdict } from "@/lib/hs-plausibility";
+import { loadSupplierHsByProduct } from "./product-context-load";
 import {
   hsCodeCandidates,
   importProducts,
@@ -12,6 +14,11 @@ export type ProductClassificationBundle = {
   candidates: Array<typeof hsCodeCandidates.$inferSelect>;
   classification: typeof productClassifications.$inferSelect | null;
   tariffSnapshot: typeof tariffSnapshots.$inferSelect | null;
+  /**
+   * Does the current code fit the product (chapter / section, supplier's invoice
+   * code as a hint)? null when the product has no real code yet.
+   */
+  plausibility?: PlausibilityVerdict | null;
 };
 
 export async function getCaseClassifications(
@@ -24,6 +31,7 @@ export async function getCaseClassifications(
     .orderBy(importProducts.productSequence);
 
   const result: ProductClassificationBundle[] = [];
+  const supplierHs = await loadSupplierHsByProduct(caseId);
 
   for (const product of products) {
     const [candidates, classifications, snapshots] = await Promise.all([
@@ -42,11 +50,21 @@ export async function getCaseClassifications(
         .where(eq(tariffSnapshots.productId, product.id)),
     ]);
 
+    const classification = classifications[0] ?? null;
+    const verdict = classification
+      ? checkPlausibility({
+          hsCode: classification.hsCode,
+          texts: [product.productName, product.rawDescription, product.normalizedDescription],
+          supplierHsCode: supplierHs.get(product.id) ?? null,
+        })
+      : null;
+
     result.push({
       product,
       candidates,
-      classification: classifications[0] ?? null,
+      classification,
       tariffSnapshot: snapshots[0] ?? null,
+      plausibility: verdict && verdict.status !== "unknown" ? verdict : null,
     });
   }
 
