@@ -196,6 +196,12 @@ export const usersNavLink: NavLink = {
 
 export const clientNavLinks: NavLink[] = [
   {
+    href: "/dashboard",
+    label: "Dashboard",
+    exact: true,
+    icon: icons.dashboard,
+  },
+  {
     href: "/dashboard/my-shipments",
     label: "My shipments",
     exact: false,

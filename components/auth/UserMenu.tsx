@@ -160,8 +160,8 @@ export function UserMenu({
             onClick={() => setOpen(false)}
             className="flex items-center gap-2 px-3 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
           >
-            {isClient ? <TrackOrderIcon /> : <DashboardIcon />}
-            {isClient ? "Track order" : "Dashboard"}
+            <DashboardIcon />
+            Dashboard
           </Link>
           {showMyShipmentsLink ? (
             <Link
@@ -229,26 +229,6 @@ function ShipmentsIcon() {
         strokeLinejoin="round"
         strokeWidth={2}
         d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"
-      />
-    </svg>
-  );
-}
-
-function TrackOrderIcon() {
-  return (
-    <svg
-      className="w-4 h-4 text-gray-400"
-      fill="none"
-      stroke="currentColor"
-      viewBox="0 0 24 24"
-      aria-hidden
-    >
-      <title>Track order</title>
-      <path
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        strokeWidth={2}
-        d="M8.25 18.75a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m3 0h6m-9 0H3.375a1.125 1.125 0 01-1.125-1.125V14.25m17.25 4.5a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m3 0h1.125c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9m9 9v.75m-9-.75H4.125A1.125 1.125 0 013 14.25v2.25m16.875-11.25v7.5"
       />
     </svg>
   );

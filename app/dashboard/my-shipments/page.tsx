@@ -26,9 +26,7 @@ export default async function MyShipmentsPage() {
         title="My shipments"
         description="Follow each case through the clearance workflow."
         breadcrumbs={[
-          role === "client"
-            ? { label: "Track order", href: "/dashboard" }
-            : { label: "Dashboard", href: "/dashboard" },
+          { label: "Dashboard", href: "/dashboard" },
           { label: "My shipments" },
         ]}
       />

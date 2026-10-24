@@ -6,23 +6,35 @@ import {
 import { ClientShipmentCard } from "@/components/dashboard/client/ClientShipmentCard";
 import type { ClientShipmentSummary } from "@/components/dashboard/client/ClientShipmentCard";
 import {
+  BentoCard,
+  BentoCardHeader,
+  KpiRingTile,
+  PeriodPill,
+} from "@/components/dashboard/bento/BentoCard";
+import {
+  GradientHeroCard,
+  KpiProgressTile,
+  StatList,
+} from "@/components/dashboard/bento/DashboardCards";
+import { BENTO_COLORS } from "@/components/dashboard/bento/charts";
+import { SourceCountryMap } from "@/components/dashboard/map/SourceCountryMap";
+import {
+  DashButton,
   DashCard,
   DashCardHeader,
   DashLink,
   DashTable,
   DashTableAction,
-  DashTableEmpty,
   DashTableHead,
   DashTableHeaderRow,
   DashTbody,
   DashTd,
   DashTh,
   DashTr,
-  PageHeader,
   StatusBadge,
 } from "@/components/dashboard/ui";
-import { SourceCountryMap } from "@/components/dashboard/map/SourceCountryMap";
 import type { SourceCountrySummary } from "@/lib/dashboard-map-utils";
+import { formatShare } from "@/lib/dashboard-map-utils";
 import { getTrackingLabel } from "@/lib/tracking/workflow";
 
 type ClientDashboardHomeProps = {
@@ -41,28 +53,6 @@ function formatUpdated(shipment: ClientShipmentSummary) {
     day: "numeric",
     year: "numeric",
   });
-}
-
-function StatCard({
-  label,
-  value,
-  hint,
-}: {
-  label: string;
-  value: number | string;
-  hint: string;
-}) {
-  return (
-    <div className="rounded-2xl border border-slate-200/70 bg-white p-3.5 sm:rounded-3xl sm:p-5">
-      <p className="text-[11px] font-medium text-gray-500 sm:text-sm">{label}</p>
-      <p className="mt-1 text-xl font-bold tabular-nums tracking-tight text-gray-900 sm:text-3xl">
-        {value}
-      </p>
-      <p className="mt-0.5 text-[11px] leading-snug text-gray-500 sm:mt-1 sm:text-xs">
-        {hint}
-      </p>
-    </div>
-  );
 }
 
 function EmptyShipments() {
@@ -93,49 +83,160 @@ export function ClientDashboardHome({
   const featured =
     active.length > 0 ? active.slice(0, 6) : shipments.slice(0, 6);
 
-  return (
-    <div className="w-full min-w-0 space-y-6 sm:space-y-8">
-      <PageHeader
-        title={`Track order${displayName ? ` · ${displayName}` : ""}`}
-        description="Follow your shipments from documents through customs to pickup."
-        action={
-          <Link
-            href="/dashboard/my-shipments"
-            className="inline-flex w-full items-center justify-center rounded-xl bg-[#007bff] px-4 py-2.5 text-sm font-semibold text-white hover:bg-[#0069d9] sm:w-auto"
-          >
-            All shipments
-          </Link>
-        }
-      />
+  const total = shipments.length;
+  const deliveredPct =
+    total > 0 ? Math.round((delivered.length / total) * 100) : 0;
+  const inProgressPct =
+    total > 0 ? Math.round((active.length / total) * 100) : 0;
 
-      <div className="grid grid-cols-2 gap-2.5 sm:gap-3 lg:grid-cols-4">
-        <StatCard
-          label="Total"
-          value={shipments.length}
-          hint="Linked to your account"
-        />
-        <StatCard
-          label="In progress"
-          value={active.length}
-          hint="Moving through workflow"
-        />
-        <StatCard
-          label="Ready"
-          value={ready.length}
-          hint="Ready for pickup"
-        />
-        <StatCard
-          label="Delivered"
-          value={delivered.length}
-          hint="Completed shipments"
-        />
+  const topSources = sourceSummary.countries.slice(0, 5);
+  const sourceColors = [
+    BENTO_COLORS.brand,
+    BENTO_COLORS.indigo,
+    BENTO_COLORS.sky,
+    BENTO_COLORS.success,
+    BENTO_COLORS.warning,
+  ];
+
+  return (
+    <div className="w-full min-w-0 space-y-4">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="min-w-0">
+          <p className="text-[11px] font-bold uppercase tracking-widest text-[#007bff]">
+            Overview
+          </p>
+          <h1 className="mt-1 text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">
+            {displayName ? `Track order · ${displayName}` : "Track order"}
+          </h1>
+          <p className="mt-1.5 max-w-xl text-sm text-slate-500">
+            Follow your shipments from documents through customs to pickup.
+          </p>
+        </div>
+        <DashButton href="/dashboard/my-shipments" variant="primary">
+          All shipments
+        </DashButton>
       </div>
 
-      <SourceCountryMap
-        summary={sourceSummary}
-        title="Your shipments by source country"
-        periodLabel="Linked to you"
-      />
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-12">
+        <div className="min-w-0 xl:col-span-8">
+          <SourceCountryMap
+            summary={sourceSummary}
+            title="Your shipments by source country"
+            periodLabel="Linked to you"
+          />
+        </div>
+
+        <div className="grid min-w-0 content-start gap-4 xl:col-span-4">
+          <GradientHeroCard
+            title="Your shipments"
+            caption="Linked to your account"
+            value={total.toLocaleString()}
+            lines={
+              ready.length > 0
+                ? [
+                    {
+                      label: "Ready for pickup",
+                      value: ready.length.toLocaleString(),
+                    },
+                  ]
+                : undefined
+            }
+            href="/dashboard/my-shipments"
+            actionLabel="View all"
+          />
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <KpiRingTile
+              label="Delivered"
+              value={delivered.length.toLocaleString()}
+              percent={deliveredPct}
+              tone="green"
+              hint="Completed shipments"
+            />
+            <KpiProgressTile
+              label="In progress"
+              badgeValue={active.length.toLocaleString()}
+              percent={inProgressPct}
+              caption={
+                total > 0 ? `${inProgressPct}% of your shipments` : "No cases yet"
+              }
+              hint="Moving through workflow"
+            />
+          </div>
+        </div>
+      </div>
+
+      <div
+        className={`grid grid-cols-1 gap-4 md:grid-cols-2 ${
+          topSources.length > 0 ? "xl:grid-cols-3" : "xl:grid-cols-2"
+        }`}
+      >
+        {topSources.length > 0 ? (
+          <BentoCard label="Top source countries">
+            <BentoCardHeader
+              title="Top source countries"
+              action={<PeriodPill>Linked to you</PeriodPill>}
+            />
+            <StatList
+              trendLabel="share of your shipments"
+              rows={topSources.map((c, i) => ({
+                key: c.iso2,
+                label: c.name,
+                value: `${c.count.toLocaleString()} ${
+                  c.count === 1 ? "shipment" : "shipments"
+                }`,
+                caption: `${formatShare(c.share)} of your shipments`,
+                percent: c.share,
+                color: sourceColors[i % sourceColors.length]!,
+              }))}
+            />
+          </BentoCard>
+        ) : null}
+
+        <BentoCard label="Shipment status">
+          <BentoCardHeader title="Shipment status" />
+          <StatList
+            trendLabel="status"
+            rows={[
+              {
+                key: "active",
+                label: "In progress",
+                value: active.length.toLocaleString(),
+                percent: inProgressPct,
+                color: BENTO_COLORS.brand,
+              },
+              {
+                key: "ready",
+                label: "Ready for pickup",
+                value: ready.length.toLocaleString(),
+                percent:
+                  total > 0 ? Math.round((ready.length / total) * 100) : 0,
+                color: BENTO_COLORS.warning,
+              },
+              {
+                key: "delivered",
+                label: "Delivered",
+                value: delivered.length.toLocaleString(),
+                percent: deliveredPct,
+                color: BENTO_COLORS.success,
+              },
+            ]}
+          />
+        </BentoCard>
+
+        {notifications.length > 0 ? (
+          <BentoCard label="Recent updates" padded={false} className="overflow-hidden">
+            <BentoCardHeader
+              title="Recent updates"
+              inset
+              action={<PeriodPill>Latest</PeriodPill>}
+            />
+            <p className="border-b border-slate-100 px-5 pb-3 text-xs text-slate-500 sm:px-6">
+              Same messages sent by SMS
+            </p>
+            <ClientNotificationsList items={notifications.slice(0, 5)} />
+          </BentoCard>
+        ) : null}
+      </div>
 
       {ready.length > 0 ? (
         <div className="rounded-2xl border border-amber-200/80 bg-amber-50/60 px-4 py-3 sm:px-5 sm:py-3.5">
@@ -166,14 +267,12 @@ export function ClientDashboardHome({
           <EmptyShipments />
         ) : (
           <>
-            {/* Mobile: cards */}
             <div className="grid gap-3 p-3 sm:p-4 md:hidden">
               {featured.map((shipment) => (
                 <ClientShipmentCard key={shipment.id} shipment={shipment} />
               ))}
             </div>
 
-            {/* Desktop: table */}
             <div className="hidden md:block">
               <DashTable>
                 <DashTableHead>
@@ -226,16 +325,6 @@ export function ClientDashboardHome({
           </>
         )}
       </DashCard>
-
-      {notifications.length > 0 ? (
-        <DashCard>
-          <DashCardHeader title="Recent updates" />
-          <p className="border-b border-gray-100 px-4 py-2.5 text-sm text-gray-500 sm:px-5">
-            Same messages sent by SMS and shown here when you sign in
-          </p>
-          <ClientNotificationsList items={notifications} />
-        </DashCard>
-      ) : null}
     </div>
   );
 }

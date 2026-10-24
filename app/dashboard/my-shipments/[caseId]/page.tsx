@@ -61,9 +61,7 @@ export default async function MyShipmentDetailPage({ params }: PageProps) {
         title={shipment.caseNumber}
         description="Clearance workflow for this shipment"
         breadcrumbs={[
-          role === "client"
-            ? { label: "Track order", href: "/dashboard" }
-            : { label: "Dashboard", href: "/dashboard" },
+          { label: "Dashboard", href: "/dashboard" },
           { label: "My shipments", href: "/dashboard/my-shipments" },
           { label: shipment.caseNumber },
         ]}
