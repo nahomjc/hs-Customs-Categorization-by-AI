@@ -145,33 +145,36 @@ export function DemoRequestsTable({
 
       <DashCard>
         <DashTableToolbar>
-          <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
             <input
               type="search"
               placeholder="Search name, email, company…"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className={dashInputClass}
+              className={`${dashInputClass} sm:min-w-0 sm:flex-1 sm:w-auto`}
               aria-label="Search demo requests"
             />
-            <DashSelect
-              value={status}
-              onChange={(v) => setStatus(v as DemoRequestStatus | "")}
-              aria-label="Filter by status"
-              options={[
-                { value: "", label: "All statuses" },
-                ...DEMO_REQUEST_STATUSES.map((s) => ({
-                  value: s,
-                  label: DEMO_REQUEST_STATUS_LABELS[s],
-                })),
-              ]}
-            />
-            <DashButton
-              onClick={() => void load(search, status)}
-              disabled={loading}
-            >
-              {loading ? "Loading…" : "Filter"}
-            </DashButton>
+            <div className="flex shrink-0 flex-wrap items-center gap-3">
+              <DashSelect
+                value={status}
+                onChange={(v) => setStatus(v as DemoRequestStatus | "")}
+                aria-label="Filter by status"
+                className="w-[11.5rem]"
+                options={[
+                  { value: "", label: "All statuses" },
+                  ...DEMO_REQUEST_STATUSES.map((s) => ({
+                    value: s,
+                    label: DEMO_REQUEST_STATUS_LABELS[s],
+                  })),
+                ]}
+              />
+              <DashButton
+                onClick={() => void load(search, status)}
+                disabled={loading}
+              >
+                {loading ? "Loading…" : "Filter"}
+              </DashButton>
+            </div>
           </div>
           <p className="text-xs text-gray-500">
             {loading ? "Searching…" : `${total} request(s)`}
