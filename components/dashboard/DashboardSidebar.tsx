@@ -161,6 +161,15 @@ const icons = {
       />
     </NavIcon>
   ),
+  suppliers: (
+    <NavIcon>
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M3 21h18M5 21V7l7-4 7 4v14M9 21v-6h6v6"
+      />
+    </NavIcon>
+  ),
 };
 
 export const mainNavLinks: NavLink[] = [
@@ -230,6 +239,13 @@ export const demoRequestsNavLink: NavLink = {
   label: "Demo requests",
   exact: false,
   icon: icons.demoRequests,
+};
+
+export const suppliersNavLink: NavLink = {
+  href: "/dashboard/suppliers",
+  label: "Suppliers",
+  exact: false,
+  icon: icons.suppliers,
 };
 
 export const vddNavLink: NavLink = {
@@ -319,7 +335,12 @@ export function getDashboardNavGroups(
     managementLinks.push(usersNavLink);
   }
   if (options.isAdmin) {
-    managementLinks.push(demoRequestsNavLink, adminNavLink, vddNavLink);
+    managementLinks.push(
+      suppliersNavLink,
+      demoRequestsNavLink,
+      adminNavLink,
+      vddNavLink,
+    );
   }
   if (managementLinks.length > 0) {
     groups.push({

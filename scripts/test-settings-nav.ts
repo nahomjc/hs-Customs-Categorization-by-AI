@@ -85,6 +85,24 @@ test("sidebar: Demo requests is admin-only under Management", () => {
   );
 });
 
+test("sidebar: Suppliers is admin-only under Management", () => {
+  const hrefs = (o: Parameters<typeof getDashboardNavLinks>[0]) =>
+    getDashboardNavLinks(o).map((l) => l.href);
+  assert.ok(hrefs({ isAdmin: true }).includes("/dashboard/suppliers"));
+  assert.ok(
+    !hrefs({ isAdmin: false, isAssessor: true }).includes("/dashboard/suppliers"),
+  );
+  assert.ok(!hrefs({ isClient: true }).includes("/dashboard/suppliers"));
+  const management = getDashboardNavGroups({ isAdmin: true }).find(
+    (g) => g.id === "management",
+  );
+  assert.ok(
+    management?.links.some(
+      (l) => l.href === "/dashboard/suppliers" && l.label === "Suppliers",
+    ),
+  );
+});
+
 test("smoke: tab bar markup (roles, aria, brand-blue active, no shadows)", () => {
   const html = renderToStaticMarkup(
     createElement(SettingsTabs, { tabs: visibleSettingsTabs(true), activeId: "channels", onSelect: () => {} }),

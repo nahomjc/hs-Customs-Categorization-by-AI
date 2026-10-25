@@ -4,7 +4,9 @@ import { TRACKING_STATUSES } from "@/lib/tracking/constants";
 
 export const createImportCaseSchema = z.object({
   importerName: z.string().trim().min(1, "Importer name is required").max(255),
+  supplierId: z.string().uuid().optional().nullable(),
   supplierName: z.string().trim().max(255).optional().nullable(),
+  supplierCountryCode: z.string().trim().max(3).optional().nullable(),
   countryOfExportCode: z.string().trim().max(3).optional().nullable(),
   countryOfOriginCode: z.string().trim().max(3).optional().nullable(),
   shipmentReference: z.string().trim().max(100).optional().nullable(),

@@ -8,6 +8,10 @@ import {
   type ClientOption,
 } from "@/components/dashboard/ClientSearchSelect";
 import {
+  SupplierSearchSelect,
+  type SupplierOption,
+} from "@/components/dashboard/SupplierSearchSelect";
+import {
   DashButton,
   DashCard,
   dashInputClass,
@@ -29,8 +33,10 @@ export function CreateImportCaseForm({ agents }: CreateImportCaseFormProps) {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [clientLabel, setClientLabel] = useState("");
+  const [supplierLabel, setSupplierLabel] = useState("");
   const [form, setForm] = useState({
     importerName: "Impact logistic",
+    supplierId: "",
     supplierName: "",
     countryOfExportCode: "",
     countryOfOriginCode: "",
@@ -59,6 +65,7 @@ export function CreateImportCaseForm({ agents }: CreateImportCaseFormProps) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           importerName: form.importerName,
+          supplierId: form.supplierId || null,
           supplierName: form.supplierName || null,
           countryOfExportCode: form.countryOfExportCode || null,
           countryOfOriginCode: form.countryOfOriginCode || null,
@@ -115,11 +122,16 @@ export function CreateImportCaseForm({ agents }: CreateImportCaseFormProps) {
               className={dashInputClass}
             />
           </Field>
-          <Field label="Supplier name">
-            <input
-              value={form.supplierName}
-              onChange={(e) => updateField("supplierName", e.target.value)}
-              className={dashInputClass}
+          <Field label="Supplier" htmlFor="supplier">
+            <SupplierSearchSelect
+              id="supplier"
+              value={form.supplierId}
+              selectedLabel={supplierLabel || null}
+              onChange={(supplierId, supplier?: SupplierOption | null) => {
+                updateField("supplierId", supplierId);
+                updateField("supplierName", supplier?.name ?? "");
+                setSupplierLabel(supplier?.name ?? "");
+              }}
             />
           </Field>
           <Field label="Country of export (ISO)" htmlFor="country-of-export">

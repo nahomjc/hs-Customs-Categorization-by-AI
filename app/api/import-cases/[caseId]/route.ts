@@ -21,6 +21,7 @@ import {
 } from "@/lib/import-cases/queries";
 import { updateImportCaseSchema } from "@/lib/import-cases/validation";
 import { notifyImportCaseAssignment } from "@/lib/notifications/notify-assignment";
+import { resolveSupplierForCase } from "@/lib/suppliers/queries";
 
 type RouteParams = { params: Promise<{ caseId: string }> };
 
@@ -102,10 +103,63 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     }
   }
 
+  const {
+    supplierId: rawSupplierId,
+    supplierName: rawSupplierName,
+    supplierCountryCode: rawSupplierCountry,
+    ...rest
+  } = parsed.data;
+
+  let supplierPatch: {
+    supplierId?: string | null;
+    supplierName?: string | null;
+    supplierCountryCode?: string | null;
+  } = {};
+
+  if (
+    rawSupplierId !== undefined ||
+    rawSupplierName !== undefined ||
+    rawSupplierCountry !== undefined
+  ) {
+    const nextId =
+      rawSupplierId !== undefined ? rawSupplierId : existing.supplierId;
+    const nextName =
+      rawSupplierName !== undefined ? rawSupplierName : existing.supplierName;
+    const nextCountry =
+      rawSupplierCountry !== undefined
+        ? rawSupplierCountry
+        : existing.supplierCountryCode;
+
+    if (!nextId && !nextName?.trim()) {
+      supplierPatch = {
+        supplierId: null,
+        supplierName: null,
+        supplierCountryCode: nextCountry ?? null,
+      };
+    } else {
+      try {
+        supplierPatch = await resolveSupplierForCase(tenantId, {
+          supplierId: nextId,
+          supplierName: nextName,
+          supplierCountryCode: nextCountry,
+        });
+      } catch (error) {
+        return NextResponse.json(
+          {
+            error:
+              error instanceof Error ? error.message : "Invalid supplier",
+          },
+          { status: 400 },
+        );
+      }
+    }
+  }
+
   const [updated] = await db
     .update(importCases)
     .set({
-      ...parsed.data,
+      ...rest,
+      ...supplierPatch,
       updatedAt: new Date(),
     })
     .where(eq(importCases.id, caseId))

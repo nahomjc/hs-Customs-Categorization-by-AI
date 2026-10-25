@@ -113,6 +113,13 @@
       "when": 1789300000000,
       "tag": "0015_sms_provider_smshub",
       "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1789400000000,
+      "tag": "0016_suppliers",
+      "breakpoints": true
     }
   ]
 }

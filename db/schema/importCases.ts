@@ -8,6 +8,7 @@ import {
   uuid,
   varchar,
 } from "drizzle-orm/pg-core";
+import { suppliers } from "./suppliers";
 import { users } from "./users";
 
 export const importCases = pgTable(
@@ -19,6 +20,9 @@ export const importCases = pgTable(
     status: varchar("status", { length: 40 }).default("draft").notNull(),
     importerName: varchar("importer_name", { length: 255 }),
     importerTinNumber: varchar("importer_tin_number", { length: 50 }),
+    supplierId: uuid("supplier_id").references(() => suppliers.id, {
+      onDelete: "set null",
+    }),
     supplierName: varchar("supplier_name", { length: 255 }),
     supplierCountryCode: varchar("supplier_country_code", { length: 3 }),
     countryOfExportCode: varchar("country_of_export_code", { length: 3 }),
@@ -80,6 +84,9 @@ export const importCases = pgTable(
     ),
     idxImportCasesClientUser: index("idx_import_cases_client_user").on(
       table.clientUserId,
+    ),
+    idxImportCasesSupplier: index("idx_import_cases_supplier").on(
+      table.supplierId,
     ),
     idxImportCasesCaseNumber: index("idx_import_cases_case_number").on(
       table.caseNumber,

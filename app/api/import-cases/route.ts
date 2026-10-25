@@ -25,6 +25,7 @@ import {
   listImportCasesQuerySchema,
 } from "@/lib/import-cases/validation";
 import { notifyImportCaseAssignment } from "@/lib/notifications/notify-assignment";
+import { resolveSupplierForCase } from "@/lib/suppliers/queries";
 import { recordInitialTrackingEvent } from "@/lib/tracking/update-tracking-status";
 
 export async function GET(request: NextRequest) {
@@ -116,6 +117,23 @@ export async function POST(request: NextRequest) {
     );
   }
 
+  let supplierFields: Awaited<ReturnType<typeof resolveSupplierForCase>>;
+  try {
+    supplierFields = await resolveSupplierForCase(tenantId, {
+      supplierId: parsed.data.supplierId,
+      supplierName: parsed.data.supplierName,
+      supplierCountryCode: parsed.data.supplierCountryCode,
+    });
+  } catch (error) {
+    return NextResponse.json(
+      {
+        error:
+          error instanceof Error ? error.message : "Invalid supplier",
+      },
+      { status: 400 },
+    );
+  }
+
   let created: (typeof importCases.$inferSelect) | undefined;
   for (let attempt = 0; attempt < 5; attempt++) {
     const caseNumber = await generateCaseNumber(tenantId);
@@ -127,7 +145,9 @@ export async function POST(request: NextRequest) {
           caseNumber,
           status: "draft",
           importerName: parsed.data.importerName,
-          supplierName: parsed.data.supplierName ?? null,
+          supplierId: supplierFields.supplierId,
+          supplierName: supplierFields.supplierName,
+          supplierCountryCode: supplierFields.supplierCountryCode,
           countryOfExportCode: parsed.data.countryOfExportCode ?? null,
           countryOfOriginCode: parsed.data.countryOfOriginCode ?? null,
           shipmentReference: parsed.data.shipmentReference ?? null,

@@ -7,6 +7,7 @@ export * from "./documentItems";
 export * from "./itemClassifications";
 export * from "./groupedItems";
 export * from "./hsCodeReference";
+export * from "./suppliers";
 export * from "./importCases";
 export * from "./importCaseDocuments";
 export * from "./invoiceLines";

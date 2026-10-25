@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import {
   ClientNotificationsList,
@@ -14,6 +15,7 @@ type ClientNotificationBellProps = {
 export function ClientNotificationBell({
   initialItems,
 }: ClientNotificationBellProps) {
+  const router = useRouter();
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
   const unread = initialItems.filter((n) => !n.read).length;
@@ -77,26 +79,40 @@ export function ClientNotificationBell({
           aria-label="Shipment notifications"
           className="absolute right-0 z-50 mt-2 w-[min(100vw-1.5rem,22rem)] overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-lg"
         >
-          <div className="border-b border-slate-100 px-4 py-3">
-            <p className="text-sm font-semibold text-slate-900">Updates</p>
-            <p className="text-xs text-slate-500">
-              Messages from your broker about your shipments
-            </p>
+          <div className="flex items-center justify-between gap-2 border-b border-slate-100 px-4 py-3">
+            <div>
+              <p className="text-sm font-semibold text-slate-900">Updates</p>
+              <p className="text-xs text-slate-500">
+                Messages from your broker about your shipments
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                setOpen(false);
+                router.push("/dashboard/notifications");
+              }}
+              className="shrink-0 text-xs font-semibold text-[#007bff] hover:text-[#0069d9]"
+            >
+              Open inbox
+            </button>
           </div>
           <div className="max-h-[min(70vh,24rem)] overflow-y-auto">
             <ClientNotificationsList
               items={initialItems.slice(0, 12)}
               compact
               emptyLabel="No shipment updates yet."
+              hrefForItem={(n) => `/dashboard/notifications?id=${n.id}`}
+              onItemClick={() => setOpen(false)}
             />
           </div>
           <div className="border-t border-slate-100 bg-slate-50/80 px-4 py-2.5 text-center">
             <Link
-              href="/dashboard"
+              href="/dashboard/notifications"
               onClick={() => setOpen(false)}
               className="text-xs font-semibold text-[#007bff] hover:text-[#0069d9]"
             >
-              Open track order
+              View all notifications
             </Link>
           </div>
         </div>

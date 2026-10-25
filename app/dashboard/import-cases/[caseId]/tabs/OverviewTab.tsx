@@ -10,6 +10,10 @@ import {
 } from "@/components/dashboard/ClientSearchSelect";
 import { CountrySearchSelect } from "@/components/dashboard/CountrySearchSelect";
 import {
+  SupplierSearchSelect,
+  type SupplierOption,
+} from "@/components/dashboard/SupplierSearchSelect";
+import {
   DashButton,
   DashCard,
   DashCardHeader,
@@ -38,6 +42,7 @@ type OverviewTabProps = {
 type FormState = {
   importerName: string;
   importerTinNumber: string;
+  supplierId: string;
   supplierName: string;
   countryOfExportCode: string;
   countryOfOriginCode: string;
@@ -56,6 +61,7 @@ function toFormState(importCase: ImportCaseRow): FormState {
   return {
     importerName: importCase.importerName ?? "",
     importerTinNumber: importCase.importerTinNumber ?? "",
+    supplierId: importCase.supplierId ?? "",
     supplierName: importCase.supplierName ?? "",
     countryOfExportCode: importCase.countryOfExportCode ?? "",
     countryOfOriginCode: importCase.countryOfOriginCode ?? "",
@@ -84,6 +90,9 @@ export function OverviewTab({
       ? `${client.fullName ?? client.email}${client.phone ? ` · ${client.phone}` : ""}`
       : "",
   );
+  const [supplierLabel, setSupplierLabel] = useState(
+    () => importCase.supplierName ?? "",
+  );
   const [loading, setLoading] = useState(false);
   const [dirty, setDirty] = useState(false);
 
@@ -106,6 +115,7 @@ export function OverviewTab({
         body: JSON.stringify({
           importerName: form.importerName.trim(),
           importerTinNumber: form.importerTinNumber.trim() || null,
+          supplierId: form.supplierId || null,
           supplierName: form.supplierName.trim() || null,
           countryOfExportCode: form.countryOfExportCode || null,
           countryOfOriginCode: form.countryOfOriginCode || null,
@@ -205,11 +215,20 @@ export function OverviewTab({
                   className={dashInputClass}
                 />
               </Field>
-              <Field label="Supplier name" className="sm:col-span-2">
-                <input
-                  value={form.supplierName}
-                  onChange={(e) => updateField("supplierName", e.target.value)}
-                  className={dashInputClass}
+              <Field
+                label="Supplier"
+                htmlFor="supplier"
+                className="sm:col-span-2"
+              >
+                <SupplierSearchSelect
+                  id="supplier"
+                  value={form.supplierId}
+                  selectedLabel={supplierLabel || null}
+                  onChange={(supplierId, supplier?: SupplierOption | null) => {
+                    updateField("supplierId", supplierId);
+                    updateField("supplierName", supplier?.name ?? "");
+                    setSupplierLabel(supplier?.name ?? "");
+                  }}
                 />
               </Field>
             </div>
