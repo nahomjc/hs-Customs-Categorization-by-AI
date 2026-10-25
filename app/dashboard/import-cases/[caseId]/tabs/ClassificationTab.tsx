@@ -425,7 +425,9 @@ export function ClassificationTab({
     caseId,
     endpoint: "classifications/bulk-review",
     itemLabel: "classifications",
-    onSuccess: refresh,
+    onSuccess: async () => {
+      await refresh();
+    },
   });
 
   return (
