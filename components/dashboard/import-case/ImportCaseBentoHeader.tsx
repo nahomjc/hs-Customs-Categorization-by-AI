@@ -122,12 +122,40 @@ export function ImportCaseBentoHeader({
   return (
     <div className="space-y-4">
       <BentoCard label="Import case summary">
-        <Breadcrumbs
-          items={[
-            { label: "Import cases", href: "/dashboard/import-cases" },
-            { label: importCase.caseNumber },
-          ]}
-        />
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <Breadcrumbs
+            items={[
+              { label: "Import cases", href: "/dashboard/import-cases" },
+              { label: importCase.caseNumber },
+            ]}
+          />
+          <div className="flex shrink-0 items-center gap-2">
+            <DashButton
+              href={
+                previousCase
+                  ? `/dashboard/import-cases/${previousCase.id}`
+                  : undefined
+              }
+              variant="secondary"
+              disabled={!previousCase}
+              className="px-3 py-2"
+            >
+              ← Previous
+            </DashButton>
+            <DashButton
+              href={
+                nextCase
+                  ? `/dashboard/import-cases/${nextCase.id}`
+                  : undefined
+              }
+              variant="secondary"
+              disabled={!nextCase}
+              className="px-3 py-2"
+            >
+              Next →
+            </DashButton>
+          </div>
+        </div>
 
         <div className="mt-3 flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
           <div className="flex min-w-0 items-start gap-4">
@@ -244,30 +272,6 @@ export function ImportCaseBentoHeader({
                 clientLabel={clientLabel}
               />
               <div className="flex flex-wrap gap-2 sm:justify-end">
-                <DashButton
-                  href={
-                    previousCase
-                      ? `/dashboard/import-cases/${previousCase.id}`
-                      : undefined
-                  }
-                  variant="secondary"
-                  disabled={!previousCase}
-                  className="px-3"
-                >
-                  ← Previous
-                </DashButton>
-                <DashButton
-                  href={
-                    nextCase
-                      ? `/dashboard/import-cases/${nextCase.id}`
-                      : undefined
-                  }
-                  variant="secondary"
-                  disabled={!nextCase}
-                  className="px-3"
-                >
-                  Next →
-                </DashButton>
                 <DashButton href="/dashboard/import-cases" variant="secondary">
                   All cases
                 </DashButton>

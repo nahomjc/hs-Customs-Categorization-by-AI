@@ -270,8 +270,8 @@ export function CaseHistoryPanel({
       ) : (
         <>
           <div className="border-b border-slate-100 px-3 py-4 sm:px-5">
-            <nav aria-label="Case history stages" className="overflow-x-auto pb-1">
-              <ol className="flex min-w-max list-none items-stretch">
+            <nav aria-label="Case history stages" className="w-full overflow-x-auto pb-1">
+              <ol className="flex w-full min-w-[44rem] list-none items-stretch sm:min-w-0">
                 {pipeline.map((step, index) => {
                   const meta = STEP_META[step.id];
                   const isActive = step.id === activeId;
@@ -289,7 +289,7 @@ export function CaseHistoryPanel({
                   return (
                     <li
                       key={step.id}
-                      className="relative"
+                      className="relative min-w-0 flex-1"
                       style={{ zIndex: isActive ? 20 : pipeline.length - index }}
                     >
                       <button
@@ -297,24 +297,24 @@ export function CaseHistoryPanel({
                         onClick={() => setSelected(step.id)}
                         aria-current={isActive ? "step" : undefined}
                         className={[
-                          "flex h-full min-w-[7rem] flex-col items-center justify-center gap-0.5 px-5 py-3.5 text-center transition-colors sm:min-w-[8.5rem] sm:px-6",
+                          "flex h-full w-full flex-col items-center justify-center gap-0.5 px-3 py-3.5 text-center transition-colors sm:px-4",
                           isActive
                             ? "bg-[#007bff] text-white"
                             : hasActivity
                               ? "bg-slate-200 text-slate-800 hover:bg-slate-300"
                               : "bg-slate-100 text-slate-400 hover:bg-slate-200",
                           isFirst && isLast ? "rounded-xl" : "",
-                          isFirst && !isLast ? "rounded-l-xl pl-5" : "",
-                          isLast && !isFirst ? "rounded-r-xl pr-5" : "",
-                          !isLast ? "-mr-3 pr-7" : "",
-                          !isFirst ? "pl-7" : "",
+                          isFirst && !isLast ? "rounded-l-xl" : "",
+                          isLast && !isFirst ? "rounded-r-xl" : "",
+                          !isLast ? "-mr-3 pr-5" : "",
+                          !isFirst ? "pl-5" : "",
                         ].join(" ")}
                         style={clip ? { clipPath: clip } : undefined}
                       >
                         <span className="text-[10px] font-bold uppercase tracking-wider opacity-80">
                           {String(index + 1).padStart(2, "0")}
                         </span>
-                        <span className="text-xs font-semibold sm:text-sm">
+                        <span className="w-full truncate px-0.5 text-xs font-semibold sm:text-sm">
                           <span className="sm:hidden">{meta.shortLabel}</span>
                           <span className="hidden sm:inline">{meta.label}</span>
                         </span>
