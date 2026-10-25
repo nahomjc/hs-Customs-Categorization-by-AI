@@ -1,3 +1,6 @@
+"use client";
+
+import { useMemo, useState } from "react";
 import {
   formatAuditAction,
   formatAuditDetails,
@@ -9,54 +12,67 @@ import { DashCard, DashCardHeader } from "@/components/dashboard/ui";
 
 const STEP_META: Record<
   AuditStepGroupId,
-  { label: string; description: string; order: number }
+  { label: string; shortLabel: string; description: string; order: number }
 > = {
   "case-info": {
     label: "Case info",
+    shortLabel: "Case",
     description: "Case created and shipment details updated",
     order: 1,
   },
   documents: {
     label: "Documents",
+    shortLabel: "Documents",
     description: "Uploads, replacements, deletions, and extraction",
     order: 2,
   },
   "invoice-lines": {
     label: "Invoice lines",
+    shortLabel: "Invoice",
     description: "Line review, corrections, and bulk decisions",
     order: 3,
   },
   "packing-lines": {
-    label: "Packing list lines",
+    label: "Packing list",
+    shortLabel: "Packing",
     description: "Line review, corrections, and bulk decisions",
     order: 4,
   },
   checks: {
     label: "Checks",
+    shortLabel: "Checks",
     description: "Validation warnings resolved or overridden",
     order: 5,
   },
   products: {
-    label: "Harmonized products",
+    label: "Products",
+    shortLabel: "Products",
     description: "Matching, verification, and product edits",
     order: 6,
   },
   classification: {
-    label: "HS classification",
+    label: "Classification",
+    shortLabel: "Classify",
     description: "Suggestions, AI requests, and approvals",
     order: 7,
   },
   "grouping-export": {
-    label: "Grouping & export",
+    label: "Export",
+    shortLabel: "Export",
     description: "Declaration groups and export reports",
     order: 8,
   },
   other: {
-    label: "Other activity",
+    label: "Other",
+    shortLabel: "Other",
     description: "Additional case events",
     order: 9,
   },
 };
+
+const PIPELINE_STEPS = (
+  Object.keys(STEP_META) as AuditStepGroupId[]
+).filter((id) => id !== "other");
 
 function formatWhen(d: Date) {
   return new Intl.DateTimeFormat(undefined, {
@@ -146,11 +162,16 @@ function toneForAction(action: string): {
     };
   }
   return {
-    dot: "bg-[#2563eb]",
+    dot: "bg-[#007bff]",
     badge: "bg-blue-50 text-blue-700 ring-blue-100",
     iconBg: "bg-blue-50 text-blue-700",
   };
 }
+
+type StepBucket = {
+  id: AuditStepGroupId;
+  entries: AuditLogView[];
+};
 
 type CaseHistoryPanelProps = {
   entries: AuditLogView[];
@@ -161,10 +182,44 @@ export function CaseHistoryPanel({
   entries,
   caseNumber,
 }: CaseHistoryPanelProps) {
-  const grouped = groupByStep(entries);
+  const grouped = useMemo(() => groupByStep(entries), [entries]);
+  const byId = useMemo(() => {
+    const map = new Map<AuditStepGroupId, AuditLogView[]>();
+    for (const g of grouped) map.set(g.id, g.entries);
+    return map;
+  }, [grouped]);
+
+  const pipeline = useMemo(() => {
+    const steps = PIPELINE_STEPS.map((id) => ({
+      id,
+      entries: byId.get(id) ?? [],
+    }));
+    const other = byId.get("other") ?? [];
+    if (other.length > 0) {
+      steps.push({ id: "other" as AuditStepGroupId, entries: other });
+    }
+    return steps;
+  }, [byId]);
+
+  const defaultStep = useMemo(() => {
+    // Prefer the furthest step that has activity (most progressed).
+    for (let i = pipeline.length - 1; i >= 0; i--) {
+      if ((pipeline[i]?.entries.length ?? 0) > 0) return pipeline[i]!.id;
+    }
+    return pipeline[0]?.id ?? "case-info";
+  }, [pipeline]);
+
+  const [selected, setSelected] = useState<AuditStepGroupId>(defaultStep);
+  const activeId = pipeline.some((s) => s.id === selected)
+    ? selected
+    : defaultStep;
+  const activeEntries = byId.get(activeId) ?? [];
+  const activeMeta = STEP_META[activeId];
+
   const uniqueActors = new Set(
     entries.map((e) => e.userId ?? e.userEmail ?? "system"),
   ).size;
+  const stepsTouched = pipeline.filter((s) => s.entries.length > 0).length;
 
   return (
     <DashCard className="overflow-hidden">
@@ -177,9 +232,9 @@ export function CaseHistoryPanel({
         }
       />
 
-      <div className="border-b border-slate-100 bg-linear-to-r from-slate-50/80 to-white px-5 py-4 sm:px-6">
-        <p className="text-sm text-slate-600 leading-relaxed max-w-3xl">
-          Chronological record of what happened on
+      <div className="border-b border-slate-100 bg-slate-50/60 px-5 py-4 sm:px-6">
+        <p className="text-sm leading-relaxed text-slate-600 max-w-3xl">
+          Workflow progress for
           {caseNumber ? (
             <>
               {" "}
@@ -188,21 +243,15 @@ export function CaseHistoryPanel({
           ) : (
             " this case"
           )}
-          — who approved, overrode, uploaded, or classified, with timestamps and
-          notes.
+          . Select a stage to review who did what.
         </p>
         <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
           <SummaryStat label="Events" value={String(entries.length)} />
           <SummaryStat label="People" value={String(uniqueActors)} />
-          <SummaryStat
-            label="Steps touched"
-            value={String(grouped.filter((g) => g.entries.length > 0).length)}
-          />
+          <SummaryStat label="Stages touched" value={String(stepsTouched)} />
           <SummaryStat
             label="Latest"
-            value={
-              entries[0] ? formatRelative(entries[0].createdAt) : "—"
-            }
+            value={entries[0] ? formatRelative(entries[0].createdAt) : "—"}
           />
         </div>
       </div>
@@ -212,140 +261,199 @@ export function CaseHistoryPanel({
           <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-100 text-slate-400">
             <HistoryIcon />
           </div>
-          <p className="text-sm font-semibold text-slate-800">
-            No history yet
-          </p>
+          <p className="text-sm font-semibold text-slate-800">No history yet</p>
           <p className="mt-1 text-sm text-slate-500">
             Activity from each workflow step will appear here as the case
             progresses.
           </p>
         </div>
       ) : (
-        <div className="divide-y divide-slate-100">
-          {grouped.map((group) => {
-            if (group.entries.length === 0) return null;
-            const meta = STEP_META[group.id];
-            return (
-              <section key={group.id} className="px-5 py-6 sm:px-6">
-                <div className="mb-5 flex items-start justify-between gap-3">
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <span className="flex h-6 w-6 items-center justify-center rounded-lg bg-slate-900 text-[11px] font-bold text-white">
-                        {meta.order}
-                      </span>
-                      <h3 className="text-sm font-semibold text-slate-900">
-                        {meta.label}
-                      </h3>
-                    </div>
-                    <p className="mt-1 text-xs text-slate-500 pl-8">
-                      {meta.description}
-                    </p>
-                  </div>
-                  <span className="shrink-0 rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-500 tabular-nums">
-                    {group.entries.length}
-                  </span>
-                </div>
+        <>
+          <div className="border-b border-slate-100 px-3 py-4 sm:px-5">
+            <nav aria-label="Case history stages" className="overflow-x-auto pb-1">
+              <ol className="flex min-w-max list-none items-stretch">
+                {pipeline.map((step, index) => {
+                  const meta = STEP_META[step.id];
+                  const isActive = step.id === activeId;
+                  const hasActivity = step.entries.length > 0;
+                  const isFirst = index === 0;
+                  const isLast = index === pipeline.length - 1;
+                  const clip = isFirst
+                    ? isLast
+                      ? undefined
+                      : "polygon(0 0, calc(100% - 12px) 0, 100% 50%, calc(100% - 12px) 100%, 0 100%)"
+                    : isLast
+                      ? "polygon(0 0, 100% 0, 100% 100%, 0 100%, 12px 50%)"
+                      : "polygon(0 0, calc(100% - 12px) 0, 100% 50%, calc(100% - 12px) 100%, 0 100%, 12px 50%)";
 
-                <ol className="relative ml-3 border-l border-slate-200 pl-6 sm:ml-4">
-                  {group.entries.map((entry, index) => {
-                    const tone = toneForAction(entry.action);
-                    const details = formatAuditDetails(
-                      entry.action,
-                      entry.newData,
-                    );
-                    const verb = decisionVerb(entry.action);
-                    const note =
-                      entry.reason?.trim() ||
-                      (typeof entry.newData?.note === "string"
-                        ? entry.newData.note.trim()
-                        : "") ||
-                      (typeof entry.newData?.reviewerReason === "string"
-                        ? entry.newData.reviewerReason.trim()
-                        : "") ||
-                      null;
+                  return (
+                    <li
+                      key={step.id}
+                      className="relative"
+                      style={{ zIndex: isActive ? 20 : pipeline.length - index }}
+                    >
+                      <button
+                        type="button"
+                        onClick={() => setSelected(step.id)}
+                        aria-current={isActive ? "step" : undefined}
+                        className={[
+                          "flex h-full min-w-[7rem] flex-col items-center justify-center gap-0.5 px-5 py-3.5 text-center transition-colors sm:min-w-[8.5rem] sm:px-6",
+                          isActive
+                            ? "bg-[#007bff] text-white"
+                            : hasActivity
+                              ? "bg-slate-200 text-slate-800 hover:bg-slate-300"
+                              : "bg-slate-100 text-slate-400 hover:bg-slate-200",
+                          isFirst && isLast ? "rounded-xl" : "",
+                          isFirst && !isLast ? "rounded-l-xl pl-5" : "",
+                          isLast && !isFirst ? "rounded-r-xl pr-5" : "",
+                          !isLast ? "-mr-3 pr-7" : "",
+                          !isFirst ? "pl-7" : "",
+                        ].join(" ")}
+                        style={clip ? { clipPath: clip } : undefined}
+                      >
+                        <span className="text-[10px] font-bold uppercase tracking-wider opacity-80">
+                          {String(index + 1).padStart(2, "0")}
+                        </span>
+                        <span className="text-xs font-semibold sm:text-sm">
+                          <span className="sm:hidden">{meta.shortLabel}</span>
+                          <span className="hidden sm:inline">{meta.label}</span>
+                        </span>
+                        {hasActivity ? (
+                          <span
+                            className={[
+                              "mt-0.5 rounded-full px-1.5 py-px text-[10px] font-semibold tabular-nums",
+                              isActive
+                                ? "bg-white/20 text-white"
+                                : "bg-white text-slate-600",
+                            ].join(" ")}
+                          >
+                            {step.entries.length}
+                          </span>
+                        ) : null}
+                      </button>
+                    </li>
+                  );
+                })}
+              </ol>
+            </nav>
+          </div>
 
-                    return (
-                      <li key={entry.id} className="relative pb-5 last:pb-0">
-                        <span
-                          className={`absolute -left-6 top-2 h-2.5 w-2.5 -translate-x-1/2 rounded-full ring-4 ring-white ${tone.dot}`}
-                          aria-hidden
-                        />
-                        <article className="rounded-xl border border-slate-200/80 bg-white p-4 transition hover:border-slate-300">
-                          <div className="flex flex-wrap items-center gap-2">
-                            <span
-                              className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold ring-1 ring-inset ${tone.badge}`}
-                            >
-                              {formatAuditAction(entry.action)}
+          <section className="px-5 py-6 sm:px-6">
+            <div className="mb-5 flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <h3 className="text-sm font-semibold text-slate-900">
+                  {activeMeta.label}
+                </h3>
+                <p className="mt-1 text-xs text-slate-500">
+                  {activeMeta.description}
+                </p>
+              </div>
+              <span className="shrink-0 rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-medium text-slate-500 tabular-nums">
+                {activeEntries.length} event
+                {activeEntries.length === 1 ? "" : "s"}
+              </span>
+            </div>
+
+            {activeEntries.length === 0 ? (
+              <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50/50 px-4 py-10 text-center">
+                <p className="text-sm font-medium text-slate-700">
+                  No activity in this stage yet
+                </p>
+                <p className="mt-1 text-xs text-slate-500">
+                  Events will show here when work happens on{" "}
+                  {activeMeta.label.toLowerCase()}.
+                </p>
+              </div>
+            ) : (
+              <ol className="space-y-3">
+                {activeEntries.map((entry, index) => {
+                  const tone = toneForAction(entry.action);
+                  const details = formatAuditDetails(
+                    entry.action,
+                    entry.newData,
+                  );
+                  const verb = decisionVerb(entry.action);
+                  const note =
+                    entry.reason?.trim() ||
+                    (typeof entry.newData?.note === "string"
+                      ? entry.newData.note.trim()
+                      : "") ||
+                    (typeof entry.newData?.reviewerReason === "string"
+                      ? entry.newData.reviewerReason.trim()
+                      : "") ||
+                    null;
+
+                  return (
+                    <li key={entry.id}>
+                      <article className="rounded-xl border border-slate-200/80 bg-white p-4 transition hover:border-slate-300">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span
+                            className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold ring-1 ring-inset ${tone.badge}`}
+                          >
+                            {formatAuditAction(entry.action)}
+                          </span>
+                          {index === 0 ? (
+                            <span className="text-[11px] font-medium text-slate-400">
+                              Most recent
                             </span>
-                            {index === 0 ? (
-                              <span className="text-[11px] font-medium text-slate-400">
-                                Most recent
-                              </span>
+                          ) : null}
+                        </div>
+
+                        <div className="mt-3 flex items-start gap-3">
+                          <span
+                            className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xs font-bold ${tone.iconBg}`}
+                            title={actorName(entry)}
+                          >
+                            {actorInitials(entry)}
+                          </span>
+                          <div className="min-w-0 flex-1">
+                            <p className="text-[11px] font-medium uppercase tracking-wide text-slate-400">
+                              {verb ?? "Performed by"}
+                            </p>
+                            <p className="truncate text-sm font-semibold text-slate-900">
+                              {actorName(entry)}
+                            </p>
+                            <p className="mt-0.5 text-xs text-slate-500">
+                              <time
+                                dateTime={new Date(
+                                  entry.createdAt,
+                                ).toISOString()}
+                              >
+                                {formatWhen(entry.createdAt)}
+                              </time>
+                              <span className="mx-1.5 text-slate-300">·</span>
+                              <span>{formatRelative(entry.createdAt)}</span>
+                            </p>
+                          </div>
+                        </div>
+
+                        {(details || note) && (
+                          <div className="mt-3 space-y-2 border-t border-slate-100 pt-3">
+                            {details ? (
+                              <p className="text-sm leading-relaxed text-slate-600">
+                                {details}
+                              </p>
+                            ) : null}
+                            {note ? (
+                              <blockquote className="rounded-lg border border-amber-100 bg-amber-50/70 px-3 py-2.5 text-sm text-amber-950">
+                                <p className="mb-1 text-[10px] font-bold uppercase tracking-wider text-amber-700/80">
+                                  Note
+                                </p>
+                                <p className="whitespace-pre-wrap leading-relaxed">
+                                  {note}
+                                </p>
+                              </blockquote>
                             ) : null}
                           </div>
-
-                          <div className="mt-3 flex items-start gap-3">
-                            <span
-                              className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xs font-bold ${tone.iconBg}`}
-                              title={actorName(entry)}
-                            >
-                              {actorInitials(entry)}
-                            </span>
-                            <div className="min-w-0 flex-1">
-                              {verb ? (
-                                <p className="text-[11px] font-medium uppercase tracking-wide text-slate-400">
-                                  {verb}
-                                </p>
-                              ) : (
-                                <p className="text-[11px] font-medium uppercase tracking-wide text-slate-400">
-                                  Performed by
-                                </p>
-                              )}
-                              <p className="text-sm font-semibold text-slate-900 truncate">
-                                {actorName(entry)}
-                              </p>
-                              <p className="mt-0.5 text-xs text-slate-500">
-                                <time
-                                  dateTime={new Date(
-                                    entry.createdAt,
-                                  ).toISOString()}
-                                >
-                                  {formatWhen(entry.createdAt)}
-                                </time>
-                                <span className="mx-1.5 text-slate-300">·</span>
-                                <span>{formatRelative(entry.createdAt)}</span>
-                              </p>
-                            </div>
-                          </div>
-
-                          {(details || note) && (
-                            <div className="mt-3 space-y-2 border-t border-slate-100 pt-3">
-                              {details ? (
-                                <p className="text-sm text-slate-600 leading-relaxed">
-                                  {details}
-                                </p>
-                              ) : null}
-                              {note ? (
-                                <blockquote className="rounded-lg border border-amber-100 bg-amber-50/70 px-3 py-2.5 text-sm text-amber-950">
-                                  <p className="mb-1 text-[10px] font-bold uppercase tracking-wider text-amber-700/80">
-                                    Note
-                                  </p>
-                                  <p className="whitespace-pre-wrap leading-relaxed">
-                                    {note}
-                                  </p>
-                                </blockquote>
-                              ) : null}
-                            </div>
-                          )}
-                        </article>
-                      </li>
-                    );
-                  })}
-                </ol>
-              </section>
-            );
-          })}
-        </div>
+                        )}
+                      </article>
+                    </li>
+                  );
+                })}
+              </ol>
+            )}
+          </section>
+        </>
       )}
     </DashCard>
   );
@@ -357,14 +465,14 @@ function SummaryStat({ label, value }: { label: string; value: string }) {
       <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
         {label}
       </p>
-      <p className="mt-0.5 text-sm font-semibold text-slate-900 tabular-nums truncate">
+      <p className="mt-0.5 truncate text-sm font-semibold tabular-nums text-slate-900">
         {value}
       </p>
     </div>
   );
 }
 
-function groupByStep(entries: AuditLogView[]) {
+function groupByStep(entries: AuditLogView[]): StepBucket[] {
   const buckets = new Map<AuditStepGroupId, AuditLogView[]>();
   for (const id of Object.keys(STEP_META) as AuditStepGroupId[]) {
     buckets.set(id, []);

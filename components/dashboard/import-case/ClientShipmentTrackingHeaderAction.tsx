@@ -18,7 +18,9 @@ import {
 } from "@/components/ui/dialog";
 import type { TrackingNotificationDelivery } from "@/lib/notifications/notify-tracking";
 import {
-  TRACKING_SMS_MAX_CHARS,
+  TRACKING_SMS_MAX_GSM,
+  TRACKING_SMS_MAX_UNICODE,
+  smsNeedsUnicode,
   trackingSmsText,
 } from "@/lib/tracking/client-message";
 import {
@@ -121,6 +123,14 @@ export function ClientShipmentTrackingHeaderAction({
     TRACKING_STATUS_LABELS[
       (trackingStatusProp as TrackingStatus) || "received"
     ];
+
+  const smsPreview = trackingSmsText(
+    caseNumber?.trim() || "CASE",
+    trackingStatus,
+    trackingNote,
+  );
+  const smsIsUnicode = smsNeedsUnicode(smsPreview) || smsNeedsUnicode(trackingNote);
+  const smsMax = smsIsUnicode ? TRACKING_SMS_MAX_UNICODE : TRACKING_SMS_MAX_GSM;
 
   function selectTrackingStatus(next: TrackingStatus) {
     setTrackingStatus(next);
@@ -234,18 +244,17 @@ export function ClientShipmentTrackingHeaderAction({
               />
               <p className="mt-1 flex justify-between gap-2 text-xs text-slate-500">
                 <span>
-                  Prefilled when you change status; edit before notifying the
-                  client. SMS is capped at {TRACKING_SMS_MAX_CHARS} characters.
+                  Prefilled when you change status; edit before notifying.
+                  {smsIsUnicode
+                    ? ` Amharic/Unicode SMS max is ${TRACKING_SMS_MAX_UNICODE} characters (provider limit).`
+                    : ` English SMS max is ${TRACKING_SMS_MAX_GSM} characters.`}
                 </span>
-                <span className="shrink-0 tabular-nums">
-                  {
-                    trackingSmsText(
-                      caseNumber?.trim() || "CASE",
-                      trackingStatus,
-                      trackingNote,
-                    ).length
-                  }
-                  /{TRACKING_SMS_MAX_CHARS}
+                <span
+                  className={`shrink-0 tabular-nums ${
+                    smsPreview.length >= smsMax ? "font-semibold text-amber-700" : ""
+                  }`}
+                >
+                  {smsPreview.length}/{smsMax}
                 </span>
               </p>
             </label>
