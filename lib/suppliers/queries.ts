@@ -1,4 +1,15 @@
-import { and, asc, count, eq, ilike, sql } from "drizzle-orm";
+import {
+  and,
+  asc,
+  count,
+  desc,
+  eq,
+  ilike,
+  isNotNull,
+  ne,
+  sql,
+  type SQL,
+} from "drizzle-orm";
 import { db } from "@/db";
 import { suppliers, type SupplierRow } from "@/db/schema";
 
@@ -9,6 +20,17 @@ export type SupplierListItem = {
   createdAt: Date;
   updatedAt: Date;
 };
+
+export const SUPPLIER_SORT_FIELDS = [
+  "name",
+  "countryCode",
+  "createdAt",
+  "updatedAt",
+] as const;
+
+export type SupplierSortField = (typeof SUPPLIER_SORT_FIELDS)[number];
+export type SupplierSortDir = "asc" | "desc";
+export type SupplierCountryFilter = "" | "with" | "without";
 
 export async function searchSuppliers(params: {
   tenantId: string;
@@ -35,19 +57,48 @@ export async function searchSuppliers(params: {
     .limit(limit);
 }
 
+function supplierOrderBy(
+  sortBy: SupplierSortField,
+  sortDir: SupplierSortDir,
+): SQL {
+  const col =
+    sortBy === "countryCode"
+      ? suppliers.countryCode
+      : sortBy === "createdAt"
+        ? suppliers.createdAt
+        : sortBy === "updatedAt"
+          ? suppliers.updatedAt
+          : suppliers.name;
+  return sortDir === "desc" ? desc(col) : asc(col);
+}
+
 export async function listSuppliers(params: {
   tenantId: string;
   search?: string;
+  country?: SupplierCountryFilter;
+  sortBy?: SupplierSortField;
+  sortDir?: SupplierSortDir;
   limit?: number;
   offset?: number;
 }): Promise<{ items: SupplierListItem[]; total: number }> {
   const limit = Math.min(Math.max(params.limit ?? 50, 1), 100);
   const offset = Math.max(params.offset ?? 0, 0);
+  const sortBy = params.sortBy ?? "name";
+  const sortDir = params.sortDir ?? "asc";
   const conditions = [eq(suppliers.tenantId, params.tenantId)];
   if (params.search?.trim()) {
     conditions.push(ilike(suppliers.name, `%${params.search.trim()}%`));
   }
+  if (params.country === "with") {
+    conditions.push(isNotNull(suppliers.countryCode));
+    conditions.push(ne(suppliers.countryCode, ""));
+  } else if (params.country === "without") {
+    conditions.push(
+      sql`(${suppliers.countryCode} is null or ${suppliers.countryCode} = '')`,
+    );
+  }
   const where = and(...conditions);
+  const order = supplierOrderBy(sortBy, sortDir);
 
   const [items, totalRow] = await Promise.all([
     db
@@ -60,7 +111,7 @@ export async function listSuppliers(params: {
       })
       .from(suppliers)
       .where(where)
-      .orderBy(asc(suppliers.name))
+      .orderBy(order, asc(suppliers.name))
       .limit(limit)
       .offset(offset),
     db.select({ count: count() }).from(suppliers).where(where),

@@ -11,6 +11,7 @@ import { getTenantId } from "@/lib/import-cases/queries";
 import {
   findOrCreateSupplier,
   listSuppliers,
+  SUPPLIER_SORT_FIELDS,
 } from "@/lib/suppliers/queries";
 
 const createSupplierSchema = z.object({
@@ -20,6 +21,9 @@ const createSupplierSchema = z.object({
 
 const listQuerySchema = z.object({
   search: z.string().trim().optional(),
+  country: z.enum(["", "with", "without"]).optional().default(""),
+  sortBy: z.enum(SUPPLIER_SORT_FIELDS).default("name"),
+  sortDir: z.enum(["asc", "desc"]).default("asc"),
   limit: z.coerce.number().int().min(1).max(100).default(50),
   offset: z.coerce.number().int().min(0).default(0),
 });
@@ -37,6 +41,9 @@ export async function GET(request: NextRequest) {
   const result = await listSuppliers({
     tenantId: getTenantId(),
     search: parsed.data.search,
+    country: parsed.data.country,
+    sortBy: parsed.data.sortBy,
+    sortDir: parsed.data.sortDir,
     limit: parsed.data.limit,
     offset: parsed.data.offset,
   });

@@ -4,7 +4,6 @@ import {
   KpiTile,
 } from "@/components/dashboard/bento/BentoCard";
 import { BENTO_COLORS, RingChart } from "@/components/dashboard/bento/charts";
-import { BentoIcon } from "@/components/dashboard/bento/icons";
 import { ClientShipmentTrackingHeaderAction } from "@/components/dashboard/import-case/ClientShipmentTrackingHeaderAction";
 import type { ImportCaseHeroStats } from "@/components/dashboard/import-case/ImportCaseHero";
 import { Breadcrumbs, DashButton, StatusBadge } from "@/components/dashboard/ui";
@@ -271,15 +270,6 @@ export function ImportCaseBentoHeader({
                 trackingNote={importCase.trackingNote}
                 clientLabel={clientLabel}
               />
-              <div className="flex flex-wrap gap-2 sm:justify-end">
-                <DashButton href="/dashboard/import-cases" variant="secondary">
-                  All cases
-                </DashButton>
-                <DashButton href="/dashboard/import-cases/new" variant="primary">
-                  <BentoIcon name="plus" className="h-4 w-4" strokeWidth={2} />
-                  New case
-                </DashButton>
-              </div>
             </div>
           </div>
         </div>
