@@ -161,22 +161,15 @@ function stepButtonClass(
       : "items-start gap-3 px-3 py-2.5 text-left";
 
   if (locked) {
-    return `group relative z-10 flex w-full ${layoutClass} cursor-not-allowed rounded-2xl ${focusRing}`;
+    return `group relative z-10 flex w-full ${layoutClass} cursor-not-allowed ${focusRing}`;
   }
 
   const surface =
     status === "current"
-      ? "border border-blue-200/70 bg-gradient-to-b from-blue-50/95 to-white shadow-sm shadow-blue-100/40"
-      : "border border-transparent bg-transparent";
+      ? "bg-gradient-to-b from-blue-50/95 to-white"
+      : "bg-transparent";
 
-  const hover =
-    status === "current"
-      ? "cursor-pointer hover:border-blue-300/80 hover:from-blue-50 hover:to-blue-50/30 hover:shadow-md hover:shadow-blue-100/50 active:scale-[0.99]"
-      : status === "complete"
-        ? "cursor-pointer hover:border-emerald-200/90 hover:bg-emerald-50/35 hover:shadow-sm active:scale-[0.99]"
-        : "cursor-pointer hover:border-slate-200/90 hover:bg-slate-50/80 hover:shadow-sm hover:shadow-slate-200/40 active:scale-[0.99]";
-
-  return `group relative z-10 flex w-full ${layoutClass} rounded-2xl transition-all duration-200 ease-out ${surface} ${hover} ${focusRing}`;
+  return `group relative z-10 flex w-full ${layoutClass} cursor-pointer transition-colors duration-200 ease-out ${surface} ${focusRing}`;
 }
 
 /**
@@ -197,13 +190,6 @@ export function CaseWorkflowStepper({
 }) {
   const total = Math.max(steps.length, 1);
   const pct = Math.round((completedCount / total) * 100);
-
-  const titleFor = (step: StepperStep) =>
-    step.status === "locked"
-      ? `${step.label} - locked until previous steps are finished`
-      : step.badge
-        ? `${step.label} - ${step.badge}`
-        : step.description;
 
   return (
     <BentoCard label="Workflow steps">
@@ -251,7 +237,13 @@ export function CaseWorkflowStepper({
                   disabled={locked}
                   onClick={() => onSelect(step.id)}
                   aria-current={step.status === "current" ? "step" : undefined}
-                  title={titleFor(step)}
+                  aria-label={
+                    locked
+                      ? `${step.label}, locked until previous steps are finished`
+                      : step.badge
+                        ? `${step.label}, ${step.badge}`
+                        : step.label
+                  }
                   className={stepButtonClass(step.status, locked, "horizontal")}
                 >
                   <div className="relative flex h-9 w-full items-center justify-center">
@@ -315,7 +307,13 @@ export function CaseWorkflowStepper({
                   disabled={locked}
                   onClick={() => onSelect(step.id)}
                   aria-current={step.status === "current" ? "step" : undefined}
-                  title={titleFor(step)}
+                  aria-label={
+                    locked
+                      ? `${step.label}, locked until previous steps are finished`
+                      : step.badge
+                        ? `${step.label}, ${step.badge}`
+                        : step.label
+                  }
                   className={stepButtonClass(step.status, locked, "vertical")}
                 >
                   <StepDot
