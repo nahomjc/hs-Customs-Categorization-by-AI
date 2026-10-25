@@ -2,6 +2,7 @@
 
 import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { toast } from "sonner";
 import { DiscardWorkflowJobDialog } from "@/components/dashboard/import-case/DiscardWorkflowJobDialog";
 import { CaseHistoryPanel } from "@/components/dashboard/import-case/CaseHistoryPanel";
 import {
@@ -846,7 +847,8 @@ function StepHint({
   };
 
   const hint = hints[stepId];
-  if (!hint) return null;
+  const stepLabel =
+    WIZARD_STEPS.find((s) => s.id === stepId)?.label ?? "Step tip";
 
   const hasInvoice = documents.some(
     (d) => d.documentType === "commercial_invoice",
@@ -880,34 +882,20 @@ function StepHint({
                 ? groupings.length > 0
                 : false));
 
-  return (
-    <div
-      className={`flex gap-3 rounded-2xl border px-4 py-3.5 text-sm leading-relaxed ${
-        isWarning
-          ? "border-amber-200/80 bg-amber-50 text-amber-900"
-          : isSuccess
-            ? "border-emerald-200/80 bg-emerald-50 text-emerald-900"
-            : "border-indigo-100 bg-indigo-50/70 text-indigo-900"
-      }`}
-    >
-      <span className="shrink-0 mt-0.5">
-        {isWarning ? (
-          <span className="flex h-6 w-6 items-center justify-center rounded-full bg-amber-200/60 text-amber-800 text-xs font-bold">
-            !
-          </span>
-        ) : isSuccess ? (
-          <span className="flex h-6 w-6 items-center justify-center rounded-full bg-emerald-200/60 text-emerald-800">
-            <CheckIcon className="h-3.5 w-3.5" />
-          </span>
-        ) : (
-          <span className="flex h-6 w-6 items-center justify-center rounded-full bg-indigo-200/60 text-indigo-700 text-xs font-bold">
-            i
-          </span>
-        )}
-      </span>
-      <p>{hint}</p>
-    </div>
-  );
+  // Top-right toast guidance when entering / updating a step; auto-dismisses.
+  useEffect(() => {
+    if (!hint) return;
+    const opts = {
+      id: "wizard-step-guidance",
+      description: hint,
+      duration: isWarning ? 7000 : 5500,
+    } as const;
+    if (isWarning) toast.warning(stepLabel, opts);
+    else if (isSuccess) toast.success(stepLabel, opts);
+    else toast.info(stepLabel, opts);
+  }, [stepId, hint, isWarning, isSuccess, stepLabel]);
+
+  return null;
 }
 
 function LockedStepPanel({ stepId }: { stepId: WizardStepId }) {
@@ -925,26 +913,6 @@ function LockedStepPanel({ stepId }: { stepId: WizardStepId }) {
         </p>
       </div>
     </DashCard>
-  );
-}
-
-function CheckIcon({ className = "h-4 w-4" }: { className?: string }) {
-  return (
-    <svg
-      className={className}
-      fill="none"
-      stroke="currentColor"
-      viewBox="0 0 24 24"
-      aria-hidden
-    >
-      <title>Complete</title>
-      <path
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        strokeWidth={2.5}
-        d="M5 13l4 4L19 7"
-      />
-    </svg>
   );
 }
 
