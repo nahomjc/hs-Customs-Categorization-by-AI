@@ -189,14 +189,14 @@ export function CaseHistoryPanel({
     return map;
   }, [grouped]);
 
-  const pipeline = useMemo(() => {
-    const steps = PIPELINE_STEPS.map((id) => ({
+  const pipeline = useMemo((): StepBucket[] => {
+    const steps: StepBucket[] = PIPELINE_STEPS.map((id) => ({
       id,
       entries: byId.get(id) ?? [],
     }));
     const other = byId.get("other") ?? [];
     if (other.length > 0) {
-      steps.push({ id: "other" as AuditStepGroupId, entries: other });
+      steps.push({ id: "other", entries: other });
     }
     return steps;
   }, [byId]);
