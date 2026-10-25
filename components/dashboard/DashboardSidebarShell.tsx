@@ -4,7 +4,10 @@ import {
 } from "@/components/dashboard/DashboardSidebar";
 import { getSessionUserProfile } from "@/lib/auth/require-admin";
 import { canViewUserList } from "@/lib/auth/permissions";
-import { isClientRole } from "@/lib/auth/roles";
+import {
+  canAccessPersonalShipments,
+  isClientRole,
+} from "@/lib/auth/roles";
 
 export async function DashboardSidebarShell() {
   const session = await getSessionUserProfile();
@@ -13,6 +16,7 @@ export async function DashboardSidebarShell() {
   const isAssessor = role === "assessor";
   const isClient = isClientRole(role);
   const canViewUsers = canViewUserList(role);
+  const showNotifications = canAccessPersonalShipments(role);
 
   return (
     <>
@@ -21,6 +25,7 @@ export async function DashboardSidebarShell() {
         isAssessor={isAssessor}
         isClient={isClient}
         canViewUsers={canViewUsers}
+        showNotifications={showNotifications}
       />
       <div className="lg:hidden w-full shrink-0">
         <DashboardMobileNav
@@ -28,6 +33,7 @@ export async function DashboardSidebarShell() {
           isAssessor={isAssessor}
           isClient={isClient}
           canViewUsers={canViewUsers}
+          showNotifications={showNotifications}
         />
       </div>
     </>

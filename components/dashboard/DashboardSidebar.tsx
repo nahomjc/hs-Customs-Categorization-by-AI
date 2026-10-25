@@ -221,6 +221,13 @@ export const usersNavLink: NavLink = {
   icon: icons.users,
 };
 
+export const notificationsNavLink: NavLink = {
+  href: "/dashboard/notifications",
+  label: "Notifications",
+  exact: false,
+  icon: icons.notifications,
+};
+
 export const clientNavLinks: NavLink[] = [
   {
     href: "/dashboard",
@@ -234,12 +241,7 @@ export const clientNavLinks: NavLink[] = [
     exact: false,
     icon: icons.shipments,
   },
-  {
-    href: "/dashboard/notifications",
-    label: "Notifications",
-    exact: false,
-    icon: icons.notifications,
-  },
+  notificationsNavLink,
 ];
 
 export const adminNavLink: NavLink = {
@@ -295,6 +297,8 @@ export type DashboardNavOptions = {
   isAssessor?: boolean;
   isClient?: boolean;
   canViewUsers?: boolean;
+  /** Personal shipment inbox (client + admin recipients) — never under Management. */
+  showNotifications?: boolean;
 };
 
 export function getDashboardNavGroups(
@@ -315,11 +319,16 @@ export function getDashboardNavGroups(
     workflowLinks.push(mainNavLinks[3], mainNavLinks[4]);
   }
 
+  const overviewLinks: NavLink[] = [mainNavLinks[0]];
+  if (options.showNotifications) {
+    overviewLinks.push(notificationsNavLink);
+  }
+
   const groups: NavGroup[] = [
     {
       id: "overview",
       label: "Overview",
-      links: [mainNavLinks[0]],
+      links: overviewLinks,
     },
     {
       id: "workflow",
@@ -377,11 +386,13 @@ export function DashboardSidebar({
   isAssessor = false,
   isClient = false,
   canViewUsers = false,
+  showNotifications = false,
 }: {
   isAdmin?: boolean;
   isAssessor?: boolean;
   isClient?: boolean;
   canViewUsers?: boolean;
+  showNotifications?: boolean;
 }) {
   const pathname = usePathname();
   const groups = getDashboardNavGroups({
@@ -389,6 +400,7 @@ export function DashboardSidebar({
     isAssessor,
     isClient,
     canViewUsers,
+    showNotifications,
   });
 
   return (
@@ -483,11 +495,13 @@ export function DashboardMobileNav({
   isAssessor = false,
   isClient = false,
   canViewUsers = false,
+  showNotifications = false,
 }: {
   isAdmin?: boolean;
   isAssessor?: boolean;
   isClient?: boolean;
   canViewUsers?: boolean;
+  showNotifications?: boolean;
 }) {
   const pathname = usePathname();
   const links = getDashboardNavLinks({
@@ -495,6 +509,7 @@ export function DashboardMobileNav({
     isAssessor,
     isClient,
     canViewUsers,
+    showNotifications,
   });
 
   return (

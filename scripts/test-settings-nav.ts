@@ -103,19 +103,36 @@ test("sidebar: Suppliers is admin-only under Management", () => {
   );
 });
 
-test("sidebar: Notifications is on client Overview nav", () => {
+test("sidebar: Notifications is Overview-only (not Management)", () => {
   const hrefs = (o: Parameters<typeof getDashboardNavLinks>[0]) =>
     getDashboardNavLinks(o).map((l) => l.href);
   assert.ok(hrefs({ isClient: true }).includes("/dashboard/notifications"));
+  assert.ok(
+    hrefs({ isAdmin: true, showNotifications: true }).includes(
+      "/dashboard/notifications",
+    ),
+  );
   assert.ok(!hrefs({ isAdmin: true }).includes("/dashboard/notifications"));
-  const overview = getDashboardNavGroups({ isClient: true }).find(
+  const clientOverview = getDashboardNavGroups({ isClient: true }).find(
     (g) => g.id === "overview",
   );
   assert.ok(
-    overview?.links.some(
+    clientOverview?.links.some(
       (l) =>
         l.href === "/dashboard/notifications" && l.label === "Notifications",
     ),
+  );
+  const adminGroups = getDashboardNavGroups({
+    isAdmin: true,
+    showNotifications: true,
+  });
+  const adminOverview = adminGroups.find((g) => g.id === "overview");
+  const adminManagement = adminGroups.find((g) => g.id === "management");
+  assert.ok(
+    adminOverview?.links.some((l) => l.href === "/dashboard/notifications"),
+  );
+  assert.ok(
+    !adminManagement?.links.some((l) => l.href === "/dashboard/notifications"),
   );
 });
 
