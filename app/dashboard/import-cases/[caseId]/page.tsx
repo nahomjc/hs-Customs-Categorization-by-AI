@@ -19,6 +19,7 @@ import type { UnclassifiedProduct } from "@/lib/import-cases/unclassified";
 import { isHsReferenceAvailable } from "@/lib/import-cases/classify-product-description";
 import { getCaseProducts } from "@/lib/import-cases/product-queries";
 import {
+  getAdjacentImportCases,
   getCaseDocuments,
   getImportCaseById,
   getInvoiceLines,
@@ -70,12 +71,19 @@ export default async function ImportCaseDetailPage({ params }: PageProps) {
     fullName: string | null;
     email: string;
     phone: string | null;
+    avatarUrl: string | null;
   } | null = null;
+  let previousCase: { id: string; caseNumber: string } | null = null;
+  let nextCase: { id: string; caseNumber: string } | null = null;
 
   try {
     const caseRow = await getImportCaseById(caseId, tenantId);
     if (!caseRow) notFound();
     importCase = caseRow;
+
+    const adjacent = await getAdjacentImportCases(tenantId, caseId);
+    previousCase = adjacent.previous;
+    nextCase = adjacent.next;
 
     // Refresh open auto-checks from current lines before reading them.
     await runImportCaseChecks(caseId);
@@ -113,6 +121,7 @@ export default async function ImportCaseDetailPage({ params }: PageProps) {
           fullName: users.fullName,
           email: users.email,
           phone: users.phone,
+          avatarUrl: users.avatarUrl,
         })
         .from(users)
         .where(eq(users.id, caseRow.clientUserId))
@@ -193,6 +202,10 @@ export default async function ImportCaseDetailPage({ params }: PageProps) {
             ? client.fullName ?? client.email
             : null
         }
+        clientAvatarUrl={client?.avatarUrl ?? null}
+        clientEmail={client?.email ?? null}
+        previousCase={previousCase}
+        nextCase={nextCase}
       />
 
       <Suspense

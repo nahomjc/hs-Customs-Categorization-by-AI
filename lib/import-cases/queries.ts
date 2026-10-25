@@ -14,8 +14,10 @@ import {
   count,
   desc,
   eq,
+  gt,
   ilike,
   inArray,
+  lt,
   or,
   sql,
 } from "drizzle-orm";
@@ -43,6 +45,70 @@ export async function getImportCaseById(caseId: string, tenantId: string) {
     .where(and(eq(importCases.id, caseId), eq(importCases.tenantId, tenantId)))
     .limit(1);
   return row ?? null;
+}
+
+export type AdjacentImportCase = {
+  id: string;
+  caseNumber: string;
+};
+
+/**
+ * Neighbors in the default list order (updatedAt desc, then id desc).
+ * `previous` = newer case; `next` = older case.
+ */
+export async function getAdjacentImportCases(
+  tenantId: string,
+  caseId: string,
+): Promise<{ previous: AdjacentImportCase | null; next: AdjacentImportCase | null }> {
+  const current = await getImportCaseById(caseId, tenantId);
+  if (!current) return { previous: null, next: null };
+
+  const tenant = eq(importCases.tenantId, tenantId);
+  const selectCols = {
+    id: importCases.id,
+    caseNumber: importCases.caseNumber,
+  };
+
+  const [previous] = await db
+    .select(selectCols)
+    .from(importCases)
+    .where(
+      and(
+        tenant,
+        or(
+          gt(importCases.updatedAt, current.updatedAt),
+          and(
+            eq(importCases.updatedAt, current.updatedAt),
+            gt(importCases.id, current.id),
+          ),
+        ),
+      ),
+    )
+    .orderBy(asc(importCases.updatedAt), asc(importCases.id))
+    .limit(1);
+
+  const [next] = await db
+    .select(selectCols)
+    .from(importCases)
+    .where(
+      and(
+        tenant,
+        or(
+          lt(importCases.updatedAt, current.updatedAt),
+          and(
+            eq(importCases.updatedAt, current.updatedAt),
+            lt(importCases.id, current.id),
+          ),
+        ),
+      ),
+    )
+    .orderBy(desc(importCases.updatedAt), desc(importCases.id))
+    .limit(1);
+
+  return {
+    previous: previous ?? null,
+    next: next ?? null,
+  };
 }
 
 function importCaseOrderBy(

@@ -22,6 +22,11 @@ export type CaseInvoiceValue = {
   source: "case" | "lines";
 };
 
+type AdjacentCaseLink = {
+  id: string;
+  caseNumber: string;
+};
+
 type ImportCaseBentoHeaderProps = {
   importCase: ImportCaseRow;
   stats: ImportCaseHeroStats;
@@ -32,7 +37,28 @@ type ImportCaseBentoHeaderProps = {
   packingLineCount: number;
   invoiceValue: CaseInvoiceValue | null;
   clientLabel?: string | null;
+  clientAvatarUrl?: string | null;
+  clientEmail?: string | null;
+  previousCase?: AdjacentCaseLink | null;
+  nextCase?: AdjacentCaseLink | null;
 };
+
+function clientInitials(
+  name: string | null | undefined,
+  email: string | null | undefined,
+): string {
+  if (name?.trim()) {
+    const parts = name.trim().split(/\s+/).filter(Boolean);
+    if (parts.length >= 2) {
+      const a = parts[0]?.charAt(0) ?? "";
+      const b = parts[1]?.charAt(0) ?? "";
+      return `${a}${b}`.toUpperCase();
+    }
+    return name.trim().slice(0, 2).toUpperCase();
+  }
+  if (email?.trim()) return email.trim().slice(0, 2).toUpperCase();
+  return "CL";
+}
 
 function formatDate(value: Date | string | null | undefined): string | null {
   if (!value) return null;
@@ -65,10 +91,15 @@ export function ImportCaseBentoHeader({
   packingLineCount,
   invoiceValue,
   clientLabel = null,
+  clientAvatarUrl = null,
+  clientEmail = null,
+  previousCase = null,
+  nextCase = null,
 }: ImportCaseBentoHeaderProps) {
   const status = (importCase.status as ImportCaseStatus) ?? "draft";
   const created = formatDate(importCase.createdAt);
   const pct = Math.max(0, Math.min(100, Math.round(progressPercent)));
+  const initials = clientInitials(clientLabel, clientEmail);
 
   const metaItems = [
     importCase.supplierName
@@ -99,42 +130,85 @@ export function ImportCaseBentoHeader({
         />
 
         <div className="mt-3 flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
-          <div className="min-w-0 space-y-2">
-            <p className="text-[11px] font-bold uppercase tracking-widest text-[#007bff]">
-              Import case
-            </p>
-            <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-              <h1 className="break-all text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">
-                {importCase.caseNumber}
-              </h1>
-              <StatusBadge label={IMPORT_CASE_STATUS_LABELS[status]} status={status} />
+          <div className="flex min-w-0 items-start gap-4">
+            <div className="shrink-0">
+              {clientAvatarUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element -- remote user avatar URLs
+                <img
+                  src={clientAvatarUrl}
+                  alt={clientLabel ? `${clientLabel} avatar` : "Client avatar"}
+                  className="h-16 w-16 rounded-2xl border border-slate-200/80 object-cover shadow-sm sm:h-[4.5rem] sm:w-[4.5rem]"
+                />
+              ) : (
+                <span
+                  className="flex h-16 w-16 items-center justify-center rounded-2xl border border-[#007bff]/15 bg-gradient-to-br from-[#007bff] to-[#0069d9] text-lg font-bold tracking-wide text-white shadow-sm sm:h-[4.5rem] sm:w-[4.5rem] sm:text-xl"
+                  aria-hidden={!clientLabel}
+                  title={clientLabel ?? "No client linked"}
+                >
+                  {initials}
+                </span>
+              )}
+              <p className="mt-1.5 max-w-[4.5rem] truncate text-center text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+                Client
+              </p>
             </div>
-            <p className="text-sm text-slate-500">
-              {importCase.importerName ?? "Import case"}
-              {created ? (
-                <>
-                  <span className="mx-2 text-slate-300" aria-hidden="true">
-                    &middot;
-                  </span>
-                  <span className="text-xs text-slate-400">Created {created}</span>
-                </>
-              ) : null}
-            </p>
-            {metaItems.length > 0 ? (
-              <ul className="flex list-none flex-wrap gap-1.5 pt-1">
-                {metaItems.map((item) => (
-                  <li
-                    key={item.label}
-                    className="inline-flex max-w-full items-center gap-1.5 rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[11px] text-slate-600"
-                  >
-                    <span className="font-semibold uppercase tracking-wide text-slate-400">
-                      {item.label}
+
+            <div className="min-w-0 flex-1 space-y-2">
+              <p className="text-[11px] font-bold uppercase tracking-widest text-[#007bff]">
+                Import case
+              </p>
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+                <h1 className="break-all text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">
+                  {importCase.caseNumber}
+                </h1>
+                <StatusBadge
+                  label={IMPORT_CASE_STATUS_LABELS[status]}
+                  status={status}
+                />
+              </div>
+              <p className="text-sm text-slate-500">
+                {clientLabel ? (
+                  <>
+                    <span className="font-medium text-slate-700">{clientLabel}</span>
+                    {importCase.importerName ? (
+                      <>
+                        <span className="mx-2 text-slate-300" aria-hidden="true">
+                          &middot;
+                        </span>
+                        <span>{importCase.importerName}</span>
+                      </>
+                    ) : null}
+                  </>
+                ) : (
+                  (importCase.importerName ?? "Import case")
+                )}
+                {created ? (
+                  <>
+                    <span className="mx-2 text-slate-300" aria-hidden="true">
+                      &middot;
                     </span>
-                    <span className="truncate text-slate-700">{item.value}</span>
-                  </li>
-                ))}
-              </ul>
-            ) : null}
+                    <span className="text-xs text-slate-400">
+                      Created {created}
+                    </span>
+                  </>
+                ) : null}
+              </p>
+              {metaItems.length > 0 ? (
+                <ul className="flex list-none flex-wrap gap-1.5 pt-1">
+                  {metaItems.map((item) => (
+                    <li
+                      key={item.label}
+                      className="inline-flex max-w-full items-center gap-1.5 rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[11px] text-slate-600"
+                    >
+                      <span className="font-semibold uppercase tracking-wide text-slate-400">
+                        {item.label}
+                      </span>
+                      <span className="truncate text-slate-700">{item.value}</span>
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
+            </div>
           </div>
 
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center lg:shrink-0">
@@ -170,13 +244,37 @@ export function ImportCaseBentoHeader({
                 clientLabel={clientLabel}
               />
               <div className="flex flex-wrap gap-2 sm:justify-end">
-              <DashButton href="/dashboard/import-cases" variant="secondary">
-                All cases
-              </DashButton>
-              <DashButton href="/dashboard/import-cases/new" variant="primary">
-                <BentoIcon name="plus" className="h-4 w-4" strokeWidth={2} />
-                New case
-              </DashButton>
+                <DashButton
+                  href={
+                    previousCase
+                      ? `/dashboard/import-cases/${previousCase.id}`
+                      : undefined
+                  }
+                  variant="secondary"
+                  disabled={!previousCase}
+                  className="px-3"
+                >
+                  ← Previous
+                </DashButton>
+                <DashButton
+                  href={
+                    nextCase
+                      ? `/dashboard/import-cases/${nextCase.id}`
+                      : undefined
+                  }
+                  variant="secondary"
+                  disabled={!nextCase}
+                  className="px-3"
+                >
+                  Next →
+                </DashButton>
+                <DashButton href="/dashboard/import-cases" variant="secondary">
+                  All cases
+                </DashButton>
+                <DashButton href="/dashboard/import-cases/new" variant="primary">
+                  <BentoIcon name="plus" className="h-4 w-4" strokeWidth={2} />
+                  New case
+                </DashButton>
               </div>
             </div>
           </div>

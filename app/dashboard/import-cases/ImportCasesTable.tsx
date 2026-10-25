@@ -139,7 +139,7 @@ export function ImportCasesTable({
   return (
     <DashCard>
       <DashTableToolbar>
-        <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
           <input
             type="search"
             placeholder="Search case number, importer, supplier..."
@@ -151,36 +151,40 @@ export function ImportCasesTable({
                 void applyFilters(search, status, sort);
               }
             }}
-            className={dashInputClass}
+            className={`${dashInputClass} sm:min-w-0 sm:flex-1 sm:w-auto`}
             aria-label="Search import cases"
           />
-          <DashSelect
-            value={status}
-            onChange={(v) => setStatus(v as ImportCaseStatus | "")}
-            aria-label="Filter by status"
-            options={[
-              { value: "", label: "All statuses" },
-              ...IMPORT_CASE_STATUSES.map((s) => ({
-                value: s,
-                label: IMPORT_CASE_STATUS_LABELS[s],
-              })),
-            ]}
-          />
-          <DashSelect
-            value={sort}
-            onChange={setSort}
-            aria-label="Sort import cases"
-            options={SORT_PRESETS.map((p) => ({
-              value: p.value,
-              label: p.label,
-            }))}
-          />
-          <DashButton
-            onClick={() => void applyFilters(search, status, sort)}
-            disabled={loading}
-          >
-            {loading ? "Loading..." : "Filter"}
-          </DashButton>
+          <div className="flex shrink-0 flex-wrap items-center gap-3">
+            <DashSelect
+              value={status}
+              onChange={(v) => setStatus(v as ImportCaseStatus | "")}
+              aria-label="Filter by status"
+              className="w-[11.5rem]"
+              options={[
+                { value: "", label: "All statuses" },
+                ...IMPORT_CASE_STATUSES.map((s) => ({
+                  value: s,
+                  label: IMPORT_CASE_STATUS_LABELS[s],
+                })),
+              ]}
+            />
+            <DashSelect
+              value={sort}
+              onChange={setSort}
+              aria-label="Sort import cases"
+              className="w-[13.5rem]"
+              options={SORT_PRESETS.map((p) => ({
+                value: p.value,
+                label: p.label,
+              }))}
+            />
+            <DashButton
+              onClick={() => void applyFilters(search, status, sort)}
+              disabled={loading}
+            >
+              {loading ? "Loading..." : "Filter"}
+            </DashButton>
+          </div>
         </div>
         <p className="text-xs text-gray-500">
           {loading
