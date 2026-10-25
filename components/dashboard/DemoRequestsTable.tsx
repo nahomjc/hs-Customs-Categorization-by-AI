@@ -129,17 +129,19 @@ export function DemoRequestsTable({
       />
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-        <div className="rounded-3xl border border-slate-200/70 bg-white px-5 py-4 shadow-sm">
+        <div className="rounded-3xl border border-slate-200/70 bg-white px-5 py-4">
           <p className="text-xs font-semibold uppercase tracking-wider text-gray-500">
             Total
           </p>
           <p className="mt-1 text-2xl font-semibold text-slate-900">{total}</p>
         </div>
-        <div className="rounded-3xl border border-slate-200/70 bg-white px-5 py-4 shadow-sm">
+        <div className="rounded-3xl border border-slate-200/70 bg-white px-5 py-4">
           <p className="text-xs font-semibold uppercase tracking-wider text-gray-500">
             New
           </p>
-          <p className="mt-1 text-2xl font-semibold text-[#007bff]">{newCount}</p>
+          <p className="mt-1 text-2xl font-semibold text-[#007bff]">
+            {newCount}
+          </p>
         </div>
       </div>
 
@@ -220,7 +222,8 @@ export function DemoRequestsTable({
                   <DashTd>{item.company}</DashTd>
                   <DashTd muted>
                     {item.monthlyVolume
-                      ? (VOLUME_LABELS[item.monthlyVolume] ?? item.monthlyVolume)
+                      ? (VOLUME_LABELS[item.monthlyVolume] ??
+                        item.monthlyVolume)
                       : "—"}
                   </DashTd>
                   <DashTd className="max-w-[14rem]">
