@@ -27,6 +27,7 @@ import {
   type FirstPass,
   type StepDeps,
 } from "../lib/import-cases/hs-web-step";
+import { gateStepResult } from "../lib/import-cases/plausibility-gate";
 import {
   CONTEXT_LIMITS,
   buildContextPromptBlock,
@@ -172,6 +173,11 @@ async function main() {
     assert.match(r.review.reason ?? "", /^No clear tariff match/);
     assert.match(r.review.reason ?? "", /options below/);
     assert.match(r.review.confidenceNote, /3 options/);
+    // After the plausibility gate: best book option is filled for expert review.
+    const gated = gateStepResult(r, { texts: ["Foo card"] });
+    assert.equal(gated.hsCode, "8523.5200");
+    assert.equal(gated.review.required, true);
+    assert.equal(gated.review.decisionRequired, true);
   });
   test("Bar Little Bird: web turned off -> the AI's own options are still offered", async () => {
     const { calls, search } = spy([answer()]);
@@ -195,6 +201,10 @@ async function main() {
     assert.equal(r.review.question, "Is this a fish snack or a pet food?");
     assert.deepEqual(r.review.alternatives.map((a) => a.hsCode), ["0305.4900", "1604.1900"]);
     assert.match(r.review.reason ?? "", /Pick one of the options/);
+    const gated = gateStepResult(r, { texts: ["Bar Little Bird"] });
+    assert.equal(gated.hsCode, "0305.4900");
+    assert.equal(gated.review.required, true);
+    assert.equal(gated.review.decisionRequired, true);
   });
   test("Baz Angel: web search fails -> fallback keeps the options and says so", async () => {
     const failing: StepDeps["search"] = async () => ({ ok: false, error: "timed out" });
@@ -213,6 +223,9 @@ async function main() {
     assert.equal(r.review.decisionRequired, true);
     assert.equal(r.review.alternatives.length, 2);
     assert.equal(r.hsCode, "9999");
+    const gated = gateStepResult(r, { texts: ["Baz Angel"] });
+    assert.equal(gated.hsCode, "2309.9000");
+    assert.equal(gated.review.required, true);
   });
   test("no options at all but a question -> still needs a decision, nothing invented", async () => {
     const r = await applyWebSearchStep(

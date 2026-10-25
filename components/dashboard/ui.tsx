@@ -296,3 +296,49 @@ export {
   DashTableAction,
   DashTableToolbar,
 } from "./DashTable";
+
+export function DashSpinner({
+  className = "h-8 w-8",
+  label,
+}: {
+  className?: string;
+  label?: string;
+}) {
+  return (
+    <span className="inline-flex flex-col items-center gap-2" role="status">
+      <span
+        className={`inline-block animate-spin rounded-full border-2 border-slate-200 border-t-[#007bff] ${className}`}
+        aria-hidden={Boolean(label)}
+      />
+      {label ? (
+        <span className="text-sm font-medium text-slate-600">{label}</span>
+      ) : null}
+    </span>
+  );
+}
+
+/** Semi-transparent overlay for tables while a step action is running. */
+export function DashTableBusy({
+  busy,
+  label = "Working…",
+  children,
+}: {
+  busy: boolean;
+  label?: string;
+  children: ReactNode;
+}) {
+  return (
+    <div className="relative min-h-[8rem]">
+      {children}
+      {busy ? (
+        <div
+          className="absolute inset-0 z-10 flex items-center justify-center rounded-b-3xl bg-white/80 backdrop-blur-[2px]"
+          aria-busy="true"
+          aria-live="polite"
+        >
+          <DashSpinner label={label} />
+        </div>
+      ) : null}
+    </div>
+  );
+}

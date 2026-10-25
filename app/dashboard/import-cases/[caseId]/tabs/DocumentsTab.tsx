@@ -8,6 +8,7 @@ import {
   DashCard,
   DashCardHeader,
   DashTable,
+  DashTableBusy,
   DashTableHead,
   DashTableHeaderRow,
   DashTbody,
@@ -332,6 +333,16 @@ export function DocumentsTab({
                 this case
               </p>
             </div>
+            <DashTableBusy
+              busy={loading || extractingId != null || deletingId != null}
+              label={
+                extractingId
+                  ? "Extracting lines…"
+                  : deletingId
+                    ? "Removing document…"
+                    : "Uploading…"
+              }
+            >
             <DashTable tableClassName="min-w-[640px]">
               <DashTableHead>
                 <DashTableHeaderRow>
@@ -356,6 +367,7 @@ export function DocumentsTab({
                 ))}
               </DashTbody>
             </DashTable>
+            </DashTableBusy>
           </section>
         ) : null}
       </DashCard>

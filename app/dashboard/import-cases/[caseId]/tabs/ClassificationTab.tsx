@@ -10,6 +10,7 @@ import {
   ClassifyProgressBanner,
   ClassifyProgressDialog,
 } from "@/components/dashboard/import-case/ClassifyProgressDialog";
+import { ClassificationDecisionDialog } from "@/components/dashboard/import-case/ClassificationDecisionDialog";
 import { RerunWorkflowJobDialog } from "@/components/dashboard/import-case/RerunWorkflowJobDialog";
 import {
   Dialog,
@@ -23,6 +24,7 @@ import {
   DashCard,
   DashCardHeader,
   DashTable,
+  DashTableBusy,
   DashTableHead,
   DashTableHeaderRow,
   DashTbody,
@@ -44,6 +46,10 @@ import { formatDutyRateFromSnapshot } from "@/lib/import-cases/duty-rate-display
 import { useBulkReview } from "@/lib/import-cases/use-bulk-review";
 import { useClassifyJob } from "@/lib/import-cases/use-classify-job";
 import { useSyncServerProp } from "@/lib/import-cases/use-sync-server-prop";
+import {
+  useWorkflowJobGuard,
+  type WorkflowJobGuardPayload,
+} from "@/lib/import-cases/use-workflow-job-guard";
 import { needsRecheck } from "@/lib/hs-plausibility";
 import { formatHsCode } from "@/lib/hs-code-format";
 
@@ -52,6 +58,7 @@ type ClassificationTabProps = {
   classifications: ProductClassificationBundle[];
   referencePopulated: boolean;
   onClassificationsChange?: (items: ProductClassificationBundle[]) => void;
+  onWorkflowJobGuard?: (guard: WorkflowJobGuardPayload | null) => void;
 };
 
 function classificationSearchHaystack(row: ProductClassificationBundle): string {
@@ -97,6 +104,14 @@ function needsExpertReview(row: ProductClassificationBundle): boolean {
   return false;
 }
 
+function isUnclassified(row: ProductClassificationBundle): boolean {
+  const { classification, candidates } = row;
+  return (
+    (!classification && candidates.length === 0) ||
+    (classification != null && isCatchAllHsCode(classification.hsCode))
+  );
+}
+
 function sourceBadgeStatus(source: string | null | undefined): string {
   switch (source) {
     case "reference_match":
@@ -117,6 +132,7 @@ export function ClassificationTab({
   classifications: classificationsFromParent,
   referencePopulated: initialReferencePopulated,
   onClassificationsChange,
+  onWorkflowJobGuard,
 }: ClassificationTabProps) {
   const router = useRouter();
   const [items, setItems] =
@@ -134,12 +150,20 @@ export function ClassificationTab({
   const [overrideId, setOverrideId] = useState<string | null>(null);
   const [overrideHsCode, setOverrideHsCode] = useState("");
   const [expertModalOpen, setExpertModalOpen] = useState(false);
+  const [unclassifiedModalOpen, setUnclassifiedModalOpen] = useState(false);
+  const [decisionModal, setDecisionModal] = useState<{
+    productId: string;
+    productSequence: number;
+    productLabel: string;
+    currentHsCode: string | null;
+    review: ClassificationReviewView;
+  } | null>(null);
 
-  async function refresh() {
+  async function refresh(): Promise<ProductClassificationBundle[] | null> {
     const res = await fetch(`/api/import-cases/${caseId}/classifications`, {
       cache: "no-store",
     });
-    if (!res.ok) return;
+    if (!res.ok) return null;
     const data = (await res.json()) as {
       classifications: ProductClassificationBundle[];
       referencePopulated?: boolean;
@@ -150,6 +174,26 @@ export function ClassificationTab({
       setReferencePopulated(data.referencePopulated);
     }
     router.refresh();
+    return data.classifications;
+  }
+
+  function presentDecisionModal(row: ProductClassificationBundle) {
+    const review = buildClassificationReviewView(
+      row.candidates,
+      row.classification,
+    );
+    if (!review.decisionRequired) return;
+    setDecisionModal({
+      productId: row.product.id,
+      productSequence: row.product.productSequence,
+      productLabel:
+        row.product.normalizedDescription ??
+        row.product.rawDescription ??
+        row.product.productName ??
+        "Product",
+      currentHsCode: row.classification?.hsCode ?? null,
+      review,
+    });
   }
 
   // Classification runs as short, resumable batches driven from here so the
@@ -175,6 +219,12 @@ export function ClassificationTab({
     getScope: () => scopeRef.current,
   });
   const classifying = job.active;
+  useWorkflowJobGuard(
+    classifying,
+    "HS classification",
+    job.stop,
+    onWorkflowJobGuard,
+  );
 
   function startClassifyJob(scope?: "suspicious") {
     scopeRef.current = scope;
@@ -230,14 +280,10 @@ export function ClassificationTab({
       if (!data) {
         throw new Error("Server returned an invalid response");
       }
+      const updated = await refresh();
       if (data.decisionRequired) {
-        const optionText = (data.options ?? [])
-          .map((o, i) => `${i + 1}. ${o.hsCode}${o.reason ? ` (${o.reason})` : ""}`)
-          .join("  ");
-        toast.warning("Needs your decision", {
-          description: [data.question, optionText].filter(Boolean).join("  "),
-          duration: 15000,
-        });
+        const row = updated?.find((r) => r.product.id === productId);
+        if (row) presentDecisionModal(row);
       } else if (data.hsCode && !isCatchAllHsCode(data.hsCode)) {
         toast.success(
           `AI suggested HS ${data.hsCode}${data.webSearchUsed ? " (web search)" : ""}${
@@ -255,7 +301,6 @@ export function ClassificationTab({
           "AI could not classify this item — set HS manually or review the description",
         );
       }
-      await refresh();
     } catch (error) {
       toast.error(
         error instanceof Error ? error.message : "AI classification failed",
@@ -286,6 +331,9 @@ export function ClassificationTab({
       if (!res.ok) throw new Error(data.error ?? "Approval failed");
       toast.success("HS classification approved");
       setOverrideId(null);
+      if (decisionModal?.productId === productId) {
+        setDecisionModal(null);
+      }
       await refresh();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Approval failed");
@@ -365,11 +413,11 @@ export function ClassificationTab({
   const approvedCount = verifiedProducts.filter(
     (i) => i.classification?.isFinal,
   ).length;
-  const unclassifiedCount = verifiedProducts.filter(
-    (i) =>
-      (!i.classification && i.candidates.length === 0) ||
-      (i.classification != null && isCatchAllHsCode(i.classification.hsCode)),
-  ).length;
+  const unclassifiedRows = useMemo(
+    () => verifiedProducts.filter(isUnclassified),
+    [verifiedProducts],
+  );
+  const unclassifiedCount = unclassifiedRows.length;
   const pendingCount = verifiedProducts.filter(
     (i) => !i.classification?.isFinal,
   ).length;
@@ -568,18 +616,28 @@ export function ClassificationTab({
                     aria-label="Search classifications"
                   />
                 </div>
-                <DashButton
-                  type="button"
-                  variant="secondary"
-                  disabled={expertReviewRows.length === 0}
-                  onClick={() => setExpertModalOpen(true)}
-                  className="shrink-0"
-                >
-                  Expert review
-                  {expertReviewRows.length > 0
-                    ? ` (${expertReviewRows.length})`
-                    : ""}
-                </DashButton>
+                <div className="flex shrink-0 flex-wrap gap-2">
+                  <DashButton
+                    type="button"
+                    variant="secondary"
+                    disabled={unclassifiedCount === 0}
+                    onClick={() => setUnclassifiedModalOpen(true)}
+                  >
+                    Not classified
+                    {unclassifiedCount > 0 ? ` (${unclassifiedCount})` : ""}
+                  </DashButton>
+                  <DashButton
+                    type="button"
+                    variant="secondary"
+                    disabled={expertReviewRows.length === 0}
+                    onClick={() => setExpertModalOpen(true)}
+                  >
+                    Expert review
+                    {expertReviewRows.length > 0
+                      ? ` (${expertReviewRows.length})`
+                      : ""}
+                  </DashButton>
+                </div>
               </div>
               {search.trim() ? (
                 <p className="mt-2 text-xs text-slate-500">
@@ -588,6 +646,16 @@ export function ClassificationTab({
                 </p>
               ) : null}
             </div>
+            <DashTableBusy
+              busy={classifying || bulk.loading || aiProductId != null}
+              label={
+                classifying
+                  ? "Classifying products…"
+                  : aiProductId
+                    ? "Running AI classification…"
+                    : "Updating classifications…"
+              }
+            >
             <DashTable tableClassName="table-fixed text-xs">
               <colgroup>
                 <col className="w-8" />
@@ -618,21 +686,21 @@ export function ClassificationTab({
                     </td>
                   </tr>
                 ) : null}
-                {pageRows.map(
-                  ({ product, candidates, classification, tariffSnapshot, plausibility }) => (
+                {pageRows.map((row) => (
                     <ClassificationTableRow
-                      key={product.id}
-                      product={product}
-                      candidates={candidates}
-                      classification={classification}
-                      tariffSnapshot={tariffSnapshot}
-                      plausibility={plausibility}
+                      key={row.product.id}
+                      product={row.product}
+                      candidates={row.candidates}
+                      classification={row.classification}
+                      tariffSnapshot={row.tariffSnapshot}
+                      plausibility={row.plausibility}
                       approvingId={approvingId}
                       aiProductId={aiProductId}
                       overrideId={overrideId}
                       overrideHsCode={overrideHsCode}
                       onApprove={handleApprove}
                       onAskAi={handleAskAi}
+                      onOpenDecision={() => presentDecisionModal(row)}
                       onStartOverride={(id, hsCode) => {
                         setOverrideId(id);
                         setOverrideHsCode(hsCode);
@@ -640,8 +708,7 @@ export function ClassificationTab({
                       onCancelOverride={() => setOverrideId(null)}
                       onOverrideHsCodeChange={setOverrideHsCode}
                     />
-                  ),
-                )}
+                  ))}
               </DashTbody>
             </DashTable>
             <Pagination
@@ -655,6 +722,7 @@ export function ClassificationTab({
                   : undefined
               }
             />
+            </DashTableBusy>
           </>
         )}
       </DashCard>
@@ -675,6 +743,24 @@ export function ClassificationTab({
         onOpenChange={setRerunConfirmOpen}
         onConfirm={confirmRerunClassify}
         loading={classifying}
+      />
+
+      <ClassificationDecisionDialog
+        open={decisionModal != null}
+        onOpenChange={(open) => {
+          if (!open) setDecisionModal(null);
+        }}
+        productSequence={decisionModal?.productSequence ?? 0}
+        productLabel={decisionModal?.productLabel ?? ""}
+        currentHsCode={decisionModal?.currentHsCode ?? null}
+        review={decisionModal?.review ?? null}
+        approving={
+          decisionModal != null && approvingId === decisionModal.productId
+        }
+        onApproveOption={(candidateId) => {
+          if (!decisionModal) return;
+          void handleApprove(decisionModal.productId, candidateId);
+        }}
       />
 
       <Dialog
@@ -719,27 +805,21 @@ export function ClassificationTab({
                   </DashTableHeaderRow>
                 </DashTableHead>
                 <DashTbody>
-                  {expertReviewRows.map(
-                    ({
-                      product,
-                      candidates,
-                      classification,
-                      tariffSnapshot,
-                      plausibility,
-                    }) => (
+                  {expertReviewRows.map((row) => (
                       <ClassificationTableRow
-                        key={product.id}
-                        product={product}
-                        candidates={candidates}
-                        classification={classification}
-                        tariffSnapshot={tariffSnapshot}
-                        plausibility={plausibility}
+                        key={row.product.id}
+                        product={row.product}
+                        candidates={row.candidates}
+                        classification={row.classification}
+                        tariffSnapshot={row.tariffSnapshot}
+                        plausibility={row.plausibility}
                         approvingId={approvingId}
                         aiProductId={aiProductId}
                         overrideId={overrideId}
                         overrideHsCode={overrideHsCode}
                         onApprove={handleApprove}
                         onAskAi={handleAskAi}
+                        onOpenDecision={() => presentDecisionModal(row)}
                         onStartOverride={(id, hsCode) => {
                           setOverrideId(id);
                           setOverrideHsCode(hsCode);
@@ -747,8 +827,79 @@ export function ClassificationTab({
                         onCancelOverride={() => setOverrideId(null)}
                         onOverrideHsCodeChange={setOverrideHsCode}
                       />
-                    ),
-                  )}
+                    ))}
+                </DashTbody>
+              </DashTable>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={unclassifiedModalOpen}
+        onOpenChange={(open) => {
+          setUnclassifiedModalOpen(open);
+          if (!open) setOverrideId(null);
+        }}
+      >
+        <DialogContent className="!flex h-auto max-h-[min(90vh,52rem)] w-[min(96vw,56rem)] max-w-[56rem] flex-col gap-0 overflow-hidden p-0">
+          <DialogHeader className="shrink-0 border-b border-slate-100 px-5 py-4 text-left">
+            <DialogTitle>Not classified</DialogTitle>
+            <DialogDescription>
+              {unclassifiedCount === 0
+                ? "Every verified product has an HS suggestion."
+                : `${unclassifiedCount} product(s) have no tariff match yet (or are marked unclassified). Run classification, use Ask AI, or set HS manually.`}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="min-h-0 max-h-[calc(min(90vh,52rem)-6.5rem)] flex-1 overflow-y-auto overscroll-y-contain">
+            {unclassifiedRows.length === 0 ? (
+              <p className="px-5 py-8 text-center text-sm text-slate-500">
+                Nothing in this queue.
+              </p>
+            ) : (
+              <DashTable tableClassName="table-fixed text-xs">
+                <colgroup>
+                  <col className="w-8" />
+                  <col className="w-[24%]" />
+                  <col className="w-[30%]" />
+                  <col className="w-[16%]" />
+                  <col className="w-[160px]" />
+                </colgroup>
+                <DashTableHead>
+                  <DashTableHeaderRow>
+                    <DashTh density="compact">#</DashTh>
+                    <DashTh density="compact">Product</DashTh>
+                    <DashTh density="compact">HS / Tariff</DashTh>
+                    <DashTh density="compact">Source</DashTh>
+                    <DashTh density="compact" align="right">
+                      Actions
+                    </DashTh>
+                  </DashTableHeaderRow>
+                </DashTableHead>
+                <DashTbody>
+                  {unclassifiedRows.map((row) => (
+                      <ClassificationTableRow
+                        key={row.product.id}
+                        product={row.product}
+                        candidates={row.candidates}
+                        classification={row.classification}
+                        tariffSnapshot={row.tariffSnapshot}
+                        plausibility={row.plausibility}
+                        approvingId={approvingId}
+                        aiProductId={aiProductId}
+                        overrideId={overrideId}
+                        overrideHsCode={overrideHsCode}
+                        onApprove={handleApprove}
+                        onAskAi={handleAskAi}
+                        onOpenDecision={() => presentDecisionModal(row)}
+                        onStartOverride={(id, hsCode) => {
+                          setOverrideId(id);
+                          setOverrideHsCode(hsCode);
+                        }}
+                        onCancelOverride={() => setOverrideId(null)}
+                        onOverrideHsCodeChange={setOverrideHsCode}
+                      />
+                    ))}
                 </DashTbody>
               </DashTable>
             )}
@@ -771,6 +922,7 @@ type ClassificationTableRowProps = {
   overrideHsCode: string;
   onApprove: (productId: string, candidateId?: string, hsCode?: string) => void;
   onAskAi: (productId: string, note?: string) => void;
+  onOpenDecision: () => void;
   onStartOverride: (productId: string, hsCode: string) => void;
   onCancelOverride: () => void;
   onOverrideHsCodeChange: (value: string) => void;
@@ -788,6 +940,7 @@ function ClassificationTableRow({
   overrideHsCode,
   onApprove,
   onAskAi,
+  onOpenDecision,
   onStartOverride,
   onCancelOverride,
   onOverrideHsCodeChange,
@@ -863,6 +1016,7 @@ function ClassificationTableRow({
             review={review}
             isApproving={isApproving}
             onApprove={onApprove}
+            onOpenDecision={onOpenDecision}
           />
           {!classification ? (
             <p className="mt-1 whitespace-normal text-amber-700">
@@ -1015,11 +1169,13 @@ function ReviewDetails({
   review,
   isApproving,
   onApprove,
+  onOpenDecision,
 }: {
   productId: string;
   review: ClassificationReviewView;
   isApproving: boolean;
   onApprove: (productId: string, candidateId?: string, hsCode?: string) => void;
+  onOpenDecision: () => void;
 }) {
   const hasDetails =
     review.sources.length > 0 ||
@@ -1036,47 +1192,26 @@ function ReviewDetails({
   return (
     <div className="mt-1 space-y-1">
       {review.decisionRequired ? (
-        <div className="max-h-56 overflow-y-auto overscroll-y-contain whitespace-normal rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-2 text-amber-800">
-          <p className="font-medium">Needs your decision</p>
-          {review.question ? (
-            <p className="mt-0.5">{review.question}</p>
-          ) : null}
-          {review.alternatives.length > 0 ? (
-            <ol className="mt-1.5 space-y-1.5" aria-label="Most likely HS codes, best first">
-              {review.alternatives.map((alt, index) => (
-                <li key={alt.candidateId} className="flex items-start gap-2">
-                  <span className="min-w-0 flex-1">
-                    <span className="text-amber-700">{index + 1}. </span>
-                    <span className="font-mono text-slate-900">
-                      {alt.hsCode}
-                    </span>
-                    {alt.officialDescription
-                      ? ` - ${alt.officialDescription}`
-                      : ""}
-                    {alt.reason ? (
-                      <span className="block text-amber-700">{alt.reason}</span>
-                    ) : null}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => onApprove(productId, alt.candidateId)}
-                    disabled={isApproving}
-                    className="shrink-0 rounded-lg bg-white px-2 py-0.5 font-medium text-indigo-700 hover:bg-indigo-50 disabled:opacity-50"
-                    title={`Approve ${alt.hsCode}`}
-                    aria-label={`Approve HS code ${alt.hsCode}`}
-                  >
-                    Approve this
-                  </button>
-                </li>
-              ))}
-            </ol>
-          ) : (
-            <p className="mt-0.5">
-              No tariff code could be supported yet. Add a note below or set the
-              code by hand.
-            </p>
-          )}
-        </div>
+        <button
+          type="button"
+          onClick={onOpenDecision}
+          className="mt-1.5 flex w-full items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-2 text-left text-xs font-medium text-amber-900 hover:bg-amber-100/80"
+        >
+          <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-amber-100 text-amber-800">
+            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+            </svg>
+          </span>
+          <span className="min-w-0 flex-1">
+            Review required
+            {review.question ? (
+              <span className="mt-0.5 block font-normal text-amber-800/90 line-clamp-2">
+                {review.question}
+              </span>
+            ) : null}
+          </span>
+          <span className="shrink-0 text-[#007bff]">Open</span>
+        </button>
       ) : null}
       {review.reason ? (
         <p className="text-amber-700 whitespace-normal">{review.reason}</p>

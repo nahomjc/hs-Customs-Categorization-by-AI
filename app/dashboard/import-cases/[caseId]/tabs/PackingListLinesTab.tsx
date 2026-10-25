@@ -10,6 +10,7 @@ import {
   DashCard,
   DashCardHeader,
   DashTable,
+  DashTableBusy,
   DashTableEmpty,
   DashTableHead,
   DashTableHeaderRow,
@@ -298,6 +299,7 @@ export function PackingListLinesTab({
             ) : null}
           </div>
         ) : null}
+        <DashTableBusy busy={bulk.loading || loading} label="Updating packing lines…">
         <DashTable>
           <DashTableHead>
             <DashTableHeaderRow>
@@ -367,6 +369,7 @@ export function PackingListLinesTab({
               : undefined
           }
         />
+        </DashTableBusy>
       </DashCard>
     </div>
   );

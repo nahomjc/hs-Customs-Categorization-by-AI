@@ -34,6 +34,7 @@ import {
   type FirstPass,
   type StepDeps,
 } from "../lib/import-cases/hs-web-step";
+import { gateStepResult } from "../lib/import-cases/plausibility-gate";
 import { buildClassificationReviewView } from "../lib/import-cases/classification-review-view";
 import {
   formatAskWhichProduct,
@@ -420,6 +421,12 @@ async function main() {
     assert.match(r.review.reason ?? "", /^No clear tariff match/);
     assert.equal(r.review.proposedCode?.hsCode, "2202.55");
     assert.equal(r.review.proposedCode?.validation, "unresolved");
+    // Gate fills the best book alternative for expert review (not the unresolved code).
+    const gated = gateStepResult(r, { texts: ["Electrolyte Water"] });
+    assert.equal(gated.hsCode, "2202.1000");
+    assert.equal(gated.review.required, true);
+    assert.equal(gated.review.decisionRequired, true);
+    assert.equal(gated.review.proposedCode?.hsCode, "2202.55");
   });
   test("search failure falls back to the plain AI result and says so", async () => {
     setHsReferenceCache(BOOK_EXACT);

@@ -15,6 +15,7 @@ import {
   DashCard,
   DashCardHeader,
   DashTable,
+  DashTableBusy,
   DashTableHead,
   DashTableHeaderRow,
   DashTbody,
@@ -36,6 +37,10 @@ import type { GroupingSnapshot } from "@/lib/import-cases/grouping-progress";
 import type { GroupingWithProducts } from "@/lib/import-cases/grouping-queries";
 import { useGroupingJob } from "@/lib/import-cases/use-grouping-job";
 import { useSyncServerProp } from "@/lib/import-cases/use-sync-server-prop";
+import {
+  useWorkflowJobGuard,
+  type WorkflowJobGuardPayload,
+} from "@/lib/import-cases/use-workflow-job-guard";
 
 type GroupingExportTabProps = {
   caseId: string;
@@ -43,6 +48,7 @@ type GroupingExportTabProps = {
   initialGroupings: GroupingWithProducts[];
   /** Products that are in no group: listed with a warning, also in the CSV. */
   initialUnclassified?: UnclassifiedProduct[];
+  onWorkflowJobGuard?: (guard: WorkflowJobGuardPayload | null) => void;
 };
 
 /** Country name from a stored code, or "Not provided" (never "UNK"). */
@@ -86,6 +92,7 @@ export function GroupingExportTab({
   caseNumber,
   initialGroupings,
   initialUnclassified = [],
+  onWorkflowJobGuard,
 }: GroupingExportTabProps) {
   const router = useRouter();
   const [groupings, setGroupings] =
@@ -150,6 +157,12 @@ export function GroupingExportTab({
 
   const job = useGroupingJob(caseId, { onFinished: handleJobFinished });
   const grouping = job.active;
+  useWorkflowJobGuard(
+    grouping,
+    "Declaration grouping",
+    job.stop,
+    onWorkflowJobGuard,
+  );
 
   function startGroupingJob() {
     setProgressOpen(true);
@@ -357,6 +370,10 @@ export function GroupingExportTab({
               </p>
             ) : null}
           </div>
+          <DashTableBusy
+            busy={grouping || exporting}
+            label={grouping ? "Grouping products…" : "Preparing export…"}
+          >
           <DashTable tableClassName="min-w-160">
             <DashTableHead>
               <DashTableHeaderRow>
@@ -412,6 +429,7 @@ export function GroupingExportTab({
             onPageSizeChange={pagination.setPageSize}
             itemLabel="groups"
           />
+          </DashTableBusy>
 
           <section className="border-t border-slate-100 bg-slate-50/50 px-5 py-4">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">

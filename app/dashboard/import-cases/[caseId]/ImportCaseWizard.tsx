@@ -1,7 +1,8 @@
 "use client";
 
 import { useRouter, useSearchParams } from "next/navigation";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { DiscardWorkflowJobDialog } from "@/components/dashboard/import-case/DiscardWorkflowJobDialog";
 import { CaseHistoryPanel } from "@/components/dashboard/import-case/CaseHistoryPanel";
 import {
   BentoCard,
@@ -18,7 +19,7 @@ import {
   CaseWorkflowStepper,
   type StepperStep,
 } from "@/components/dashboard/import-case/CaseWorkflowStepper";
-import { DashButton, DashCard } from "@/components/dashboard/ui";
+import { DashButton, DashCard, DashSpinner } from "@/components/dashboard/ui";
 import type { AuditLogView } from "@/lib/import-cases/audit-queries";
 import type { DocumentCheckRow } from "@/db/schema/documentChecks";
 import type { ImportCaseRow } from "@/db/schema/importCases";
@@ -56,6 +57,7 @@ import { OverviewTab } from "./tabs/OverviewTab";
 import { PackingListLinesTab } from "./tabs/PackingListLinesTab";
 import { GroupingExportTab } from "./tabs/GroupingExportTab";
 import type { UnclassifiedProduct } from "@/lib/import-cases/unclassified";
+import type { WorkflowJobGuardPayload } from "@/lib/import-cases/use-workflow-job-guard";
 import { ProductsTab } from "./tabs/ProductsTab";
 
 type InvoiceLineWithDoc = {
@@ -205,6 +207,34 @@ export function ImportCaseWizard({
   );
   const [continueWarningOpen, setContinueWarningOpen] = useState(false);
   const [continueWarnings, setContinueWarnings] = useState<string[]>([]);
+  const [continueNavigating, setContinueNavigating] = useState(false);
+  const [stepJobGuard, setStepJobGuard] = useState<
+    (WorkflowJobGuardPayload & { step: WizardStepId }) | null
+  >(null);
+  const [discardJobOpen, setDiscardJobOpen] = useState(false);
+  const pendingNavRef = useRef<(() => void) | null>(null);
+
+  const bindStepJobGuard = useCallback((step: WizardStepId) => {
+    return (guard: WorkflowJobGuardPayload | null) => {
+      setStepJobGuard((prev) => {
+        if (guard) return { step, ...guard };
+        return prev?.step === step ? null : prev;
+      });
+    };
+  }, []);
+
+  const productsJobGuard = useMemo(
+    () => bindStepJobGuard("products"),
+    [bindStepJobGuard],
+  );
+  const classificationJobGuard = useMemo(
+    () => bindStepJobGuard("classification"),
+    [bindStepJobGuard],
+  );
+  const groupingJobGuard = useMemo(
+    () => bindStepJobGuard("grouping-export"),
+    [bindStepJobGuard],
+  );
   const [checksState, setChecksState] = useState(checks);
   useSyncServerProp(checks, setChecksState);
 
@@ -245,7 +275,7 @@ export function ImportCaseWizard({
     (c) => c.product.humanVerified && c.classification?.isFinal,
   ).length;
 
-  const goToStep = useCallback(
+  const applyGoToStep = useCallback(
     (stepId: WizardStepId, options?: { bypassUnlock?: boolean }) => {
       if (!options?.bypassUnlock && !stepUnlocked(stepId)) return;
       setCurrentStep(stepId);
@@ -256,6 +286,38 @@ export function ImportCaseWizard({
     },
     [router, searchParams, stepUnlocked],
   );
+
+  const requestNavigation = useCallback(
+    (action: () => void) => {
+      if (stepJobGuard?.step === currentStep) {
+        pendingNavRef.current = action;
+        setDiscardJobOpen(true);
+        return;
+      }
+      action();
+    },
+    [currentStep, stepJobGuard],
+  );
+
+  const goToStep = useCallback(
+    (stepId: WizardStepId, options?: { bypassUnlock?: boolean }) => {
+      if (stepId === currentStep) {
+        applyGoToStep(stepId, options);
+        return;
+      }
+      requestNavigation(() => applyGoToStep(stepId, options));
+    },
+    [applyGoToStep, currentStep, requestNavigation],
+  );
+
+  function confirmDiscardJobAndNavigate() {
+    stepJobGuard?.stop();
+    setStepJobGuard(null);
+    setDiscardJobOpen(false);
+    const next = pendingNavRef.current;
+    pendingNavRef.current = null;
+    next?.();
+  }
 
   function advanceToNextStep() {
     const idx = activeSteps.findIndex((s) => s.id === currentStep);
@@ -268,67 +330,72 @@ export function ImportCaseWizard({
 
   async function goNext() {
     const idx = activeSteps.findIndex((s) => s.id === currentStep);
-    if (idx < 0 || idx >= activeSteps.length - 1) return;
+    if (idx < 0 || idx >= activeSteps.length - 1 || continueNavigating) return;
 
-    let checkCountForWarnings = openCheckCount;
-    let warningCtx = completionCtx;
-    if (currentStep === "checks") {
-      try {
-        const res = await fetch(
-          `/api/import-cases/${importCase.id}/checks?refresh=0`,
-          { cache: "no-store" },
-        );
-        if (res.ok) {
-          const data = (await res.json()) as {
-            checks: DocumentCheckRow[];
-          };
-          setChecksState(data.checks);
-          checkCountForWarnings = data.checks.filter(
-            (c) => c.status === "open",
-          ).length;
+    setContinueNavigating(true);
+    try {
+      let checkCountForWarnings = openCheckCount;
+      let warningCtx = completionCtx;
+      if (currentStep === "checks") {
+        try {
+          const res = await fetch(
+            `/api/import-cases/${importCase.id}/checks?refresh=0`,
+            { cache: "no-store" },
+          );
+          if (res.ok) {
+            const data = (await res.json()) as {
+              checks: DocumentCheckRow[];
+            };
+            setChecksState(data.checks);
+            checkCountForWarnings = data.checks.filter(
+              (c) => c.status === "open",
+            ).length;
+          }
+        } catch {
+          // use in-memory checks
         }
-      } catch {
-        // use in-memory checks
       }
-    }
-    if (currentStep === "classification") {
-      try {
-        const res = await fetch(
-          `/api/import-cases/${importCase.id}/classifications`,
-          { cache: "no-store" },
-        );
-        if (res.ok) {
-          const data = (await res.json()) as {
-            classifications: ProductClassificationBundle[];
-          };
-          setClassificationsState(data.classifications);
-          warningCtx = {
-            ...completionCtx,
-            classifications: data.classifications,
-          };
+      if (currentStep === "classification") {
+        try {
+          const res = await fetch(
+            `/api/import-cases/${importCase.id}/classifications`,
+            { cache: "no-store" },
+          );
+          if (res.ok) {
+            const data = (await res.json()) as {
+              classifications: ProductClassificationBundle[];
+            };
+            setClassificationsState(data.classifications);
+            warningCtx = {
+              ...completionCtx,
+              classifications: data.classifications,
+            };
+          }
+        } catch {
+          // use in-memory classifications
         }
-      } catch {
-        // use in-memory classifications
       }
-    }
 
-    const warnings = getWizardStepWarnings(
-      currentStep,
-      warningCtx,
-      checkCountForWarnings,
-    );
-    if (warnings.length > 0) {
-      setContinueWarnings(warnings);
-      setContinueWarningOpen(true);
-      return;
+      const warnings = getWizardStepWarnings(
+        currentStep,
+        warningCtx,
+        checkCountForWarnings,
+      );
+      if (warnings.length > 0) {
+        setContinueWarnings(warnings);
+        setContinueWarningOpen(true);
+        return;
+      }
+      advanceToNextStep();
+    } finally {
+      setContinueNavigating(false);
     }
-    advanceToNextStep();
   }
 
   function goBack() {
     const idx = activeSteps.findIndex((s) => s.id === currentStep);
     if (idx > 0) {
-      goToStep(activeSteps[idx - 1].id);
+      requestNavigation(() => applyGoToStep(activeSteps[idx - 1].id));
     }
   }
 
@@ -406,9 +473,26 @@ export function ImportCaseWizard({
               : `${nextMeta.description}. Use Continue when you are ready to move on.`
           }
           action={
-            <button type="button" onClick={goNext} className={promoButtonClass}>
-              Continue
-              <BentoIcon name="chevron" className="h-4 w-4" strokeWidth={2} />
+            <button
+              type="button"
+              onClick={() => void goNext()}
+              disabled={continueNavigating}
+              className={`${promoButtonClass} disabled:opacity-70`}
+            >
+              {continueNavigating ? (
+                <>
+                  <span
+                    className="h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white"
+                    aria-hidden
+                  />
+                  Checking…
+                </>
+              ) : (
+                <>
+                  Continue
+                  <BentoIcon name="chevron" className="h-4 w-4" strokeWidth={2} />
+                </>
+              )}
             </button>
           }
         />
@@ -471,7 +555,16 @@ export function ImportCaseWizard({
                 groupings={groupings}
               />
 
-              <div className="space-y-6">
+              <div className="relative space-y-6">
+                {continueNavigating ? (
+                  <div
+                    className="absolute inset-0 z-20 flex items-center justify-center rounded-2xl bg-white/70 backdrop-blur-[2px]"
+                    aria-busy="true"
+                    aria-live="polite"
+                  >
+                    <DashSpinner label="Checking this step…" />
+                  </div>
+                ) : null}
                 {currentStep === "case-info" ? (
                   <OverviewTab
                     importCase={importCase}
@@ -510,6 +603,7 @@ export function ImportCaseWizard({
                   <ProductsTab
                     caseId={importCase.id}
                     initialProducts={products}
+                    onWorkflowJobGuard={productsJobGuard}
                   />
                 ) : null}
                 {currentStep === "classification" ? (
@@ -518,6 +612,7 @@ export function ImportCaseWizard({
                     classifications={classificationsState}
                     referencePopulated={referencePopulated}
                     onClassificationsChange={setClassificationsState}
+                    onWorkflowJobGuard={classificationJobGuard}
                   />
                 ) : null}
                 {currentStep === "grouping-export" ? (
@@ -526,6 +621,7 @@ export function ImportCaseWizard({
                     caseNumber={importCase.caseNumber}
                     initialGroupings={groupings}
                     initialUnclassified={unclassified}
+                    onWorkflowJobGuard={groupingJobGuard}
                   />
                 ) : null}
                 {currentStep === "case-history" ? (
@@ -569,25 +665,38 @@ export function ImportCaseWizard({
                 ) : null}
                 <DashButton
                   variant="primary"
-                  onClick={goNext}
+                  onClick={() => void goNext()}
+                  disabled={continueNavigating}
                   className="min-w-30"
                 >
-                  Continue
-                    <svg
-                      className="h-4 w-4"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                      aria-hidden="true"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M9 5l7 7-7 7"
+                  {continueNavigating ? (
+                    <>
+                      <span
+                        className="h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white"
+                        aria-hidden
                       />
-                    </svg>
-                  </DashButton>
+                      Checking…
+                    </>
+                  ) : (
+                    <>
+                      Continue
+                      <svg
+                        className="h-4 w-4"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                        aria-hidden="true"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M9 5l7 7-7 7"
+                        />
+                      </svg>
+                    </>
+                  )}
+                </DashButton>
               </div>
             ) : (
               <p className="ml-auto px-2 text-sm font-medium text-emerald-700">
@@ -647,6 +756,18 @@ export function ImportCaseWizard({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <DiscardWorkflowJobDialog
+        open={discardJobOpen}
+        jobLabel={stepJobGuard?.label ?? "This job"}
+        onOpenChange={(open) => {
+          if (!open) {
+            setDiscardJobOpen(false);
+            pendingNavRef.current = null;
+          }
+        }}
+        onConfirm={confirmDiscardJobAndNavigate}
+      />
     </div>
   );
 }

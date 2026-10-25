@@ -10,6 +10,7 @@ import {
   DashCard,
   DashCardHeader,
   DashTable,
+  DashTableBusy,
   DashTableEmpty,
   DashTableHead,
   DashTableHeaderRow,
@@ -281,6 +282,7 @@ export function InvoiceLinesTab({
             ) : null}
           </div>
         ) : null}
+        <DashTableBusy busy={bulk.loading || loading} label="Updating invoice lines…">
         <DashTable>
           <DashTableHead>
             <DashTableHeaderRow>
@@ -347,6 +349,7 @@ export function InvoiceLinesTab({
               : undefined
           }
         />
+        </DashTableBusy>
       </DashCard>
     </div>
   );

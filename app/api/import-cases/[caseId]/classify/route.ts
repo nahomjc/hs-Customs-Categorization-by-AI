@@ -90,7 +90,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     const parsed = (await request.json()) as unknown;
     if (parsed && typeof parsed === "object") body = parsed as BatchBody;
   } catch {
-    // bulk classify defaults to reference-first
+    // empty / invalid body: treat as legacy one-shot without forceAi
   }
   const forceAi = body.forceAi === true;
 

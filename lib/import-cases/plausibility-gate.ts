@@ -159,5 +159,29 @@ export function gateStepResult(
     }
   }
 
+  // Fill the best book alternative as the primary suggestion when we would
+  // otherwise store 9999 — expert review still required; UI shows Expert review
+  // instead of "Not classified". Do not promote unresolved proposedCode.
+  if (isCatchAllHsCode(hsCode)) {
+    const best = alternatives.find((a) => !isCatchAllHsCode(a.hsCode));
+    if (best) {
+      hsCode = best.hsCode;
+      confidence = Math.min(confidence, 0.45);
+      review.required = true;
+      review.decisionRequired = true;
+      review.confidenceNote =
+        review.confidenceNote && !/no code suggested/i.test(review.confidenceNote)
+          ? review.confidenceNote
+          : "Best option filled — confirm or pick another";
+      if (!review.reason) {
+        review.reason = `${NO_CLEAR_TARIFF_MATCH}. Best option filled for review; confirm or pick another.`;
+      }
+      // Keep best in alternatives for the decision UI (rank still lists it).
+      if (!review.question) {
+        review.question = `Which of these fits "${nameOf(ctx)}"?`;
+      }
+    }
+  }
+
   return { ...step, hsCode, confidence, review };
 }

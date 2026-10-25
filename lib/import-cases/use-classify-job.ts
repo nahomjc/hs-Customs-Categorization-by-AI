@@ -36,7 +36,9 @@ export function createClassifyApi(
       (
         await postJobRequest<{ results: ClassifyBatchResult[] }>(
           url,
-          scoped({ action: "products", planKey, sequences }),
+          // Same AI+web strength as row Ask AI so Classify fills codes instead
+          // of leaving catch-all / "Not classified" for a later per-row click.
+          scoped({ action: "products", planKey, sequences, forceAi: true }),
         )
       ).results,
     finalize: (planKey) =>

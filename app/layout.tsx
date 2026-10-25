@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Orbitron } from "next/font/google";
 import { IntroLoader } from "@/components/IntroLoader";
+import { NetworkStatusBar } from "@/components/NetworkStatusBar";
 import { NavigationProgress } from "@/components/NavigationProgress";
 import { Toaster } from "sonner";
 import "./globals.css";
@@ -26,6 +27,7 @@ export default function RootLayout({
         <NavigationProgress />
         <IntroLoader />
         {children}
+        <NetworkStatusBar />
         <Toaster
           position="bottom-right"
           toastOptions={{

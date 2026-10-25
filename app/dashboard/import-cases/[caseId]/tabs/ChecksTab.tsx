@@ -3,7 +3,12 @@
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { BulkReviewToolbar } from "@/components/dashboard/import-case/BulkReviewActions";
-import { DashCard, StatusBadge, dashInputClass } from "@/components/dashboard/ui";
+import {
+  DashCard,
+  DashTableBusy,
+  StatusBadge,
+  dashInputClass,
+} from "@/components/dashboard/ui";
 import type { DocumentCheckRow } from "@/db/schema/documentChecks";
 import { useBulkReview } from "@/lib/import-cases/use-bulk-review";
 import { useSyncServerProp } from "@/lib/import-cases/use-sync-server-prop";
@@ -228,6 +233,12 @@ export function ChecksTab({
         </div>
       </div>
 
+      <DashTableBusy
+        busy={revalidating || bulk.loading}
+        label={
+          revalidating ? "Re-validating checks…" : "Updating checks…"
+        }
+      >
       <div className="rounded-2xl border border-slate-200 bg-white px-5 py-3">
         <label className="block space-y-1.5">
           <span className="text-xs font-medium text-slate-600">
@@ -268,6 +279,7 @@ export function ChecksTab({
       {closed.length > 0 ? (
         <CheckSection title="Resolved / ignored" checks={closed} muted />
       ) : null}
+      </DashTableBusy>
     </div>
   );
 }

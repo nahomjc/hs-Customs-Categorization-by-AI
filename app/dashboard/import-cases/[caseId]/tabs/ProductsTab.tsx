@@ -15,6 +15,7 @@ import {
   DashCard,
   DashCardHeader,
   DashTable,
+  DashTableBusy,
   DashTableHead,
   DashTableHeaderRow,
   DashTbody,
@@ -28,10 +29,15 @@ import type { CaseProductWithSources } from "@/lib/import-cases/product-queries"
 import { useBulkReview } from "@/lib/import-cases/use-bulk-review";
 import { useHarmonizeJob } from "@/lib/import-cases/use-harmonize-job";
 import { useSyncServerProp } from "@/lib/import-cases/use-sync-server-prop";
+import {
+  useWorkflowJobGuard,
+  type WorkflowJobGuardPayload,
+} from "@/lib/import-cases/use-workflow-job-guard";
 
 type ProductsTabProps = {
   caseId: string;
   initialProducts: CaseProductWithSources[];
+  onWorkflowJobGuard?: (guard: WorkflowJobGuardPayload | null) => void;
 };
 
 function productSearchHaystack(row: CaseProductWithSources): string {
@@ -66,7 +72,11 @@ function markPendingProductsVerified(
   );
 }
 
-export function ProductsTab({ caseId, initialProducts }: ProductsTabProps) {
+export function ProductsTab({
+  caseId,
+  initialProducts,
+  onWorkflowJobGuard,
+}: ProductsTabProps) {
   const router = useRouter();
   const [products, setProducts] =
     useState<CaseProductWithSources[]>(initialProducts);
@@ -114,6 +124,12 @@ export function ProductsTab({ caseId, initialProducts }: ProductsTabProps) {
 
   const job = useHarmonizeJob(caseId, { onFinished: handleJobFinished });
   const harmonizing = job.active;
+  useWorkflowJobGuard(
+    harmonizing,
+    "Harmonization",
+    job.stop,
+    onWorkflowJobGuard,
+  );
 
   function startHarmonizeJob() {
     setProgressOpen(true);
@@ -318,6 +334,10 @@ export function ProductsTab({ caseId, initialProducts }: ProductsTabProps) {
               </p>
             ) : null}
           </div>
+          <DashTableBusy
+            busy={harmonizing || bulk.loading}
+            label={harmonizing ? "Harmonizing products…" : "Updating products…"}
+          >
           <DashTable tableClassName="table-fixed text-xs">
             <colgroup>
               <col className="w-8" />
@@ -389,6 +409,7 @@ export function ProductsTab({ caseId, initialProducts }: ProductsTabProps) {
                 : undefined
             }
           />
+          </DashTableBusy>
           </>
         )}
       </DashCard>

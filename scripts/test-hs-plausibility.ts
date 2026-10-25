@@ -276,7 +276,7 @@ test("gate: a final answer that does not fit is never accepted silently", () => 
   }
 });
 
-test("gate: the supplier's code is offered as an option, never copied blindly", () => {
+test("gate: the supplier's code is offered as an option, then filled for expert review", () => {
   setHsReferenceCache(BOOK);
   try {
     const sup = supplierOption("1102.90.00");
@@ -289,9 +289,56 @@ test("gate: the supplier's code is offered as an option, never copied blindly", 
       texts: ["Rice Flour"],
       supplierHsCode: "11029000",
     });
-    assert.ok(out.hsCode.startsWith("9999"), "the supplier's code is not auto-applied");
+    // Best book alternative is filled so the row is not "Not classified"; still needs review.
+    assert.equal(out.hsCode, "1102.9000");
+    assert.equal(out.review.required, true);
     assert.ok(out.review.alternatives.some((a) => a.origin === "supplier"));
     assert.equal(out.review.decisionRequired, true);
+    assert.ok((out.confidence ?? 1) <= 0.45);
+  } finally {
+    invalidateHsReferenceCache();
+  }
+});
+
+test("gate: placeholder + book alternatives promotes best into HS with review flags", () => {
+  setHsReferenceCache(BOOK);
+  try {
+    const base = step("9999");
+    const out = gateStepResult(
+      {
+        ...base,
+        confidence: 0.3,
+        review: {
+          ...base.review,
+          required: true,
+          confidenceNote: "No code suggested - 2 options to choose from",
+          alternatives: [
+            {
+              hsCode: "1102.9000",
+              officialDescription: "Cereal flours other than of wheat",
+              reason: "rice flour",
+              inTariffBook: true,
+            },
+            {
+              hsCode: "1006.3000",
+              officialDescription: "Semi-milled or wholly milled rice",
+              reason: "if it is rice grain",
+              inTariffBook: true,
+            },
+          ],
+        },
+      },
+      { texts: ["Rice Flour"] },
+    );
+    assert.equal(out.hsCode, "1102.9000");
+    assert.equal(out.review.required, true);
+    assert.equal(out.review.decisionRequired, true);
+    assert.ok((out.confidence ?? 1) <= 0.45);
+    assert.match(out.review.confidenceNote ?? "", /Best option filled/i);
+    assert.deepEqual(
+      out.review.alternatives.map((a) => a.hsCode),
+      ["1102.9000", "1006.3000"],
+    );
   } finally {
     invalidateHsReferenceCache();
   }
