@@ -164,12 +164,7 @@ function stepButtonClass(
     return `group relative z-10 flex w-full ${layoutClass} cursor-not-allowed ${focusRing}`;
   }
 
-  const surface =
-    status === "current"
-      ? "bg-gradient-to-b from-blue-50/95 to-white"
-      : "bg-transparent";
-
-  return `group relative z-10 flex w-full ${layoutClass} cursor-pointer transition-colors duration-200 ease-out ${surface} ${focusRing}`;
+  return `group relative z-10 flex w-full ${layoutClass} cursor-pointer bg-transparent ${focusRing}`;
 }
 
 /**
