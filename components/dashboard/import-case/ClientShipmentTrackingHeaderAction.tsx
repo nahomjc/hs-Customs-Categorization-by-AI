@@ -18,6 +18,10 @@ import {
 } from "@/components/ui/dialog";
 import type { TrackingNotificationDelivery } from "@/lib/notifications/notify-tracking";
 import {
+  TRACKING_SMS_MAX_CHARS,
+  trackingSmsText,
+} from "@/lib/tracking/client-message";
+import {
   TRACKING_STATUSES,
   TRACKING_STATUS_DEFAULT_NOTES,
   TRACKING_STATUS_LABELS,
@@ -57,6 +61,7 @@ function toastForTrackingDelivery(
 
 type ClientShipmentTrackingHeaderActionProps = {
   caseId: string;
+  caseNumber?: string | null;
   trackingStatus: string | null;
   trackingNote: string | null;
   clientLabel?: string | null;
@@ -83,6 +88,7 @@ function TruckIcon() {
 
 export function ClientShipmentTrackingHeaderAction({
   caseId,
+  caseNumber,
   trackingStatus: trackingStatusProp,
   trackingNote: trackingNoteProp,
   clientLabel,
@@ -222,13 +228,25 @@ export function ClientShipmentTrackingHeaderAction({
               <textarea
                 value={trackingNote}
                 onChange={(e) => setTrackingNote(e.target.value)}
-                rows={3}
+                rows={4}
                 placeholder={TRACKING_STATUS_DEFAULT_NOTES[trackingStatus]}
                 className={`w-full resize-y ${dashInputClass}`}
               />
-              <p className="mt-1 text-xs text-slate-500">
-                Prefilled when you change status; edit before notifying the
-                client.
+              <p className="mt-1 flex justify-between gap-2 text-xs text-slate-500">
+                <span>
+                  Prefilled when you change status; edit before notifying the
+                  client. SMS is capped at {TRACKING_SMS_MAX_CHARS} characters.
+                </span>
+                <span className="shrink-0 tabular-nums">
+                  {
+                    trackingSmsText(
+                      caseNumber?.trim() || "CASE",
+                      trackingStatus,
+                      trackingNote,
+                    ).length
+                  }
+                  /{TRACKING_SMS_MAX_CHARS}
+                </span>
               </p>
             </label>
           </div>

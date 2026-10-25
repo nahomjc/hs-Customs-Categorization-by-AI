@@ -1,8 +1,43 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
 import { demoRequests } from "@/db/schema";
+import { requireAdmin } from "@/lib/auth/require-admin";
+import {
+  isDemoRequestStatus,
+  type DemoRequestStatus,
+} from "@/lib/demo-requests/constants";
+import { listDemoRequests } from "@/lib/demo-requests/queries";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+/** Admin list of landing-page demo leads. */
+export async function GET(request: NextRequest) {
+  const admin = await requireAdmin();
+  if (!admin.ok) {
+    return NextResponse.json({ error: admin.error }, { status: admin.status });
+  }
+
+  const params = request.nextUrl.searchParams;
+  const search = params.get("search")?.trim() || undefined;
+  const statusRaw = params.get("status")?.trim() ?? "";
+  const status =
+    statusRaw && isDemoRequestStatus(statusRaw)
+      ? (statusRaw as DemoRequestStatus)
+      : "";
+  const limit = Number(params.get("limit") ?? 50);
+  const offset = Number(params.get("offset") ?? 0);
+
+  try {
+    const result = await listDemoRequests({ search, status, limit, offset });
+    return NextResponse.json(result);
+  } catch (err) {
+    console.error("[demo-requests GET]", err);
+    return NextResponse.json(
+      { error: "Could not load demo requests." },
+      { status: 500 },
+    );
+  }
+}
 
 export async function POST(request: Request) {
   let body: {

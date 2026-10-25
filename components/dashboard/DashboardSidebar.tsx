@@ -152,6 +152,15 @@ const icons = {
       />
     </NavIcon>
   ),
+  demoRequests: (
+    <NavIcon>
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M3 8l7.89 5.26a2 2 0 0 0 2.22 0L21 8M5 19h14a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2Z"
+      />
+    </NavIcon>
+  ),
 };
 
 export const mainNavLinks: NavLink[] = [
@@ -214,6 +223,13 @@ export const adminNavLink: NavLink = {
   label: "HS reference",
   exact: false,
   icon: icons.hsReference,
+};
+
+export const demoRequestsNavLink: NavLink = {
+  href: "/dashboard/demo-requests",
+  label: "Demo requests",
+  exact: false,
+  icon: icons.demoRequests,
 };
 
 export const vddNavLink: NavLink = {
@@ -303,7 +319,7 @@ export function getDashboardNavGroups(
     managementLinks.push(usersNavLink);
   }
   if (options.isAdmin) {
-    managementLinks.push(adminNavLink, vddNavLink);
+    managementLinks.push(demoRequestsNavLink, adminNavLink, vddNavLink);
   }
   if (managementLinks.length > 0) {
     groups.push({

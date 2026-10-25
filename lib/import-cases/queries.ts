@@ -10,6 +10,7 @@ import {
 import { DEFAULT_TENANT_ID } from "@/lib/auth/constants";
 import {
   and,
+  asc,
   count,
   desc,
   eq,
@@ -21,6 +22,15 @@ import {
 import { isImportCaseRecipientRole } from "@/lib/auth/roles";
 import type { ImportCaseStatus } from "./constants";
 import { countOpenChecks } from "./run-case-checks";
+
+type ImportCaseSortBy =
+  | "updatedAt"
+  | "createdAt"
+  | "caseNumber"
+  | "importerName"
+  | "supplierName"
+  | "status";
+type ImportCaseSortDir = "asc" | "desc";
 
 export function getTenantId(): string {
   return DEFAULT_TENANT_ID;
@@ -35,10 +45,27 @@ export async function getImportCaseById(caseId: string, tenantId: string) {
   return row ?? null;
 }
 
+function importCaseOrderBy(
+  sortBy: ImportCaseSortBy = "updatedAt",
+  sortDir: ImportCaseSortDir = "desc",
+) {
+  const column = {
+    updatedAt: importCases.updatedAt,
+    createdAt: importCases.createdAt,
+    caseNumber: importCases.caseNumber,
+    importerName: importCases.importerName,
+    supplierName: importCases.supplierName,
+    status: importCases.status,
+  }[sortBy];
+  return sortDir === "asc" ? asc(column) : desc(column);
+}
+
 export async function listImportCases(params: {
   tenantId: string;
   search?: string;
   status?: ImportCaseStatus;
+  sortBy?: ImportCaseSortBy;
+  sortDir?: ImportCaseSortDir;
   limit: number;
   offset: number;
   clientUserId?: string;
@@ -66,6 +93,7 @@ export async function listImportCases(params: {
   }
 
   const where = and(...conditions);
+  const order = importCaseOrderBy(params.sortBy, params.sortDir);
 
   const [rows, totalRow] = await Promise.all([
     db
@@ -87,7 +115,7 @@ export async function listImportCases(params: {
       .from(importCases)
       .leftJoin(users, eq(importCases.assignedAgentId, users.id))
       .where(where)
-      .orderBy(desc(importCases.updatedAt))
+      .orderBy(order)
       .limit(params.limit)
       .offset(params.offset),
     db

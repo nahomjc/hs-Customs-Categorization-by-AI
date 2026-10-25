@@ -24,6 +24,29 @@ import {
   type ImportCaseStatus,
 } from "@/lib/import-cases/constants";
 
+type SortBy =
+  | "updatedAt"
+  | "createdAt"
+  | "caseNumber"
+  | "importerName"
+  | "supplierName"
+  | "status";
+type SortDir = "asc" | "desc";
+
+const SORT_PRESETS: Array<{ value: string; sortBy: SortBy; sortDir: SortDir; label: string }> = [
+  { value: "updatedAt:desc", sortBy: "updatedAt", sortDir: "desc", label: "Updated (newest)" },
+  { value: "updatedAt:asc", sortBy: "updatedAt", sortDir: "asc", label: "Updated (oldest)" },
+  { value: "createdAt:desc", sortBy: "createdAt", sortDir: "desc", label: "Created (newest)" },
+  { value: "createdAt:asc", sortBy: "createdAt", sortDir: "asc", label: "Created (oldest)" },
+  { value: "caseNumber:asc", sortBy: "caseNumber", sortDir: "asc", label: "Case # A–Z" },
+  { value: "caseNumber:desc", sortBy: "caseNumber", sortDir: "desc", label: "Case # Z–A" },
+  { value: "importerName:asc", sortBy: "importerName", sortDir: "asc", label: "Importer A–Z" },
+  { value: "importerName:desc", sortBy: "importerName", sortDir: "desc", label: "Importer Z–A" },
+  { value: "supplierName:asc", sortBy: "supplierName", sortDir: "asc", label: "Supplier A–Z" },
+  { value: "supplierName:desc", sortBy: "supplierName", sortDir: "desc", label: "Supplier Z–A" },
+  { value: "status:asc", sortBy: "status", sortDir: "asc", label: "Status A–Z" },
+];
+
 export type ImportCaseListItem = {
   id: string;
   caseNumber: string;
@@ -48,31 +71,43 @@ export function ImportCasesTable({
 }: ImportCasesTableProps) {
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState<ImportCaseStatus | "">("");
+  const [sort, setSort] = useState("updatedAt:desc");
   const [items, setItems] = useState(initialItems);
   const [total, setTotal] = useState(initialTotal);
   const [loading, setLoading] = useState(false);
   const skipNextFetch = useRef(true);
 
-  const applyFilters = useCallback(async (nextSearch: string, nextStatus: ImportCaseStatus | "") => {
-    setLoading(true);
-    try {
-      const params = new URLSearchParams();
-      if (nextSearch.trim()) params.set("search", nextSearch.trim());
-      if (nextStatus) params.set("status", nextStatus);
-      const res = await fetch(`/api/import-cases?${params.toString()}`);
-      if (!res.ok) throw new Error("Failed to load cases");
-      const data = (await res.json()) as {
-        items: ImportCaseListItem[];
-        total: number;
-      };
-      setItems(data.items);
-      setTotal(data.total);
-    } catch {
-      // keep current list
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+  const applyFilters = useCallback(
+    async (
+      nextSearch: string,
+      nextStatus: ImportCaseStatus | "",
+      nextSort: string,
+    ) => {
+      setLoading(true);
+      try {
+        const preset =
+          SORT_PRESETS.find((p) => p.value === nextSort) ?? SORT_PRESETS[0];
+        const params = new URLSearchParams();
+        if (nextSearch.trim()) params.set("search", nextSearch.trim());
+        if (nextStatus) params.set("status", nextStatus);
+        params.set("sortBy", preset.sortBy);
+        params.set("sortDir", preset.sortDir);
+        const res = await fetch(`/api/import-cases?${params.toString()}`);
+        if (!res.ok) throw new Error("Failed to load cases");
+        const data = (await res.json()) as {
+          items: ImportCaseListItem[];
+          total: number;
+        };
+        setItems(data.items);
+        setTotal(data.total);
+      } catch {
+        // keep current list
+      } finally {
+        setLoading(false);
+      }
+    },
+    [],
+  );
 
   useEffect(() => {
     if (skipNextFetch.current) {
@@ -80,10 +115,10 @@ export function ImportCasesTable({
       return;
     }
     const timer = window.setTimeout(() => {
-      void applyFilters(search, status);
+      void applyFilters(search, status, sort);
     }, 300);
     return () => window.clearTimeout(timer);
-  }, [search, status, applyFilters]);
+  }, [search, status, sort, applyFilters]);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -104,7 +139,7 @@ export function ImportCasesTable({
   return (
     <DashCard>
       <DashTableToolbar>
-        <div className="flex flex-col gap-3 sm:flex-row">
+        <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
           <input
             type="search"
             placeholder="Search case number, importer, supplier..."
@@ -113,7 +148,7 @@ export function ImportCasesTable({
             onKeyDown={(e) => {
               if (e.key === "Enter") {
                 e.preventDefault();
-                void applyFilters(search, status);
+                void applyFilters(search, status, sort);
               }
             }}
             className={dashInputClass}
@@ -131,8 +166,17 @@ export function ImportCasesTable({
               })),
             ]}
           />
+          <DashSelect
+            value={sort}
+            onChange={setSort}
+            aria-label="Sort import cases"
+            options={SORT_PRESETS.map((p) => ({
+              value: p.value,
+              label: p.label,
+            }))}
+          />
           <DashButton
-            onClick={() => void applyFilters(search, status)}
+            onClick={() => void applyFilters(search, status, sort)}
             disabled={loading}
           >
             {loading ? "Loading..." : "Filter"}

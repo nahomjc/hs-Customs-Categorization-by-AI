@@ -21,6 +21,9 @@ export function trackingNotificationTitle(
   return `${caseNumber}: ${TRACKING_STATUS_LABELS[status]}`;
 }
 
+/** Max chars for outbound tracking SMS (multi-segment; was single-SMS 160). */
+export const TRACKING_SMS_MAX_CHARS = 480;
+
 export function trackingSmsText(
   caseNumber: string,
   status: TrackingStatus,
@@ -28,6 +31,7 @@ export function trackingSmsText(
 ): string {
   const label = TRACKING_STATUS_LABELS[status];
   const message = trackingClientMessage(status, note);
-  const line = `${caseNumber}: ${label} — ${message}`;
-  return line.slice(0, 160);
+  const prefix = `${caseNumber}: ${label} — `;
+  const budget = Math.max(0, TRACKING_SMS_MAX_CHARS - prefix.length);
+  return `${prefix}${message.slice(0, budget)}`;
 }

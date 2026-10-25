@@ -164,6 +164,7 @@ export function ImportCaseBentoHeader({
             <div className="flex flex-col gap-2 sm:items-end">
               <ClientShipmentTrackingHeaderAction
                 caseId={importCase.id}
+                caseNumber={importCase.caseNumber}
                 trackingStatus={importCase.trackingStatus}
                 trackingNote={importCase.trackingNote}
                 clientLabel={clientLabel}

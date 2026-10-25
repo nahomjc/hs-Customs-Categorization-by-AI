@@ -35,9 +35,20 @@ export const updateTrackingSchema = z.object({
   trackingNote: z.string().trim().max(2000).optional().nullable(),
 });
 
+export const IMPORT_CASE_SORT_FIELDS = [
+  "updatedAt",
+  "createdAt",
+  "caseNumber",
+  "importerName",
+  "supplierName",
+  "status",
+] as const;
+
 export const listImportCasesQuerySchema = z.object({
   search: z.string().trim().optional(),
   status: z.enum(IMPORT_CASE_STATUSES).optional(),
+  sortBy: z.enum(IMPORT_CASE_SORT_FIELDS).default("updatedAt"),
+  sortDir: z.enum(["asc", "desc"]).default("desc"),
   limit: z.coerce.number().int().min(1).max(100).default(50),
   offset: z.coerce.number().int().min(0).default(0),
 });

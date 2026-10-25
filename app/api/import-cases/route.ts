@@ -45,6 +45,8 @@ export async function GET(request: NextRequest) {
       tenantId,
       search: parsed.data.search,
       status: parsed.data.status,
+      sortBy: parsed.data.sortBy,
+      sortDir: parsed.data.sortDir,
       limit: parsed.data.limit,
       offset: parsed.data.offset,
       clientUserId: user.id,
@@ -58,6 +60,8 @@ export async function GET(request: NextRequest) {
     tenantId,
     search: parsed.data.search,
     status: parsed.data.status,
+    sortBy: parsed.data.sortBy,
+    sortDir: parsed.data.sortDir,
     limit: parsed.data.limit,
     offset: parsed.data.offset,
   });

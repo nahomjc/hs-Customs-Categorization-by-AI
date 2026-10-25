@@ -67,6 +67,24 @@ test("sidebar: VDD import is admin-only and has its own active state", () => {
   assert.ok(!isDashboardNavActive("/dashboard/settings", "/dashboard/vdd", false));
 });
 
+test("sidebar: Demo requests is admin-only under Management", () => {
+  const hrefs = (o: Parameters<typeof getDashboardNavLinks>[0]) =>
+    getDashboardNavLinks(o).map((l) => l.href);
+  assert.ok(hrefs({ isAdmin: true }).includes("/dashboard/demo-requests"));
+  assert.ok(
+    !hrefs({ isAdmin: false, isAssessor: true }).includes("/dashboard/demo-requests"),
+  );
+  assert.ok(!hrefs({ isClient: true }).includes("/dashboard/demo-requests"));
+  const management = getDashboardNavGroups({ isAdmin: true }).find(
+    (g) => g.id === "management",
+  );
+  assert.ok(
+    management?.links.some(
+      (l) => l.href === "/dashboard/demo-requests" && l.label === "Demo requests",
+    ),
+  );
+});
+
 test("smoke: tab bar markup (roles, aria, brand-blue active, no shadows)", () => {
   const html = renderToStaticMarkup(
     createElement(SettingsTabs, { tabs: visibleSettingsTabs(true), activeId: "channels", onSelect: () => {} }),
