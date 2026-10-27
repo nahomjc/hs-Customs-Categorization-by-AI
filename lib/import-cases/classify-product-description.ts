@@ -14,9 +14,10 @@ import { isReferencePopulated } from "@/lib/hsReferenceCache";
 import type { VddScoredMatch } from "@/lib/vdd/score-match";
 import { exactNameVddConsensus, summarizeVddEvidence } from "@/lib/vdd/search-matches";
 import { shortProductLabel } from "@/lib/hs-plausibility";
+import { AiReplyError } from "@/lib/ai-json";
 import { createStepDeps } from "./hs-web-deps";
 import { NO_CLEAR_TARIFF_MATCH } from "@/lib/hs-catch-all";
-import { applyWebSearchStep, type SuggestionReview } from "./hs-web-step";
+import { PLACEHOLDER_HS, applyWebSearchStep, type SuggestionReview } from "./hs-web-step";
 import { gateFirstPass, gateStepResult } from "./plausibility-gate";
 import {
   applyVddNameOption,
@@ -43,6 +44,21 @@ export type ClassifyProductDescriptionResult = ClassificationResult & {
    */
   review?: SuggestionReview;
 };
+
+/**
+ * What a person may read about a failed AI call: never a raw JSON excerpt or an
+ * API response body (those stay in the server log).
+ */
+export function friendlyAiFailure(error: unknown): string {
+  if (error instanceof AiReplyError) return error.message;
+  const message = error instanceof Error ? error.message : String(error);
+  if (/OPENROUTER_API_KEY/i.test(message)) return "the AI service is not set up";
+  const api = /OpenRouter API error:\s*(\d{3})/i.exec(message);
+  if (api) return `the AI service returned an error (${api[1]})`;
+  if (/^invalid json|[{}\[\]]/i.test(message)) return "the AI reply could not be read";
+  if (/empty response/i.test(message)) return "the AI returned nothing";
+  return message.slice(0, 120);
+}
 
 function parseReferenceMeta(raw: string): ReferenceClassificationMeta | undefined {
   try {
@@ -418,6 +434,56 @@ export async function classifyProductDescription(
       review: step.review,
     };
   } catch (error) {
+    // The first AI reply was cut off / unreadable: the web step (a separate AI +
+    // search call) still gets its chance, with no code assumed.
+    if (error instanceof AiReplyError) {
+      try {
+        const rawStep = await applyWebSearchStep(
+          {
+            description,
+            country: options?.country,
+            unit: options?.unit,
+            first: {
+              isImportItem: true,
+              hsCode: PLACEHOLDER_HS,
+              category: "Other",
+              cleanDescription: description.trim(),
+              confidence: 0.2,
+              source: "ai_suggestion",
+            },
+            forceAi: true,
+            weakReference,
+            userNote: userNote || undefined,
+            contextText: options?.context?.text,
+            hints: options?.context?.hints,
+          },
+          createStepDeps(),
+        );
+        const step = applyVddNameOption(gateStepResult(rawStep, gateCtx), exactVdd, {
+          texts: optionTexts,
+          label: productLabel,
+        });
+        if (step.review.web.used || step.review.alternatives.length > 0 || !isCatchAllHsCode(step.hsCode)) {
+          return {
+            isImportItem: step.isImportItem,
+            hsCode: step.hsCode,
+            category: step.category,
+            cleanDescription: step.cleanDescription,
+            noteReference: step.noteReference,
+            confidence: applyVddConfidenceBoost(step.confidence, options?.vddMatches),
+            source: "ai_suggestion",
+            vddEvidence,
+            review: step.review,
+          };
+        }
+      } catch (webError) {
+        console.warn(
+          "[HS classify] web step after a cut-off AI reply failed:",
+          webError instanceof Error ? webError.message : webError,
+        );
+      }
+    }
+
     const ruleResult = classifyByRulesOnly(description);
     const validated = validateClassification({
       hsCode: ruleResult.hsCode,
@@ -429,7 +495,7 @@ export async function classifyProductDescription(
     const notAnItem = ruleResult.hsCode === "EXCLUDE" || validated.hsCode === "EXCLUDE";
     const keepAsProduct = assumeItem && notAnItem;
     const fallbackHs = keepAsProduct ? "9999" : validated.hsCode;
-    const failure = error instanceof Error ? error.message : String(error);
+    const failure = friendlyAiFailure(error);
     return {
       isImportItem: keepAsProduct ? true : ruleResult.hsCode !== "EXCLUDE",
       category: keepAsProduct ? "Other" : ruleResult.category,
@@ -443,7 +509,10 @@ export async function classifyProductDescription(
         ? {
             review: {
               required: true,
-              reason: `${NO_CLEAR_TARIFF_MATCH}. The AI request failed (${failure.slice(0, 120)}), so only the rule fallback ran. Try Ask AI again.`,
+              reason:
+                error instanceof AiReplyError
+                  ? `${NO_CLEAR_TARIFF_MATCH}. ${failure} Only the rule fallback ran.`
+                  : `${NO_CLEAR_TARIFF_MATCH}. The AI request failed (${failure}), so only the rule fallback ran. Try Ask AI again.`,
               confidenceNote: "No code suggested",
               userNoteUsed: userNote ? true : undefined,
               alternatives: [],

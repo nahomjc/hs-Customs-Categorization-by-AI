@@ -72,8 +72,55 @@ const FOOD_RE = new RegExp(
   "i",
 );
 
-const KITCHENWARE_RE =
-  /\b(?:steamers?|woks?|cookware|pots?|pans?|kettles?|tableware|kitchenware|chopsticks?|spoons?|forks?|knife|knives|utensils?|thermos|flasks?|lunch\s*box(?:es)?|mugs?|tea\s*(?:sets?|pots?|cups?|ware|trays?)|coffee\s*(?:pots?|makers?|cups?))\b/i;
+/**
+ * Words that name a cooking / eating vessel for sure ("cookware", "tea set",
+ * "thermos"): they say kitchenware wherever they stand.
+ */
+const KITCHENWARE_STRONG_RE =
+  /\b(?:cookware|tableware|kitchenware|kettles?|chopsticks?|utensils?|thermos|flasks?|lunch\s*box(?:es)?|tea\s*(?:sets?|pots?|cups?|ware|trays?)|coffee\s*(?:pots?|makers?|cups?))\b/i;
+
+/**
+ * Words that are also part of a food name: "hot pot base", "pot noodle", "wok
+ * seasoning", "pan-fried", "steamer rice noodles". They name kitchenware only
+ * when they end the phrase ("non-stick iron pot", "iron wok").
+ */
+const KITCHENWARE_WEAK_RE = /\b(?:steamers?|woks?|pots?|pans?|spoons?|forks?|knife|knives|mugs?)\b/gi;
+
+/** Food / cooking-ingredient words that may follow a weak noun and then make it a food name. */
+const FOOD_FOLLOWER_RE = new RegExp(
+  FOOD_RE.source +
+    "|\\b(?:base|dipping|dips?|paste|powder|oil|condiments?|marinades?|stock|dressing|filling|mix|stickers?|roast|pies?|fried|stir|masala)\\b",
+  "i",
+);
+
+/** An appliance / vessel wording that keeps "hot pot" a vessel even when food words are around. */
+const VESSEL_CONTEXT_RE =
+  /\b(?:electric|appliance|cooker|induction|non-?stick|stainless|aluminium|aluminum|enamel|cast\s*iron|iron|copper|ceramic|stone|clay|divider|lid|set)\b/i;
+
+/**
+ * Kitchenware as the thing being imported. A single generic word is not enough
+ * when it sits inside a food phrase.
+ */
+export function isKitchenwareDescription(description: string): boolean {
+  const d = description.toLowerCase();
+  if (KITCHENWARE_STRONG_RE.test(d)) return true;
+
+  // a hot pot is a food phrase when food words are around and no vessel wording is
+  const hasFood = FOOD_FOLLOWER_RE.test(d);
+  const vesselContext = VESSEL_CONTEXT_RE.test(d);
+  const text = hasFood && !vesselContext ? d.replace(/\bhot\s*-?\s*pot\b/g, " hotpot ") : d;
+
+  for (const m of text.matchAll(KITCHENWARE_WEAK_RE)) {
+    const after = text.slice((m.index ?? 0) + m[0].length);
+    // the rest of the same phrase (up to for / with / used / a separator)
+    const phrase = after.split(/\b(?:for|with|used|to|and)\b|[,;.()]/)[0] ?? "";
+    // "pan-fried", "wok-fried": the hyphenated form is a cooking method
+    if (/^\s*-\s*(?:fried|frying|roasted|seared)/.test(phrase)) continue;
+    if (FOOD_FOLLOWER_RE.test(phrase)) continue;
+    return true;
+  }
+  return false;
+}
 
 const INCENSE_RE =
   /\b(?:incense|joss|perfumes?|cologne|fragrances?|air\s*fresheners?|candles?|aroma(?:therapy)?)\b/i;
@@ -106,7 +153,7 @@ export function detectProductSignals(description: string): ProductSignals {
         d,
       ),
     textileMaterial,
-    kitchenware: KITCHENWARE_RE.test(d),
+    kitchenware: isKitchenwareDescription(d),
     incense: INCENSE_RE.test(d),
   };
 }

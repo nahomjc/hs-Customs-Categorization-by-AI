@@ -26,6 +26,7 @@ import {
 } from "./hs-chapter-notes";
 import { normalizeChapter } from "./hs-chapter-notes-schema";
 import { fetchOpenRouter } from "./openrouterFetch";
+import { requestJsonObject, type AiCallResult, type AiMessage } from "./ai-json";
 
 const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
 
@@ -268,10 +269,12 @@ function extractJson<T>(content: string): T {
   return JSON.parse(cleaned) as T;
 }
 
-async function callOpenRouter(
-  messages: Array<{ role: "system" | "user"; content: string }>,
+/** Like callOpenRouter, but also says why the model stopped ("length" = cut off). */
+async function callOpenRouterDetailed(
+  messages: AiMessage[],
   maxTokens = 256,
-) {
+  options?: { json?: boolean },
+): Promise<AiCallResult> {
   const apiKey = process.env.OPENROUTER_API_KEY;
   if (!apiKey) {
     console.error("[HS classifyItem] OPENROUTER_API_KEY is not set");
@@ -291,8 +294,14 @@ async function callOpenRouter(
       messages,
       temperature: 0.2,
       max_tokens: maxTokens,
+      ...(options?.json ? { response_format: { type: "json_object" } } : {}),
     }),
   });
+
+  if (!res.ok && options?.json && res.status === 400) {
+    // the model / provider does not take response_format: ask again without it
+    return callOpenRouterDetailed(messages, maxTokens);
+  }
 
   if (!res.ok) {
     const err = await res.text();
@@ -305,15 +314,40 @@ async function callOpenRouter(
   }
 
   const data = (await res.json()) as {
-    choices?: Array<{ message?: { content?: string } }>;
+    choices?: Array<{
+      message?: { content?: string };
+      finish_reason?: string | null;
+    }>;
   };
   const content = data.choices?.[0]?.message?.content?.trim();
   if (!content) throw new Error("Empty response from OpenRouter");
-  return content;
+  return { content, finishReason: data.choices?.[0]?.finish_reason ?? null };
+}
+
+async function callOpenRouter(messages: AiMessage[], maxTokens = 256) {
+  return (await callOpenRouterDetailed(messages, maxTokens)).content;
+}
+
+/** JSON answer: retried once when cut off / invalid; the raw text only goes to the server log. */
+function requestAiJson<T>(
+  messages: AiMessage[],
+  options: { maxTokens: number; requiredKeys: readonly string[]; label: string },
+) {
+  return requestJsonObject<T>(
+    (msgs, max) => callOpenRouterDetailed(msgs, max, { json: true }),
+    messages,
+    {
+      maxTokens: options.maxTokens,
+      retryMaxTokens: Math.max(options.maxTokens * 2, 1500),
+      requiredKeys: options.requiredKeys,
+      label: options.label,
+      log: (m) => console.warn(`[HS classifyItem] ${m}`),
+    },
+  );
 }
 
 /** Larger completion budget when the notes fields (noteReference/redirectChapter) are requested. */
-const NOTES_MAX_TOKENS = 600;
+const NOTES_MAX_TOKENS = 1000;
 
 type NotedClassification = ClassificationResult & { redirectChapter?: string };
 
@@ -447,21 +481,15 @@ export async function classifyItem(
   if (contextBlock) featureUserContent += `\n\n${contextBlock}`;
 
   // Step 1: Feature extractor (AI)
-  const featureContent = await callOpenRouter([
-    { role: "system", content: FEATURE_EXTRACTOR_PROMPT },
-    { role: "user", content: featureUserContent },
-  ]);
-
-  let features: HsFeatures & { isImportItem?: boolean };
-  try {
-    features = extractJson<HsFeatures & { isImportItem?: boolean }>(
-      featureContent,
-    );
-  } catch {
-    throw new Error(
-      `Invalid JSON from feature extractor AI: ${featureContent}`,
-    );
-  }
+  const { parsed: features } = await requestAiJson<
+    HsFeatures & { isImportItem?: boolean }
+  >(
+    [
+      { role: "system", content: FEATURE_EXTRACTOR_PROMPT },
+      { role: "user", content: featureUserContent },
+    ],
+    { maxTokens: 400, requiredKeys: ["isImportItem", "itemType"], label: "feature extractor" },
+  );
 
   // Step 2: GRI rule engine (code)
   const gri = applyGriRuleEngine({
@@ -530,20 +558,21 @@ export async function classifyItem(
         )
       : buildFurnitureSystemPrompt(allowedList);
 
-  let content = await callOpenRouter(
+  // A long answer (options, a question, notes) used to be cut at 500 tokens: more
+  // room, one stricter retry, and never the raw text in the error.
+  const reasoning = await requestAiJson<NotedClassification>(
     [
       { role: "system", content: systemPrompt },
       { role: "user", content: reasoningUserContent },
     ],
-    notesBlock ? NOTES_MAX_TOKENS : mode === "tariff" ? 500 : undefined,
+    {
+      maxTokens: notesBlock ? NOTES_MAX_TOKENS : mode === "tariff" ? 900 : 600,
+      requiredKeys: ["isImportItem", "hsCode", "category", "cleanDescription"],
+      label: "reasoning",
+    },
   );
-
-  let parsed: NotedClassification;
-  try {
-    parsed = extractJson<NotedClassification>(content);
-  } catch {
-    throw new Error(`Invalid JSON from reasoning AI: ${content}`);
-  }
+  let content = reasoning.content;
+  let parsed: NotedClassification = reasoning.parsed;
 
   if (notesBlock) {
     const redirected = await applyNoteRedirect({

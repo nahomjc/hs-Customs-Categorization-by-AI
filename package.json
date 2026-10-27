@@ -23,6 +23,7 @@
 		"test:hs-ambiguous": "npx tsx scripts/test-hs-ambiguous.ts",
 		"test:hs-plausibility": "npx tsx scripts/test-hs-plausibility.ts",
 		"test:hs-ties": "npx tsx scripts/test-hs-ties.ts",
+		"test:hs-hotpot": "npx tsx scripts/test-hs-hotpot.ts",
 		"test:export-sad": "npx tsx scripts/test-export-sad.ts"
 	},
 	"dependencies": {
