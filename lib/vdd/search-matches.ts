@@ -105,6 +105,56 @@ export function buildPriceComparison(
   };
 }
 
+function normName(value: string | null | undefined): string {
+  return (value ?? "").trim().toLowerCase().replace(/\s+/g, " ");
+}
+
+export type VddNameConsensus = {
+  /** The code as stored in VDD. */
+  hsCode: string;
+  /** Its digits (6 to 10). */
+  digits: string;
+  /** How many VDD records with this exact name use it. */
+  count: number;
+};
+
+/**
+ * VDD records whose common name or commercial description EQUALS the product
+ * name (same words, ignoring case): "Rice" equals a record described "Rice", but
+ * "Eight Treasure Rice" or "Broken Rice" do not. When every such record uses the
+ * same code, that code is returned as a suggestion for the reviewer. When the
+ * records disagree (or none is an exact name match) the result is null.
+ * History only: never a final code, and the caller must still validate it.
+ */
+export function exactNameVddConsensus(
+  matches: VddScoredMatch[] | undefined,
+  names: ReadonlyArray<string | null | undefined>,
+): VddNameConsensus | null {
+  const wanted = new Set(names.map(normName).filter((n) => n.length >= 2));
+  if (!matches?.length || wanted.size === 0) return null;
+
+  const exact = matches.filter(
+    (m) =>
+      wanted.has(normName(m.record.commonName)) ||
+      wanted.has(normName(m.record.commercialDescription)),
+  );
+  if (exact.length === 0) return null;
+
+  const byCode = new Map<string, { hsCode: string; count: number }>();
+  for (const m of exact) {
+    const digits = m.record.hsCode.replace(/\D/g, "").slice(0, 10);
+    if (digits.length < 6) return null; // too short to say anything
+    const key = digits.slice(0, 8);
+    const entry = byCode.get(key);
+    if (entry) entry.count += 1;
+    else byCode.set(key, { hsCode: m.record.hsCode, count: 1 });
+  }
+  if (byCode.size !== 1) return null; // the records disagree
+
+  const [digits, entry] = [...byCode.entries()][0];
+  return { hsCode: entry.hsCode, digits, count: entry.count };
+}
+
 export function summarizeVddEvidence(matches: VddScoredMatch[]): {
   similarRecordsUsed: number;
   matchingAttributes: string[];

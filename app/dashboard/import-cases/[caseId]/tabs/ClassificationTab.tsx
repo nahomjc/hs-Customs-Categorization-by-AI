@@ -59,6 +59,8 @@ type ClassificationTabProps = {
   referencePopulated: boolean;
   onClassificationsChange?: (items: ProductClassificationBundle[]) => void;
   onWorkflowJobGuard?: (guard: WorkflowJobGuardPayload | null) => void;
+  /** Opens the grouping step (used after an approved code was changed). */
+  onGoToGrouping?: () => void;
 };
 
 function classificationSearchHaystack(row: ProductClassificationBundle): string {
@@ -133,6 +135,7 @@ export function ClassificationTab({
   referencePopulated: initialReferencePopulated,
   onClassificationsChange,
   onWorkflowJobGuard,
+  onGoToGrouping,
 }: ClassificationTabProps) {
   const router = useRouter();
   const [items, setItems] =
@@ -315,6 +318,10 @@ export function ClassificationTab({
     candidateId?: string,
     hsCode?: string,
   ) {
+    // an approved code that is being changed: grouping has to be run again
+    const changingApproved =
+      Boolean(hsCode) &&
+      items.some((row) => row.product.id === productId && row.classification?.isFinal);
     setApprovingId(productId);
     try {
       const res = await fetch(
@@ -329,7 +336,17 @@ export function ClassificationTab({
       );
       const data = (await res.json()) as { error?: string };
       if (!res.ok) throw new Error(data.error ?? "Approval failed");
-      toast.success("HS classification approved");
+      if (changingApproved) {
+        toast.success("Approved code changed", {
+          description: "Grouping must be re-run after changing an approved code.",
+          duration: 10000,
+          ...(onGoToGrouping
+            ? { action: { label: "Re-run grouping", onClick: onGoToGrouping } }
+            : {}),
+        });
+      } else {
+        toast.success("HS classification approved");
+      }
       setOverrideId(null);
       if (decisionModal?.productId === productId) {
         setDecisionModal(null);
@@ -1122,7 +1139,19 @@ function ClassificationTableRow({
                 {classification && !review.noCode ? "Override" : "Set HS"}
               </button>
             </div>
-          ) : null}
+          ) : (
+            <div className="flex flex-wrap items-center justify-end gap-1.5">
+              <button
+                type="button"
+                onClick={() => onStartOverride(product.id, classification?.hsCode ?? "")}
+                disabled={isApproving}
+                className="text-xs font-medium text-slate-700 bg-slate-100 hover:bg-slate-200 disabled:opacity-50 rounded-lg px-2.5 py-1 whitespace-nowrap"
+                title="Change the approved code. Grouping must be re-run afterwards."
+              >
+                Edit code
+              </button>
+            </div>
+          )}
         </td>
       </tr>
       {isOverriding ? (
@@ -1143,6 +1172,11 @@ function ClassificationTableRow({
                   className={`${dashInputClass} pl-3 w-full mt-1 text-sm`}
                   placeholder="e.g. 9405.10"
                 />
+                {classification?.isFinal ? (
+                  <p className="mt-1 whitespace-normal text-amber-700">
+                    Grouping must be re-run after changing an approved code.
+                  </p>
+                ) : null}
               </div>
               <DashButton
                 onClick={() => onApprove(product.id, undefined, overrideHsCode)}

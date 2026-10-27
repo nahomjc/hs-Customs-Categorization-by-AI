@@ -31,6 +31,7 @@ const ACTION_LABELS: Record<string, string> = {
   classification_suggested: "Suggested HS classifications",
   classification_ai_requested: "Requested AI HS classification",
   classification_approved: "Approved classification",
+  classification_changed: "Changed approved classification",
   grouping_created: "Created declaration groupings",
   export_generated: "Generated export report",
 };

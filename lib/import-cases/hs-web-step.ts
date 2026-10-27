@@ -61,8 +61,11 @@ export type ReviewAlternative = {
   reason?: string;
   /** False only when the tariff book was empty and the code could not be checked. */
   inTariffBook: boolean;
-  /** "supplier" = the supplier's own HS code from the invoice (a hint, may be wrong). */
-  origin?: "supplier";
+  /**
+   * "supplier" = the supplier's own HS code from the invoice (a hint, may be wrong);
+   * "vdd" = what earlier declarations with the exact same product name used.
+   */
+  origin?: "supplier" | "vdd";
 };
 
 export type SuggestionReview = {

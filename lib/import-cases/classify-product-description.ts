@@ -12,11 +12,18 @@ import {
 import { loadHsReferenceCache } from "@/lib/hsReference";
 import { isReferencePopulated } from "@/lib/hsReferenceCache";
 import type { VddScoredMatch } from "@/lib/vdd/score-match";
-import { summarizeVddEvidence } from "@/lib/vdd/search-matches";
+import { exactNameVddConsensus, summarizeVddEvidence } from "@/lib/vdd/search-matches";
+import { shortProductLabel } from "@/lib/hs-plausibility";
 import { createStepDeps } from "./hs-web-deps";
 import { NO_CLEAR_TARIFF_MATCH } from "@/lib/hs-catch-all";
 import { applyWebSearchStep, type SuggestionReview } from "./hs-web-step";
 import { gateFirstPass, gateStepResult } from "./plausibility-gate";
+import {
+  applyVddNameOption,
+  buildSupplierBreakReview,
+  buildSupplierDifferenceReview,
+  buildTieReview,
+} from "./tie-options";
 import { sanitizeNote, type NameHints } from "./product-context";
 
 export type ProductClassifySource =
@@ -179,6 +186,15 @@ export async function classifyProductDescription(
       : null;
   const vddEvidenceText = vddEvidence?.evidenceText;
 
+  // VDD records with EXACTLY this product name that agree on one code: a
+  // suggestion for the reviewer (top option), never the final code.
+  const productLabel = shortProductLabel(description) || description.trim();
+  const exactVdd = exactNameVddConsensus(options?.vddMatches, [
+    ...(options?.nameTexts ?? []),
+    productLabel,
+  ]);
+  const optionTexts = [...(options?.nameTexts ?? []), description];
+
   const vddConsensus = strongVddHsConsensus(options?.vddMatches);
   if (vddConsensus && !options?.forceAi && !userNote) {
     const hsCode = formatVddHsForSuggestion(vddConsensus.hsCode);
@@ -235,8 +251,44 @@ export async function classifyProductDescription(
         };
       }
 
+      // The book cannot tell several rows apart ("Rice": paddy / husked / milled /
+      // broken): none is picked silently. The tied rows become ranked options and
+      // the review asks one question. The invoice code and VDD only rank them.
+      if (isUsableReference && refMeta?.tied && refMeta.tied.length > 1) {
+        const tie = buildTieReview(refMeta.tied, {
+          texts: optionTexts,
+          label: refMeta.matchedOn || productLabel,
+          supplierHsCode: refMeta.supplierHsCode,
+          vdd: exactVdd,
+        });
+        return {
+          isImportItem: true,
+          hsCode: tie.hsCode,
+          category: assessed.category,
+          cleanDescription: assessed.cleanDescription,
+          confidence: 0.3,
+          aiRawResponse: refResult.aiRawResponse,
+          source: "reference_match",
+          referenceMeta: refMeta,
+          vddEvidence,
+          review: tie.review,
+        };
+      }
+
       if (isUsableReference) {
         const referenceMeta = refMeta;
+        // never override an unambiguous tariff-book match with VDD; only flag
+        // when the invoice code differs (plausibly) or decided a tie
+        const ctx = {
+          texts: optionTexts,
+          label: refMeta?.matchedOn || productLabel,
+          supplierHsCode: refMeta?.supplierHsCode,
+        };
+        const review = refMeta?.supplierCheck
+          ? buildSupplierDifferenceReview(hsCode, refMeta.supplierCheck, ctx)
+          : refMeta?.supplierBreak
+            ? buildSupplierBreakReview(hsCode, ctx)
+            : undefined;
 
         return {
           ...assessed,
@@ -250,6 +302,7 @@ export async function classifyProductDescription(
           source: "reference_match",
           referenceMeta,
           vddEvidence,
+          ...(review ? { review } : {}),
         };
       }
     }
@@ -345,7 +398,12 @@ export async function classifyProductDescription(
       },
       createStepDeps(),
     );
-    const step = gateStepResult(rawStep, gateCtx, gated.rejected);
+    const gatedStep = gateStepResult(rawStep, gateCtx, gated.rejected);
+    // exact-name VDD history: offered as the top option, never final
+    const step = applyVddNameOption(gatedStep, exactVdd, {
+      texts: optionTexts,
+      label: productLabel,
+    });
 
     return {
       ...result,

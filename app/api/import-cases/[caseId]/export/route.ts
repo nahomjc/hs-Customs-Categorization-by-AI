@@ -5,6 +5,9 @@ import {
   unauthorizedResponse,
 } from "@/lib/import-cases/api-helpers";
 import { generateDeclarationCsv } from "@/lib/import-cases/export-declaration";
+import { buildSadDraft } from "@/lib/import-cases/export-sad";
+import { generateSadExcel } from "@/lib/import-cases/export-sad-excel";
+import { generateSadPdf } from "@/lib/import-cases/export-sad-pdf";
 import {
   getCaseGroupings,
   getUnclassifiedProducts,
@@ -15,11 +18,27 @@ import { getImportCaseById, getTenantId, writeAuditLog } from "@/lib/import-case
 
 type RouteParams = { params: Promise<{ caseId: string }> };
 
-export async function GET(_request: NextRequest, { params }: RouteParams) {
+type ExportFormat = "csv" | "sad-pdf" | "sad-xlsx";
+
+function parseFormat(raw: string | null): ExportFormat | null {
+  if (!raw || raw === "csv") return "csv";
+  if (raw === "sad-pdf" || raw === "sad-xlsx") return raw;
+  return null;
+}
+
+export async function GET(request: NextRequest, { params }: RouteParams) {
   const user = await getAuthUser();
   if (!user?.id) return unauthorizedResponse();
 
   const { caseId } = await params;
+  const format = parseFormat(request.nextUrl.searchParams.get("format"));
+  if (!format) {
+    return NextResponse.json(
+      { error: "Invalid format — use csv, sad-pdf, or sad-xlsx" },
+      { status: 400 },
+    );
+  }
+
   const tenantId = getTenantId();
   const importCase = await getImportCaseById(caseId, tenantId);
   if (!importCase) return notFoundResponse("Import case not found");
@@ -39,11 +58,29 @@ export async function GET(_request: NextRequest, { params }: RouteParams) {
     loadCaseOriginData(caseId),
   ]);
 
-  const buffer = generateDeclarationCsv(importCase.caseNumber, groupings, {
-    unclassified,
-    origins,
-  });
-  const filename = `${importCase.caseNumber}-declaration.csv`;
+  const extras = { unclassified, origins };
+
+  let buffer: Buffer;
+  let filename: string;
+  let contentType: string;
+
+  if (format === "csv") {
+    buffer = generateDeclarationCsv(importCase.caseNumber, groupings, extras);
+    filename = `${importCase.caseNumber}-declaration.csv`;
+    contentType = "text/csv; charset=utf-8";
+  } else {
+    const draft = buildSadDraft(importCase, groupings, extras);
+    if (format === "sad-pdf") {
+      buffer = await generateSadPdf(draft);
+      filename = `${importCase.caseNumber}-SAD-draft.pdf`;
+      contentType = "application/pdf";
+    } else {
+      buffer = await generateSadExcel(draft);
+      filename = `${importCase.caseNumber}-SAD-draft.xlsx`;
+      contentType =
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+    }
+  }
 
   await writeAuditLog({
     tenantId,
@@ -53,7 +90,7 @@ export async function GET(_request: NextRequest, { params }: RouteParams) {
     entityId: caseId,
     action: "export_generated",
     newData: {
-      format: "csv",
+      format,
       groupCount: groupings.length,
       unclassifiedCount: unclassified.length,
     },
@@ -61,7 +98,7 @@ export async function GET(_request: NextRequest, { params }: RouteParams) {
 
   return new NextResponse(new Uint8Array(buffer), {
     headers: {
-      "Content-Type": "text/csv; charset=utf-8",
+      "Content-Type": contentType,
       "Content-Disposition": `attachment; filename="${filename}"`,
     },
   });

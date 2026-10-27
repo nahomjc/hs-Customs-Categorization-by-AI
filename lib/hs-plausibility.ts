@@ -110,6 +110,12 @@ export type PlausibilityVerdict = {
   chapter: string | null;
   /** Supplier's HS code (digits) used as a hint. */
   supplierHsCode: string | null;
+  /**
+   * How far the suggestion and the supplier's code disagree (only when status is
+   * "check"): a different chapter, a different heading (same chapter) or a
+   * different sub-heading (same heading).
+   */
+  level?: "chapter" | "heading" | "subheading";
 };
 
 export type PlausibilityInput = {
@@ -120,7 +126,38 @@ export type PlausibilityInput = {
    */
   texts: ReadonlyArray<string | null | undefined>;
   supplierHsCode?: string | null;
+  /**
+   * True when the product description clearly supports the suggestion over the
+   * supplier's code (the caller compared both tariff rows). A heading or
+   * sub-heading difference is then not flagged.
+   */
+  descriptionSupportsSuggestion?: boolean;
+  /**
+   * A person chose this code (typed it or picked it from the shown options):
+   * the supplier's hint no longer flags it. An implausible code is still flagged.
+   */
+  decidedByHuman?: boolean;
 };
+
+function dotted(digits: string): string {
+  return digits.length >= 8 ? `${digits.slice(0, 4)}.${digits.slice(4, 8)}` : digits;
+}
+
+/**
+ * Compares the suggestion with the supplier's code inside one chapter.
+ * "heading": different 4-digit heading; "subheading": same heading, different
+ * 6 or 8 digits (only when both codes are specific enough to compare).
+ */
+function sameChapterDifference(
+  code: string,
+  supplier: string,
+): "heading" | "subheading" | null {
+  if (code.length < 4 || supplier.length < 4) return null;
+  if (code.slice(0, 4) !== supplier.slice(0, 4)) return "heading";
+  const n = Math.min(code.length, supplier.length, 8);
+  if (n < 6) return null; // the supplier only gave the heading: nothing to compare
+  return code.slice(0, n) === supplier.slice(0, n) ? null : "subheading";
+}
 
 function familyOfTexts(
   texts: PlausibilityInput["texts"],
@@ -179,14 +216,33 @@ export function checkPlausibility(input: PlausibilityInput): PlausibilityVerdict
     }
   }
 
+  let level: PlausibilityVerdict["level"];
   if (supplierChapter && supplierChapter !== chapter) {
     if (status === "ok") status = "check";
+    level = "chapter";
     reasons.push(
-      `The supplier's invoice code is ${supplierDigits.length >= 8 ? `${supplierDigits.slice(0, 4)}.${supplierDigits.slice(4, 8)}` : supplierDigits} (${chapterText(supplierChapter)}), which is a different chapter.`,
+      `The supplier's invoice code is ${dotted(supplierDigits)} (${chapterText(supplierChapter)}), which is a different chapter.`,
     );
+  } else if (supplierChapter && !input.descriptionSupportsSuggestion) {
+    const codeDigits = hsDigits(input.hsCode);
+    const diff = sameChapterDifference(codeDigits, supplierDigits);
+    if (diff) {
+      if (status === "ok") status = "check";
+      level = diff;
+      reasons.push(
+        diff === "heading"
+          ? `The supplier's invoice code is ${dotted(supplierDigits)} (heading ${supplierDigits.slice(0, 4)}), this code is in heading ${codeDigits.slice(0, 4)}: same chapter, different heading.`
+          : `The supplier's invoice code is ${dotted(supplierDigits)}, this code is ${dotted(codeDigits)}: same heading ${codeDigits.slice(0, 4)}, different sub-heading.`,
+      );
+    }
   }
 
-  return { ...base, status, reasons };
+  // A person already chose between the options: the hint is not raised again.
+  if (input.decidedByHuman && status === "check") {
+    return { ...base, status: "ok", reasons: [] };
+  }
+
+  return { ...base, status, reasons, ...(level ? { level } : {}) };
 }
 
 /** True when the verdict should stop a code being accepted without a person looking. */

@@ -104,6 +104,9 @@ function buildReasoning(
   if (result.source === "reference_match") {
     const tariffNo = result.referenceMeta?.tariffNo;
     const score = result.referenceMeta?.score;
+    if (result.referenceMeta?.tied && result.referenceMeta.tied.length > 1) {
+      return `Tariff book: ${result.referenceMeta.tied.length} rows match "${result.referenceMeta.matchedOn ?? result.cleanDescription}" equally, none was picked. A person chooses.${vddNote}`;
+    }
     return `Tariff reference match${tariffNo ? ` (${tariffNo})` : ""}${score != null ? `, score ${score}` : ""}: ${result.cleanDescription}.${vddNote}`;
   }
   if (result.source === "rule_fallback") {
@@ -147,6 +150,8 @@ function buildClassificationEvidence(
       source: "reference_match",
       category: result.category,
       referenceMeta: result.referenceMeta,
+      // a tie / invoice-code difference: the options and the question
+      ...(result.review ? { review: result.review } : {}),
       ...vddBlock,
     };
   }
@@ -260,7 +265,7 @@ async function persistProductClassification(
     .returning();
 
   // Other real tariff codes the reviewer can choose instead (rank 2+).
-  const alternatives = (review?.alternatives ?? []).slice(0, 3);
+  const alternatives = (review?.alternatives ?? []).slice(0, 4);
   for (let i = 0; i < alternatives.length; i++) {
     const alt = alternatives[i];
     await db.insert(hsCodeCandidates).values({
@@ -414,6 +419,8 @@ export async function findSuspiciousProducts(
       hsCode: c.hsCode,
       texts: [p.productName, p.rawDescription, p.normalizedDescription],
       supplierHsCode: supplierHs.get(p.id) ?? null,
+      // a person already looked at it and approved: not suspicious again
+      decidedByHuman: c.source === "manual_override" || c.isFinal === true,
     });
     if (!needsRecheck(verdict)) continue;
     out.push({

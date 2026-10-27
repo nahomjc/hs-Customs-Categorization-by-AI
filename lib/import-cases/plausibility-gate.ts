@@ -33,8 +33,15 @@ type Rejected = { hsCode: string; reasons: string[] };
 
 const MAX_OPTIONS = 3;
 
+/** The invoice code is a hint: when it does not fit the description it is ignored. */
+function usableSupplier(ctx: GateContext): string | null {
+  const s = ctx.supplierHsCode;
+  if (!s) return null;
+  return checkPlausibility({ hsCode: s, texts: ctx.texts }).status === "implausible" ? null : s;
+}
+
 function verdictOf(hsCode: string, ctx: GateContext) {
-  return checkPlausibility({ hsCode, texts: ctx.texts, supplierHsCode: ctx.supplierHsCode });
+  return checkPlausibility({ hsCode, texts: ctx.texts, supplierHsCode: usableSupplier(ctx) });
 }
 
 function nameOf(ctx: GateContext): string {

@@ -219,7 +219,11 @@ export async function approveProductClassification(
     userId,
     entityType: "import_product",
     entityId: productId,
-    action: "classification_approved",
+    // an approved code that was changed: keep what it was before
+    action: existing?.isFinal ? "classification_changed" : "classification_approved",
+    ...(existing?.isFinal
+      ? { oldData: { hsCode: existing.hsCode, source: existing.source } }
+      : {}),
     newData: { hsCode, source },
     reason: input.reviewerReason ?? null,
   });

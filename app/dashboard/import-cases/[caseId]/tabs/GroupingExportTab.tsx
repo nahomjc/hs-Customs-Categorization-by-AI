@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { Pagination, usePagination } from "@/components/dashboard/Pagination";
 import { HsCodeBadge } from "@/components/dashboard/document/HsCodeBadge";
@@ -24,6 +24,26 @@ import {
   TruncatedText,
   dashInputClass,
 } from "@/components/dashboard/ui";
+
+type ExportFormat = "csv" | "sad-pdf" | "sad-xlsx";
+
+const EXPORT_OPTIONS: Array<{
+  format: ExportFormat;
+  label: string;
+  hint: string;
+}> = [
+  { format: "csv", label: "Declaration CSV", hint: "Decision-support spreadsheet" },
+  {
+    format: "sad-pdf",
+    label: "SAD PDF (Ethiopia)",
+    hint: "Customs declaration form draft",
+  },
+  {
+    format: "sad-xlsx",
+    label: "SAD Excel (Ethiopia)",
+    hint: "Box-mapped ASYCUDA template",
+  },
+];
 import { getCountryLabel } from "@/lib/countries";
 import { formatHsCode } from "@/lib/hs-code-format";
 import { displayOrigin, ORIGIN_NOT_PROVIDED } from "@/lib/import-cases/origin";
@@ -48,6 +68,8 @@ type GroupingExportTabProps = {
   initialGroupings: GroupingWithProducts[];
   /** Products that are in no group: listed with a warning, also in the CSV. */
   initialUnclassified?: UnclassifiedProduct[];
+  /** Approved codes changed after the last grouping (from stored timestamps). */
+  staleApprovedCount?: number;
   onWorkflowJobGuard?: (guard: WorkflowJobGuardPayload | null) => void;
 };
 
@@ -92,6 +114,7 @@ export function GroupingExportTab({
   caseNumber,
   initialGroupings,
   initialUnclassified = [],
+  staleApprovedCount = 0,
   onWorkflowJobGuard,
 }: GroupingExportTabProps) {
   const router = useRouter();
@@ -104,8 +127,44 @@ export function GroupingExportTab({
   const [progressOpen, setProgressOpen] = useState(false);
   const [rerunConfirmOpen, setRerunConfirmOpen] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [downloadMenu, setDownloadMenu] = useState<"header" | "footer" | null>(
+    null,
+  );
   const [expandedGroupId, setExpandedGroupId] = useState<string | null>(null);
   const [search, setSearch] = useState("");
+
+  const exportMeta = {
+    csv: {
+      filename: `${caseNumber}-declaration.csv`,
+      toast: "Declaration CSV downloaded",
+    },
+    "sad-pdf": {
+      filename: `${caseNumber}-SAD-draft.pdf`,
+      toast: "Ethiopian Customs SAD PDF downloaded",
+    },
+    "sad-xlsx": {
+      filename: `${caseNumber}-SAD-draft.xlsx`,
+      toast: "Ethiopian Customs SAD Excel downloaded",
+    },
+  } as const;
+
+  useEffect(() => {
+    if (!downloadMenu) return;
+    function onDocClick(e: MouseEvent) {
+      const t = e.target as HTMLElement | null;
+      if (t?.closest?.("[data-download-menu]")) return;
+      setDownloadMenu(null);
+    }
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") setDownloadMenu(null);
+    }
+    document.addEventListener("mousedown", onDocClick);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDocClick);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [downloadMenu]);
 
   const filteredGroupings = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -188,10 +247,13 @@ export function GroupingExportTab({
     void refresh();
   }
 
-  async function handleExport() {
+  async function handleExport(format: ExportFormat) {
+    setDownloadMenu(null);
     setExporting(true);
     try {
-      const res = await fetch(`/api/import-cases/${caseId}/export`);
+      const res = await fetch(
+        `/api/import-cases/${caseId}/export?format=${format}`,
+      );
       if (!res.ok) {
         const data = (await res.json()) as { error?: string };
         throw new Error(data.error ?? "Export failed");
@@ -200,10 +262,10 @@ export function GroupingExportTab({
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `${caseNumber}-declaration.csv`;
+      a.download = exportMeta[format].filename;
       a.click();
       URL.revokeObjectURL(url);
-      toast.success("Declaration CSV downloaded");
+      toast.success(exportMeta[format].toast);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Export failed");
     } finally {
@@ -211,14 +273,62 @@ export function GroupingExportTab({
     }
   }
 
+  function DownloadMenu({
+    id,
+    align = "right",
+  }: {
+    id: "header" | "footer";
+    align?: "left" | "right";
+  }) {
+    const open = downloadMenu === id;
+    return (
+      <div className="relative" data-download-menu>
+        <DashButton
+          type="button"
+          variant="secondary"
+          className="!px-3 !py-1.5 text-xs"
+          onClick={() => setDownloadMenu((cur) => (cur === id ? null : id))}
+          disabled={exporting}
+        >
+          {exporting ? "Exporting…" : "Download"}
+          <span className="text-[10px] opacity-70">▾</span>
+        </DashButton>
+        {open ? (
+          <div
+            role="menu"
+            className={`absolute z-30 mt-1 w-64 overflow-hidden rounded-xl border border-slate-200 bg-white py-1 shadow-lg ${
+              align === "right" ? "right-0" : "left-0"
+            }`}
+          >
+            {EXPORT_OPTIONS.map((opt) => (
+              <button
+                key={opt.format}
+                type="button"
+                role="menuitem"
+                className="flex w-full flex-col items-start gap-0.5 px-3 py-2.5 text-left hover:bg-slate-50"
+                onClick={() => void handleExport(opt.format)}
+              >
+                <span className="text-sm font-semibold text-slate-900">
+                  {opt.label}
+                </span>
+                <span className="text-xs text-slate-500">{opt.hint}</span>
+              </button>
+            ))}
+          </div>
+        ) : null}
+      </div>
+    );
+  }
+
   return (
     <DashCard>
       <DashCardHeader
         title="Declaration grouping & export"
         action={
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <DashButton
               variant="primary"
+              className="!px-3 !py-1.5 text-xs"
               onClick={handleGroup}
               disabled={grouping}
             >
@@ -228,23 +338,28 @@ export function GroupingExportTab({
                   ? "Re-group"
                   : "Run grouping"}
             </DashButton>
-            {groupings.length > 0 ? (
-              <DashButton
-                variant="secondary"
-                onClick={handleExport}
-                disabled={exporting}
-              >
-                {exporting ? "Exporting…" : "Download CSV"}
-              </DashButton>
-            ) : null}
+            {groupings.length > 0 ? <DownloadMenu id="header" /> : null}
           </div>
         }
       />
 
+      {staleApprovedCount > 0 && groupings.length > 0 ? (
+        <div
+          role="status"
+          className="border-b border-amber-100 bg-amber-50 px-5 py-2.5 text-xs text-amber-800"
+        >
+          {staleApprovedCount === 1
+            ? "1 approved code changed after the last grouping."
+            : `${staleApprovedCount} approved codes changed after the last grouping.`}{" "}
+          Use Re-group so the declaration lines match.
+        </div>
+      ) : null}
+
       <section className="border-b border-slate-100 px-5 py-4">
         <p className="text-sm text-slate-600">
           Groups approved products by HS code, origin, and tax profile into
-          declaration lines. Download the CSV for customs review.
+          declaration lines. Export as CSV or an Ethiopian Customs SAD draft
+          (PDF / Excel).
         </p>
         {job.snapshot && !progressOpen ? (
           <div className="mt-3">
@@ -435,20 +550,14 @@ export function GroupingExportTab({
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <p className="text-sm font-semibold text-slate-800">
-                  Export declaration CSV
+                  Export declaration
                 </p>
                 <p className="mt-0.5 text-xs text-slate-500">
-                  File name: {caseNumber}-declaration.csv
+                  CSV, SAD PDF, or SAD Excel · PDF/Excel are drafts (not official
+                  filings)
                 </p>
               </div>
-              <DashButton
-                type="button"
-                variant="secondary"
-                onClick={handleExport}
-                disabled={exporting}
-              >
-                {exporting ? "Exporting…" : "Download CSV"}
-              </DashButton>
+              <DownloadMenu id="footer" />
             </div>
           </section>
         </>

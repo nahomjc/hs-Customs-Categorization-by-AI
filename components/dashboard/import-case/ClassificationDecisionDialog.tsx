@@ -46,9 +46,9 @@ export function ClassificationDecisionDialog({
     <Dialog open={open} onOpenChange={(next) => !approving && onOpenChange(next)}>
       <DialogContent
         showClose={!approving}
-        className="flex max-h-[min(90vh,40rem)] w-[min(96vw,32rem)] max-w-lg flex-col gap-0 overflow-hidden p-0 sm:max-w-lg"
+        className="!flex h-auto max-h-[min(85dvh,40rem)] w-[min(96vw,32rem)] max-w-lg flex-col gap-0 overflow-hidden p-0 shadow-none! sm:max-w-lg"
       >
-        <div className="border-b border-amber-200/80 bg-amber-50 px-5 py-4">
+        <div className="shrink-0 border-b border-amber-200/80 bg-amber-50 px-5 py-4">
           <div className="flex gap-3">
             <div
               className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-amber-100 text-amber-800"
@@ -135,7 +135,7 @@ export function ClassificationDecisionDialog({
           )}
         </div>
 
-        <DialogFooter className="border-t border-slate-100 bg-slate-50/80 px-5 py-3">
+        <DialogFooter className="shrink-0 border-t border-slate-100 bg-slate-50/80 px-5 py-3">
           <DashButton
             type="button"
             variant="secondary"

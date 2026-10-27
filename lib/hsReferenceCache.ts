@@ -160,7 +160,15 @@ export function formatReferenceCandidate(row: HsReferenceCacheRow): string {
 
 export type ReferenceMatch = {
   row: HsReferenceCacheRow;
+  /** Text score of the chosen row (the invoice-code tie-break is not part of it). */
   score: number;
+  /**
+   * Rows that still score the same after the invoice-code tie-break (2 or more):
+   * the tariff book cannot tell them apart, a person has to choose.
+   */
+  tied?: HsReferenceCacheRow[];
+  /** The supplier's invoice code decided between near-equal rows. */
+  supplierBreak?: boolean;
 };
 
 export type ReferenceEnrichableRow = {
@@ -301,7 +309,24 @@ export type MatchHints = {
   supplierChapter?: string | null;
   /** Heading of the supplier's HS code (four digits). */
   supplierHeading?: string | null;
+  /**
+   * The supplier's full code (digits, 6 or more). Used ONLY to break ties between
+   * near-equal rows; a code that is not in the book gives nothing.
+   */
+  supplierCode?: string | null;
 };
+
+/**
+ * Rows within this many points of the best row count as "near-equal". Below one
+ * point on purpose: one extra whole-word match in the tariff text ("husked" in
+ * "Husked rice") is real evidence that the invoice code must not outvote.
+ */
+const SUPPLIER_NEAR = 0.5;
+/** Exact full-code match of the invoice code (8 digits). */
+const SUPPLIER_EXACT_BONUS = 3;
+/** Same 6-digit sub-heading as the invoice code. */
+const SUPPLIER_SUBHEADING_BONUS = 2;
+const TIE_EPSILON = 0.01;
 
 function scoreRow(
   row: HsReferenceCacheRow,
@@ -354,8 +379,15 @@ function scoreRow(
     meaningfulLen > 0 && labelKey === wholeQuery && !GENERIC_LABELS.has(labelKey);
   if (/^(?:other|nes|n\.?e\.?s\.?)$/i.test(desc)) return 0;
   if (meaningfulLen < 12 && !exactWholeLabel) {
-    // lenient: keep the row for the candidate list, but behind every real match
-    return lenient && !GENERIC_LABELS.has(labelKey) ? 0.25 : 0;
+    // A short row only says something when it names the thing: "Broken rice" is
+    // specific, a lone generic word ("Used", "Nuts", "Other parts") is not.
+    const rowWords = [...words];
+    const specific =
+      rowWords.length >= 2 && !rowWords.every((w) => GENERIC_LABELS.has(w) || w === "of");
+    if (!specific) {
+      // lenient: keep the row for the candidate list, but behind every real match
+      return lenient && !GENERIC_LABELS.has(labelKey) ? 0.25 : 0;
+    }
   }
 
   let score = tokenScore;
@@ -438,18 +470,60 @@ export function findBestReferenceMatch(
 
   const hasComplete = cache.rows.some(isCompleteRow);
 
-  let best: ReferenceMatch | null = null;
+  // A hint whose heading is not in the book cannot help: ignore it.
+  let usedHints = hints;
+  if (usedHints?.supplierHeading) {
+    const heading = usedHints.supplierHeading;
+    const known = cache.rows.some((r) =>
+      (r.normalizedHs ?? r.hsCode ?? r.tariffNo ?? "").replace(/\D/g, "").startsWith(heading),
+    );
+    if (!known) usedHints = undefined;
+  }
+
+  type Scored = { row: HsReferenceCacheRow; score: number; digits: string };
+  const scored: Scored[] = [];
   for (const row of cache.rows) {
     if (hasComplete && !isCompleteRow(row)) continue;
     if (!isChapterCompatible(description, row.chapter)) continue;
 
-    const score = scoreRow(row, tokens, description, hints);
+    const score = scoreRow(row, tokens, description, usedHints);
     if (score < minScore) continue;
-    if (!best || score > best.score) {
-      best = { row, score };
-    }
+    scored.push({
+      row,
+      score,
+      digits: (row.normalizedHs ?? row.hsCode ?? row.tariffNo ?? "").replace(/\D/g, ""),
+    });
   }
-  return best;
+  if (scored.length === 0) return null;
+
+  const top = Math.max(...scored.map((s) => s.score));
+  const sup = (usedHints?.supplierCode ?? "").replace(/\D/g, "");
+  const adjusted = scored.map((s) => {
+    let bonus = 0;
+    // tie-break only: the invoice code never lifts a row that is clearly worse
+    if (sup.length >= 6 && s.digits.length >= 8 && top - s.score <= SUPPLIER_NEAR) {
+      if (sup.length >= 8 && s.digits.slice(0, 8) === sup.slice(0, 8)) {
+        bonus = SUPPLIER_EXACT_BONUS;
+      } else if (s.digits.startsWith(sup.slice(0, 6))) {
+        bonus = SUPPLIER_SUBHEADING_BONUS;
+      }
+    }
+    return { ...s, adjusted: s.score + bonus, bonus };
+  });
+
+  const bestAdjusted = Math.max(...adjusted.map((a) => a.adjusted));
+  const winners = adjusted.filter((a) => bestAdjusted - a.adjusted <= TIE_EPSILON);
+  const best = winners[0];
+  const baseTop = scored.filter((s) => top - s.score <= TIE_EPSILON);
+  const supplierBreak =
+    best.bonus > 0 && !(baseTop.length === 1 && baseTop[0].row === best.row);
+
+  return {
+    row: best.row,
+    score: best.score,
+    ...(winners.length > 1 ? { tied: winners.map((w) => w.row) } : {}),
+    ...(supplierBreak ? { supplierBreak: true } : {}),
+  };
 }
 
 /** Fill missing source HS from tariff reference when description matches. */

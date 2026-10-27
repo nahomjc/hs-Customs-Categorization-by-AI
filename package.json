@@ -21,7 +21,9 @@
 		"test:my-shipments": "npx tsx scripts/test-my-shipments.ts",
 		"test:hs-web-classify": "npx tsx scripts/test-hs-web-classify.ts",
 		"test:hs-ambiguous": "npx tsx scripts/test-hs-ambiguous.ts",
-		"test:hs-plausibility": "npx tsx scripts/test-hs-plausibility.ts"
+		"test:hs-plausibility": "npx tsx scripts/test-hs-plausibility.ts",
+		"test:hs-ties": "npx tsx scripts/test-hs-ties.ts",
+		"test:export-sad": "npx tsx scripts/test-export-sad.ts"
 	},
 	"dependencies": {
 		"@aws-sdk/client-s3": "^3.1121.0",

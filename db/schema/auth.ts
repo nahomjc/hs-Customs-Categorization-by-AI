@@ -4,7 +4,6 @@ import {
   pgTable,
   text,
   timestamp,
-  uniqueIndex,
 } from "drizzle-orm/pg-core";
 
 export const authUser = pgTable("user", {
@@ -51,7 +50,8 @@ export const authAccount = pgTable(
     id: text("id").primaryKey(),
     accountId: text("account_id").notNull(),
     providerId: text("provider_id").notNull(),
-    issuer: text("issuer").notNull(),
+    /** Legacy 1.7.0–1.7.2 column; Better Auth no longer writes it — keep nullable. */
+    issuer: text("issuer"),
     userId: text("user_id")
       .notNull()
       .references(() => authUser.id, { onDelete: "cascade" }),
@@ -68,13 +68,7 @@ export const authAccount = pgTable(
       .$onUpdate(() => new Date())
       .notNull(),
   },
-  (table) => [
-    index("account_userId_idx").on(table.userId),
-    uniqueIndex("account_issuer_accountId_uidx").on(
-      table.issuer,
-      table.accountId,
-    ),
-  ]
+  (table) => [index("account_userId_idx").on(table.userId)],
 );
 
 export const authVerification = pgTable(

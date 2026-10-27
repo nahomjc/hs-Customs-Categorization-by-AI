@@ -276,6 +276,22 @@ export function ImportCaseWizard({
     (c) => c.product.humanVerified && c.classification?.isFinal,
   ).length;
 
+  // Approved codes changed after the last grouping (real timestamps: the newest
+  // grouping row is created when grouping runs, an approval sets updatedAt).
+  const approvedChangedAfterGrouping = useMemo(() => {
+    const times = groupings
+      .map((g) => new Date(g.grouping.createdAt).getTime())
+      .filter((t) => Number.isFinite(t));
+    if (times.length === 0) return 0;
+    const lastGrouping = Math.max(...times);
+    return classificationsState.filter((row) => {
+      const c = row.classification;
+      if (!c?.isFinal) return false;
+      const at = new Date(c.updatedAt).getTime();
+      return Number.isFinite(at) && at > lastGrouping;
+    }).length;
+  }, [groupings, classificationsState]);
+
   const applyGoToStep = useCallback(
     (stepId: WizardStepId, options?: { bypassUnlock?: boolean }) => {
       if (!options?.bypassUnlock && !stepUnlocked(stepId)) return;
@@ -614,6 +630,7 @@ export function ImportCaseWizard({
                     referencePopulated={referencePopulated}
                     onClassificationsChange={setClassificationsState}
                     onWorkflowJobGuard={classificationJobGuard}
+                    onGoToGrouping={() => goToStep("grouping-export", { bypassUnlock: true })}
                   />
                 ) : null}
                 {currentStep === "grouping-export" ? (
@@ -622,6 +639,7 @@ export function ImportCaseWizard({
                     caseNumber={importCase.caseNumber}
                     initialGroupings={groupings}
                     initialUnclassified={unclassified}
+                    staleApprovedCount={approvedChangedAfterGrouping}
                     onWorkflowJobGuard={groupingJobGuard}
                   />
                 ) : null}
