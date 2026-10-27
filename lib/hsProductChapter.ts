@@ -19,7 +19,14 @@ export type ProductSignals = {
   kitchenware: boolean;
   /** Incense, perfume, fragrance, candles. */
   incense: boolean;
+  /** The exact word or phrase of the description that raised each signal. */
+  triggers: Partial<Record<string, string>>;
 };
+
+function hit(re: RegExp, text: string): string | undefined {
+  const m = re.exec(text);
+  return m ? m[0].replace(/\s+/g, " ").trim() : undefined;
+}
 
 /**
  * Finished garments / worn clothing: must not map to chapter 50-60 fabric rows
@@ -64,6 +71,7 @@ const FOOD_RE = new RegExp(
       "pickled?", "kimchi", "mushrooms?", "vegetables?", "tomato(?:es)?", "potato(?:es)?", "cabbage",
       "carrots?", "soups?", "bouillon", "broth", "dumplings?", "bread", "cakes?", "wine", "beer",
       "liquor", "baijiu", "vodka", "whisk(?:e)?y", "sesame", "cinnamon", "turmeric", "paprika",
+      "buns?", "tuna", "salmon", "sardines?", "mackerel",
       "mustard", "yeast", "gelatin", "pectin", "tapioca", "cassava", "konjac", "jujubes?", "lychee",
       "longan", "tamarind", "wasabi", "miso", "sake", "kombucha", "sweeteners?", "flavou?rings?",
       "(?:cooking|edible|vegetable|frying)\\s+oil",
@@ -77,7 +85,7 @@ const FOOD_RE = new RegExp(
  * "thermos"): they say kitchenware wherever they stand.
  */
 const KITCHENWARE_STRONG_RE =
-  /\b(?:cookware|tableware|kitchenware|kettles?|chopsticks?|utensils?|thermos|flasks?|lunch\s*box(?:es)?|tea\s*(?:sets?|pots?|cups?|ware|trays?)|coffee\s*(?:pots?|makers?|cups?))\b/i;
+  /\b(?:cookware|tableware|kitchenware|cookers?|kettles?|chopsticks?|utensils?|thermos|flasks?|lunch\s*box(?:es)?|tea\s*(?:sets?|pots?|cups?|ware|trays?)|coffee\s*(?:pots?|makers?|cups?))\b/i;
 
 /**
  * Words that are also part of a food name: "hot pot base", "pot noodle", "wok
@@ -93,6 +101,29 @@ const FOOD_FOLLOWER_RE = new RegExp(
   "i",
 );
 
+/** Words that make "hot pot" a food (instant / self-heating / spicy / soup) when no vessel wording is near. */
+const HOTPOT_FOOD_HINT_RE =
+  /\b(?:instant|self[- ]?heating|spicy|mala|beef|mutton|tallow|flavou?r(?:ed)?|ingredients?|soup)\b/i;
+
+/**
+ * Last word of a product name that is an object, not a food: "wine GLASS", "jam JAR",
+ * "noodle CUP", "rice MILL". The food word in front is then a modifier, so the food
+ * signal is not raised (no opinion is safer than a wrong warning).
+ */
+const NON_FOOD_HEAD_RE =
+  /\b(?:glass(?:es|ware)?|cups?|bottles?|jars?|bowls?|plates?|trays?|lamps?|lights?|knife|knives|spoons?|forks?|sharpeners?|cleaners?|openers?|grinders?|mills?|cookers?|machines?|makers?|dispensers?|holders?|stands?|trucks?|parts?|equipment|appliances?|tools?|scales?|racks?|boxes|tables?|chairs?|desks?|cabinets?|shel(?:f|ves)|stools?|benches)$/i;
+
+function hasNonFoodHead(description: string): boolean {
+  const head = description
+    .toLowerCase()
+    .split(/\s+(?:for|with|used|of|made)\s+|[,;(]|\s-\s/)[0]
+    .replace(/\b\d+(?:\.\d+)?\s*(?:ml|l|g|kg|cl|oz|pcs?|pieces?|set|sets)?\b/g, " ")
+    .replace(/[^a-z\s-]/g, " ")
+    .trim();
+  const words = head.split(/\s+/).filter(Boolean);
+  return words.length >= 2 && NON_FOOD_HEAD_RE.test(words[words.length - 1]);
+}
+
 /** An appliance / vessel wording that keeps "hot pot" a vessel even when food words are around. */
 const VESSEL_CONTEXT_RE =
   /\b(?:electric|appliance|cooker|induction|non-?stick|stainless|aluminium|aluminum|enamel|cast\s*iron|iron|copper|ceramic|stone|clay|divider|lid|set)\b/i;
@@ -102,13 +133,24 @@ const VESSEL_CONTEXT_RE =
  * when it sits inside a food phrase.
  */
 export function isKitchenwareDescription(description: string): boolean {
+  return kitchenwareTrigger(description) !== null;
+}
+
+/** The word that makes this description kitchenware ("pot", "tea set"), or null. */
+export function kitchenwareTrigger(description: string): string | null {
   const d = description.toLowerCase();
-  if (KITCHENWARE_STRONG_RE.test(d)) return true;
+  const strong = hit(KITCHENWARE_STRONG_RE, d);
+  if (strong) return strong;
 
   // a hot pot is a food phrase when food words are around and no vessel wording is
-  const hasFood = FOOD_FOLLOWER_RE.test(d);
+  const hasFood = FOOD_FOLLOWER_RE.test(d) || HOTPOT_FOOD_HINT_RE.test(d);
   const vesselContext = VESSEL_CONTEXT_RE.test(d);
-  const text = hasFood && !vesselContext ? d.replace(/\bhot\s*-?\s*pot\b/g, " hotpot ") : d;
+  let text = hasFood && !vesselContext ? d.replace(/\bhot\s*-?\s*pot\b/g, " hotpot ") : d;
+  // compounds where the weak noun is not a vessel at all
+  text = text
+    .replace(/\bfork\s*-?\s*lifts?\b/g, " forklift ")
+    .replace(/\bpan\s*-?\s*(?:flutes?|pipes?)\b/g, " panflute ")
+    .replace(/\bpot(?:ted)?\s+(?:plants?|herbs?)\b/g, " potplant ");
 
   for (const m of text.matchAll(KITCHENWARE_WEAK_RE)) {
     const after = text.slice((m.index ?? 0) + m[0].length);
@@ -117,9 +159,9 @@ export function isKitchenwareDescription(description: string): boolean {
     // "pan-fried", "wok-fried": the hyphenated form is a cooking method
     if (/^\s*-\s*(?:fried|frying|roasted|seared)/.test(phrase)) continue;
     if (FOOD_FOLLOWER_RE.test(phrase)) continue;
-    return true;
+    return m[0];
   }
-  return false;
+  return null;
 }
 
 const INCENSE_RE =
@@ -131,9 +173,29 @@ export function detectProductSignals(description: string): ProductSignals {
   // "denim fabric for garments" is material; "denim jeans" is apparel.
   const apparel = APPAREL_RE.test(d) && !looksLikeMaterial;
   const textileMaterial = looksLikeMaterial && !apparel;
-  const food = FOOD_RE.test(d);
+  const foodWord = FOOD_RE.test(d);
+  // "wine glass", "jam jar", "noodle cup": the object is what is imported
+  const food = foodWord && !hasNonFoodHead(d);
+  const kitchenTrigger = kitchenwareTrigger(d);
+  const weakLight = LIGHTING_WEAK_RE.test(d) && !foodWord;
+  const triggers: Partial<Record<string, string>> = {
+    apparel: apparel ? hit(APPAREL_RE, d) : undefined,
+    lighting: hit(LIGHTING_STRONG_RE, d) ?? (weakLight ? hit(LIGHTING_WEAK_RE, d) : undefined),
+    artificialPlant: hit(/artificial\s+(?:plant|flower|tree)|taro\s+plant|ficus/i, d),
+    wallpaper: hit(/wallpaper|wall\s*covering|wall\s*paper/i, d),
+    fan: hit(/\bfan\b|extract\s*fan|air\s*supply\s*fan|bathroom\s*extract/i, d),
+    ceramic: hit(/ceramic|pottery|vase\b/i, d),
+    kitchenware: kitchenTrigger ?? undefined,
+    incense: hit(INCENSE_RE, d),
+    food: hit(FOOD_RE, d),
+    textile: hit(TEXTILE_MADEUP_RE, d),
+    textileMaterial: textileMaterial ? hit(TEXTILE_MATERIAL_RE, d) : undefined,
+    pump: hit(/fountain\b|water\s*feature/i, d),
+    insulation: hit(/fib(?:er|re)glass|glass\s*wool|heat\s*insulation|thermal\s*insulation/i, d),
+  };
 
   return {
+    triggers,
     lighting: LIGHTING_STRONG_RE.test(d) || (LIGHTING_WEAK_RE.test(d) && !food),
     artificialPlant:
       /artificial\s+(plant|flower|tree)|taro\s+plant|ficus|artificial\s+ficus|artificial\s+plant/i.test(
@@ -153,7 +215,7 @@ export function detectProductSignals(description: string): ProductSignals {
         d,
       ),
     textileMaterial,
-    kitchenware: isKitchenwareDescription(d),
+    kitchenware: kitchenTrigger !== null,
     incense: INCENSE_RE.test(d),
   };
 }
@@ -174,11 +236,18 @@ export type ProductFamily = {
   label: string;
   /** Chapters that fit this kind of product. */
   allowed: string[];
+  /** The exact word or phrase of the description that named this kind of product. */
+  trigger?: string;
 };
 
 /** The kind of product the description clearly names, or null when it names none. */
 export function productFamily(description: string): ProductFamily | null {
   const s = detectProductSignals(description);
+  const fam = productFamilyOf(s);
+  return fam ? { ...fam, trigger: s.triggers[fam.id] } : null;
+}
+
+function productFamilyOf(s: ProductSignals): ProductFamily | null {
   // Apparel first: never allow fabric chapters 50-60 for finished clothes.
   if (s.apparel) return { id: "apparel", label: "clothing", allowed: ["61", "62"] };
   if (s.lighting) return { id: "lighting", label: "lighting", allowed: ["94", "85"] };

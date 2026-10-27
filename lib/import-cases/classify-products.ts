@@ -23,6 +23,7 @@ import type { ClassificationSource } from "./constants";
 import { TARIFF_VERSION } from "./constants";
 import { mapWithConcurrency, stableHash } from "./harmonize-plan";
 import type { SuggestionReview } from "./hs-web-step";
+import { keywordClearedByAi } from "./keyword-judge";
 import { AI_MODEL_NAME, PROMPT_VERSION } from "./extraction-schemas";
 import { lookupTariffForHsCode, parseDutyRate, dutyRateOtherCharges } from "./tariff-lookup";
 import { writeAuditLog } from "./queries";
@@ -402,14 +403,22 @@ export async function findSuspiciousProducts(
   if (products.length === 0) return [];
 
   const ids = products.map((p) => p.id);
-  const [classifications, supplierHs] = await Promise.all([
+  const [classifications, supplierHs, candidates] = await Promise.all([
     db
       .select()
       .from(productClassifications)
       .where(inArray(productClassifications.productId, ids)),
     loadSupplierHsByProduct(caseId),
+    db
+      .select({
+        id: hsCodeCandidates.id,
+        evidence: hsCodeCandidates.classificationEvidence,
+      })
+      .from(hsCodeCandidates)
+      .where(inArray(hsCodeCandidates.productId, ids)),
   ]);
   const byProduct = new Map(classifications.map((c) => [c.productId, c]));
+  const evidenceByCandidate = new Map(candidates.map((c) => [c.id, c.evidence]));
 
   const out: SuspiciousProduct[] = [];
   for (const p of products) {
@@ -419,6 +428,9 @@ export async function findSuspiciousProducts(
       hsCode: c.hsCode,
       texts: [p.productName, p.rawDescription, p.normalizedDescription],
       supplierHsCode: supplierHs.get(p.id) ?? null,
+      keywordClearedByAi: keywordClearedByAi(
+        c.selectedCandidateId ? evidenceByCandidate.get(c.selectedCandidateId) : null,
+      ),
       // a person already looked at it and approved: not suspicious again
       decidedByHuman: c.source === "manual_override" || c.isFinal === true,
     });

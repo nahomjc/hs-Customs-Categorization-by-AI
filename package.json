@@ -24,6 +24,7 @@
 		"test:hs-plausibility": "npx tsx scripts/test-hs-plausibility.ts",
 		"test:hs-ties": "npx tsx scripts/test-hs-ties.ts",
 		"test:hs-hotpot": "npx tsx scripts/test-hs-hotpot.ts",
+		"test:hs-keyword-bank": "npx tsx scripts/test-hs-keyword-bank.ts",
 		"test:export-sad": "npx tsx scripts/test-export-sad.ts"
 	},
 	"dependencies": {

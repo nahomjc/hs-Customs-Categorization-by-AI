@@ -116,6 +116,11 @@ export type PlausibilityVerdict = {
    * different sub-heading (same heading).
    */
   level?: "chapter" | "heading" | "subheading";
+  /**
+   * The exact word or phrase of the description that raised a product-kind
+   * warning ("pot"). Set only when the warning comes from the words of the name.
+   */
+  trigger?: string;
 };
 
 export type PlausibilityInput = {
@@ -137,7 +142,28 @@ export type PlausibilityInput = {
    * the supplier's hint no longer flags it. An implausible code is still flagged.
    */
   decidedByHuman?: boolean;
+  /**
+   * A quick AI check already looked at the whole description and said this code
+   * fits: a keyword warning is dropped.
+   */
+  keywordClearedByAi?: boolean;
 };
+
+/**
+ * One plain sentence for a keyword warning: which word was seen, what it usually
+ * means, where the code sits, and that it is only a warning.
+ */
+export function keywordWarningText(input: {
+  trigger?: string;
+  familyLabel: string;
+  allowed: string[];
+  chapter: string;
+  preferred?: string[];
+}): string {
+  const where = (input.preferred?.length ? input.preferred : input.allowed).slice(0, 4).join(", ");
+  const word = input.trigger ? `We saw "${input.trigger}" in the name, which usually means` : "The name looks like";
+  return `${word} ${input.familyLabel} (chapter ${where}). This code is in ${chapterText(input.chapter)}. This is only a warning from a word check, not a decision.`;
+}
 
 function dotted(digits: string): string {
   return digits.length >= 8 ? `${digits.slice(0, 4)}.${digits.slice(4, 8)}` : digits;
@@ -196,13 +222,13 @@ export function checkPlausibility(input: PlausibilityInput): PlausibilityVerdict
 
   const reasons: string[] = [];
   let status: PlausibilityStatus = "ok";
+  let trigger: string | undefined;
 
   if (fam && !fam.allowed.includes(chapter)) {
     status = "implausible";
+    trigger = fam.trigger;
     reasons.push(
-      `This looks like ${fam.label}, which normally sits in chapter ${fam.allowed
-        .slice(0, 6)
-        .join("/")}${fam.allowed.length > 6 ? "..." : ""}, but this code is in ${chapterText(chapter)}.`,
+      keywordWarningText({ trigger, familyLabel: fam.label, allowed: fam.allowed, chapter }),
     );
   }
 
@@ -210,10 +236,18 @@ export function checkPlausibility(input: PlausibilityInput): PlausibilityVerdict
     const preferred = preferredChapters(found!.text);
     if (preferred.length > 0 && !preferred.includes(chapter)) {
       status = "implausible";
+      trigger = fam.trigger;
       reasons.push(
-        `This looks like ${fam.label} that normally sits in chapter ${preferred.slice(0, 4).join("/")}, but this code is in ${chapterText(chapter)}.`,
+        keywordWarningText({ trigger, familyLabel: fam.label, allowed: fam.allowed, chapter, preferred }),
       );
     }
+  }
+
+  // The AI already looked at the full description and said the code fits.
+  if (status === "implausible" && input.keywordClearedByAi) {
+    status = "ok";
+    trigger = undefined;
+    reasons.length = 0;
   }
 
   let level: PlausibilityVerdict["level"];
@@ -242,7 +276,13 @@ export function checkPlausibility(input: PlausibilityInput): PlausibilityVerdict
     return { ...base, status: "ok", reasons: [] };
   }
 
-  return { ...base, status, reasons, ...(level ? { level } : {}) };
+  return {
+    ...base,
+    status,
+    reasons,
+    ...(level ? { level } : {}),
+    ...(trigger ? { trigger } : {}),
+  };
 }
 
 /** True when the verdict should stop a code being accepted without a person looking. */
@@ -251,9 +291,12 @@ export function needsRecheck(verdict: PlausibilityVerdict): boolean {
 }
 
 /**
- * Code that is blocked from the one-click "Approve this": only a clearly
- * implausible code (the reviewer can still type the code by hand).
+ * A word check alone never blocks a person who looks at the item and approves
+ * it: it is a warning. Only a bulk approve (nobody looks at each item) stops on it.
  */
-export function blocksApproval(verdict: PlausibilityVerdict): boolean {
-  return verdict.status === "implausible";
+export function blocksApproval(
+  verdict: PlausibilityVerdict,
+  options?: { bulk?: boolean },
+): boolean {
+  return options?.bulk === true && verdict.status === "implausible";
 }

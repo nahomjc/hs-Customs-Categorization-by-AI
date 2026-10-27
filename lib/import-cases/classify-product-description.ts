@@ -19,6 +19,7 @@ import { createStepDeps } from "./hs-web-deps";
 import { NO_CLEAR_TARIFF_MATCH } from "@/lib/hs-catch-all";
 import { PLACEHOLDER_HS, applyWebSearchStep, type SuggestionReview } from "./hs-web-step";
 import { gateFirstPass, gateStepResult } from "./plausibility-gate";
+import { judgeKeywordConflicts } from "./keyword-judge";
 import {
   applyVddNameOption,
   buildSupplierBreakReview,
@@ -414,7 +415,14 @@ export async function classifyProductDescription(
       },
       createStepDeps(),
     );
-    const gatedStep = gateStepResult(rawStep, gateCtx, gated.rejected);
+    // A word of the name disagrees with the final code: one short AI judgement on the
+    // whole description decides whether the warning stays. Failure keeps the code
+    // and the warning.
+    const judged = await judgeKeywordConflicts([rawStep.hsCode], {
+      ...gateCtx,
+      description,
+    });
+    const gatedStep = gateStepResult(rawStep, { ...gateCtx, judged }, gated.rejected);
     // exact-name VDD history: offered as the top option, never final
     const step = applyVddNameOption(gatedStep, exactVdd, {
       texts: optionTexts,
@@ -459,7 +467,11 @@ export async function classifyProductDescription(
           },
           createStepDeps(),
         );
-        const step = applyVddNameOption(gateStepResult(rawStep, gateCtx), exactVdd, {
+        const judgedFallback = await judgeKeywordConflicts([rawStep.hsCode], {
+          ...gateCtx,
+          description,
+        });
+        const step = applyVddNameOption(gateStepResult(rawStep, { ...gateCtx, judged: judgedFallback }), exactVdd, {
           texts: optionTexts,
           label: productLabel,
         });

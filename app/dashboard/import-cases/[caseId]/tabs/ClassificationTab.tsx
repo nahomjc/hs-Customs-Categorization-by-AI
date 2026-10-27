@@ -1025,7 +1025,10 @@ function ClassificationTableRow({
               return parts.length > 0 ? parts.join(" · ") : null;
             })()}
           </p>
-          {plausibility && needsRecheck(plausibility) && !review.noCode ? (
+          {plausibility &&
+          needsRecheck(plausibility) &&
+          !review.noCode &&
+          !(plausibility.reasons[0] && review.reason?.includes(plausibility.reasons[0])) ? (
             <p className="mt-1 whitespace-normal text-amber-700">
               {plausibility.reasons[0] ?? "This code may not fit the product."}
             </p>
@@ -1070,11 +1073,7 @@ function ClassificationTableRow({
             plausibility &&
             needsRecheck(plausibility) ? (
               <StatusBadge
-                label={
-                  plausibility.status === "implausible"
-                    ? "Code doesn't fit"
-                    : "Check code"
-                }
+                label="Check code"
                 status="warning"
               />
             ) : null}

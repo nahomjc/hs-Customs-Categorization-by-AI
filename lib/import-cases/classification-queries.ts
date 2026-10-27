@@ -2,6 +2,7 @@ import { eq } from "drizzle-orm";
 import { db } from "@/db";
 import { checkPlausibility, type PlausibilityVerdict } from "@/lib/hs-plausibility";
 import { loadSupplierHsByProduct } from "./product-context-load";
+import { keywordClearedByAi } from "./keyword-judge";
 import {
   hsCodeCandidates,
   importProducts,
@@ -56,6 +57,13 @@ export async function getCaseClassifications(
           hsCode: classification.hsCode,
           texts: [product.productName, product.rawDescription, product.normalizedDescription],
           supplierHsCode: supplierHs.get(product.id) ?? null,
+          keywordClearedByAi: keywordClearedByAi(
+            (
+              candidates.find((c) => c.id === classification.selectedCandidateId) ??
+              candidates.find((c) => c.rank === 1) ??
+              candidates[0]
+            )?.classificationEvidence,
+          ),
           decidedByHuman:
             classification.source === "manual_override" || classification.isFinal === true,
         })

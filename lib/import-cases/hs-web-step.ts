@@ -94,6 +94,20 @@ export type SuggestionReview = {
   previous?: { hsCode: string; source?: string; note?: string };
   /** A code that was found but NOT used because it does not fit the product. */
   rejectedCode?: { hsCode: string; reasons: string[] };
+  /**
+   * The code is kept, but a word of the name usually means another kind of product.
+   * Only a warning for the reviewer, never a reason to drop the code.
+   */
+  keywordWarning?: {
+    /** The exact word or phrase seen in the name. */
+    word?: string;
+    /** What that word usually means, e.g. "kitchenware". */
+    looksLike: string;
+    /** What the quick AI check said, when it ran. */
+    judgement: "agrees" | "unsure" | "unavailable";
+  };
+  /** A quick AI check read the whole description and said the code fits despite the word. */
+  keywordCleared?: { word?: string; note?: string };
   /** Ranked, validated options (best first). */
   alternatives: ReviewAlternative[];
   web: WebSearchEvidence;

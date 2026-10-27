@@ -338,6 +338,8 @@ export async function bulkReviewClassifications(
           await approveProductClassification(caseId, row.productId, tenantId, userId, {
             candidateId: row.selectedCandidateId,
             reviewerReason: options?.reason ?? undefined,
+            // nobody looks at each item in a bulk approve: a word-check warning stops it
+            enforcePlausibility: true,
           });
         } else {
           await approveProductClassification(caseId, row.productId, tenantId, userId, {

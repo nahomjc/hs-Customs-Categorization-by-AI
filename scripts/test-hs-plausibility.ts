@@ -242,11 +242,12 @@ function first(hsCode: string, extra: Partial<FirstPass> = {}): FirstPass {
   };
 }
 
-test("gate: an implausible first answer becomes the placeholder so the web step runs", () => {
+// CHANGED on purpose (word checks are warnings, never a reason to drop a code): the
+// first answer is KEPT, only its confidence is capped so the web step looks again.
+test("gate: a first answer with a word-check warning is kept, confidence capped so the web step runs", () => {
   const out = gateFirstPass(first("8541.4200"), { texts: ["Rice Flour"] });
-  assert.ok(out.rejected);
-  assert.equal(out.rejected?.hsCode, "8541.4200");
-  assert.ok(out.first.hsCode.startsWith("9999"));
+  assert.equal(out.rejected, undefined);
+  assert.equal(out.first.hsCode, "8541.4200");
   assert.ok((out.first.confidence ?? 1) <= 0.3);
   const ok = gateFirstPass(first("1102.9000"), { texts: ["Rice Flour"] });
   assert.equal(ok.rejected, undefined);
@@ -264,19 +265,29 @@ function step(hsCode: string): StepResult {
   };
 }
 
-test("gate: a final answer that does not fit is never accepted silently", () => {
+// CHANGED on purpose: a final answer with a word-check warning is no longer swapped
+// for the placeholder ("No code suggested"). It is kept, flagged for a person, and
+// the warning names the word and says it is only a warning.
+test("gate: a final answer with a word-check warning is kept and flagged, never accepted silently", () => {
   setHsReferenceCache(BOOK);
   try {
     const out = gateStepResult(step("8703.1020"), { texts: ["Rice Flour"] });
-    assert.ok(out.hsCode.startsWith("9999"));
+    assert.equal(out.hsCode, "8703.1020");
     assert.equal(out.review.required, true);
-    assert.equal(out.review.rejectedCode?.hsCode, "8703.1020");
+    assert.equal(out.review.rejectedCode, undefined);
+    assert.ok(out.review.keywordWarning, "the warning is recorded");
+    assert.match(out.review.keywordWarning?.word ?? "", /rice|flour/i);
+    assert.match(out.review.reason ?? "", /only a warning/);
+    assert.match(out.review.reason ?? "", /We saw "(rice|flour)"/i);
+    assert.ok((out.confidence ?? 1) <= 0.55);
   } finally {
     invalidateHsReferenceCache();
   }
 });
 
-test("gate: the supplier's code is offered as an option, then filled for expert review", () => {
+// CHANGED on purpose: the supplier's code is offered next to the kept (flagged)
+// suggestion instead of replacing a dropped one.
+test("gate: the supplier's code is offered as an option next to a flagged suggestion", () => {
   setHsReferenceCache(BOOK);
   try {
     const sup = supplierOption("1102.90.00");
@@ -289,12 +300,11 @@ test("gate: the supplier's code is offered as an option, then filled for expert 
       texts: ["Rice Flour"],
       supplierHsCode: "11029000",
     });
-    // Best book alternative is filled so the row is not "Not classified"; still needs review.
-    assert.equal(out.hsCode, "1102.9000");
+    assert.equal(out.hsCode, "8703.1020");
     assert.equal(out.review.required, true);
     assert.ok(out.review.alternatives.some((a) => a.origin === "supplier"));
     assert.equal(out.review.decisionRequired, true);
-    assert.ok((out.confidence ?? 1) <= 0.45);
+    assert.ok((out.confidence ?? 1) <= 0.55);
   } finally {
     invalidateHsReferenceCache();
   }

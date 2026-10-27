@@ -116,9 +116,9 @@ export async function approveProductClassification(
       texts: [product.productName, product.rawDescription, product.normalizedDescription],
       supplierHsCode: supplierHs,
     });
-    if (blocksApproval(verdict)) {
+    if (blocksApproval(verdict, { bulk: input.enforcePlausibility === true })) {
       throw new Error(
-        `This code does not fit the product. ${verdict.reasons[0] ?? ""} Pick another option or set the code by hand.`.trim(),
+        `${verdict.reasons[0] ?? "This code may not fit the product."} Approve it one by one if you checked it, or pick another option.`.trim(),
       );
     }
   }
